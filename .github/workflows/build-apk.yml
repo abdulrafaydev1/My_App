@@ -5,7 +5,7 @@ on:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Allows manual one-click trigger in GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build-apk:
@@ -21,31 +21,18 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Prepare Gradle Wrapper
-        run: |
-          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-            echo "gradle-wrapper.jar not found, generating wrapper using system gradle..."
-            gradle wrapper --gradle-version 8.5
-          fi
-          chmod +x ./gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
 
       - name: Build Debug APK with Gradle
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: gradle assembleDebug --stacktrace --no-daemon
 
-      - name: Prepare Artifact
-        run: |
-          mkdir -p build-output
-          cp app/build/outputs/apk/debug/app-debug.apk build-output/InstaGuard.apk
-          ls -lh build-output/InstaGuard.apk
-
-      - name: Upload InstaGuard.apk Artifact
+      - name: Upload InstaGuard-APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaGuard-debug-apk
-          path: build-output/InstaGuard.apk
+          name: InstaGuard-APK
+          path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
