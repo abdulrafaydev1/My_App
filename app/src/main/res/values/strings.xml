@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">InstaGuard</string>
+    <string name="app_tagline">Intelligent Instagram Usage &amp; Focus Guardian</string>
+    <string name="accessibility_service_description">InstaGuard monitors Instagram foreground time to enforce a 1-hour active usage limit and 3-hour cooldown lock period for your digital wellbeing.</string>
+
+    <!-- Dashboard Status -->
+    <string name="service_active">PROTECTION ACTIVE</string>
+    <string name="service_inactive">PROTECTION INACTIVE</string>
+    <string name="service_active_desc">InstaGuard is actively protecting your screen time.</string>
+    <string name="service_inactive_desc">Complete the permission setup below to activate protection.</string>
+
+    <!-- Permission Setup -->
+    <string name="setup_required_title">Required Permissions</string>
+    <string name="btn_grant_usage_access">1. Grant Usage Access</string>
+    <string name="desc_usage_access">Allows querying precise Instagram foreground screen time.</string>
+    <string name="btn_enable_accessibility">2. Enable Accessibility Service</string>
+    <string name="desc_accessibility">Allows instant detection and lock screen enforcement when Instagram launches.</string>
+    <string name="status_granted">Granted</string>
+    <string name="status_action_required">Tap to Enable</string>
+
+    <!-- Restricted Settings Guide (Android 13+) -->
+    <string name="restricted_settings_title">Android 13+ Setup Note (Sideloaded APK)</string>
+    <string name="restricted_settings_desc">If Android blocks Accessibility as a \"Restricted setting\":\n1. Open Android Settings > Apps > InstaGuard.\n2. Tap the ⋮ (three dots) in top-right corner.\n3. Tap \"Allow restricted settings\" &amp; authenticate.\n4. Return here and tap \"2. Enable Accessibility Service\".</string>
+
+    <!-- Usage Dashboard -->
+    <string name="dashboard_title">Instagram Usage Session</string>
+    <string name="usage_ratio_format">%1$s / %2$s</string>
+    <string name="usage_remaining_format">%1$s allowance left</string>
+    <string name="status_unlocked">Normal Allowance (Unlocked)</string>
+    <string name="status_locked">LOCKED (Cooldown Active)</string>
+    <string name="lock_cooldown_label">Unlock countdown:</string>
+    <string name="btn_refresh">Refresh Stats</string>
+    <string name="btn_reset_session">Reset Session</string>
+    <string name="session_reset_confirmed">Session counters have been reset.</string>
+
+    <!-- Lock Screen -->
+    <string name="lock_screen_title">Instagram is Locked for Focus</string>
+    <string name="lock_screen_subtitle">You have used your 1-hour Instagram allowance. Take a break while your focus resets.</string>
+    <string name="lock_screen_cooldown_label">TIME REMAINING UNTIL UNLOCK</string>
+    <string name="btn_go_home">Go Back to Home</string>
+    <string name="lock_cooldown_finished">Cooldown completed. You may now return.</string>
+</resources>
