@@ -1,23 +1,24 @@
-# InstaGuard 🛡️
+# InstaGuard v3.0 🛡️
 
-**Intelligent Native Android Screen Time & Focus Guardian for Instagram**
+**Intelligent Native Android Multi-App Screen Time & Focus Guardian (Instagram, YouTube, Facebook, TikTok)**
 
-InstaGuard is a lightweight, production-ready Native Android application built in Kotlin. It enforces a strict **1-hour active usage limit** for Instagram (`com.instagram.android`) followed by an unyielding **3-hour focus cooldown lock**, helping users reclaim focus and overcome algorithmic screen addiction.
+InstaGuard v3.0 is a lightweight, production-ready Native Android application built in Kotlin. It enforces independent, real-time **1-hour active usage limits** and **3-hour focus cooldown locks** for the 4 primary social media platforms: **Instagram**, **YouTube**, **Facebook**, and **TikTok**.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Features in v3.0
 
-- **High-Precision Real-Time Tracking:** Tracks foreground Instagram usage in milliseconds without jumpy bucket aggregation. Runs a continuous 100ms background enforcement loop while Instagram is active.
-- **Smooth 30 FPS Millisecond UI Timers:** Live tickers update at 33ms (~30 FPS) displaying `HH:MM:SS.mmm` with monospace formatting to prevent layout jitter.
-- **Accurate Allowance Sessions:** Enforces 60-minute (3,600,000 ms) usage limit and 3-hour (10,800,000 ms) cooldown lock.
-- **Instant Test Mode (1m Limit / 2m Lock):** Built-in dashboard toggle switch for fast testing without waiting a full hour.
-- **Non-Bypassable Lock Screen:**
-  - Dark-themed minimalist UI: *"Instagram is Locked for Focus"*.
-  - Live millisecond countdown timer (`HH:MM:SS.mmm`) dynamically ticking down remaining cooldown.
+- **Independent Multi-App Architecture:** Instagram, YouTube, Facebook, and TikTok each run completely independent usage cycles and cooldown locks. Locking one platform never impedes the others.
+- **Comprehensive Package Mapping:** Recognizes main, Lite, and regional package variants across all 4 platforms (e.g. `com.instagram.android`, `com.instagram.lite`, `com.google.android.youtube`, `com.facebook.katana`, `com.facebook.lite`, `com.zhiliaoapp.musically`, `com.ss.android.ugc.trill`, `com.zhiliaoapp.musically.go`).
+- **High-Precision Real-Time Tracking:** Tracks active foreground usage in milliseconds with zero lag via in-memory companion state synchronized with `SharedPreferences("InstaGuardPrefs")`. Runs a continuous 100ms background enforcement loop while any tracked app is active.
+- **Smooth 30 FPS Millisecond UI Timers:** Live tickers update at 33ms (~30 FPS) displaying `HH:MM:SS.mmm` with monospace formatting to eliminate horizontal digit jitter.
+- **Instant Test Mode (1m Limit / 2m Lock):** Built-in dashboard toggle switch for fast testing across all platforms without waiting a full hour.
+- **Dynamic Non-Bypassable Lock Screen:**
+  - Dark-themed minimalist UI dynamically indicating which platform is locked: *"[App Name] is Locked for Focus"*.
+  - Live millisecond countdown timer (`HH:MM:SS.mmm`) ticking down that specific app's remaining cooldown.
   - Intercepts back navigation and redirects to the Android Home screen.
-  - Automatically dismisses and resets when the cooldown concludes.
-- **Reboot Persistence & Fallback Sync:** State persisted across device reboots via `SharedPreferences` (`InstaGuardPrefs`), with fallback to `UsageStatsManager.queryEvents()` if the service was not yet active.
+  - Automatically dismisses and resets when the app's cooldown concludes.
+- **Reboot Persistence & Fallback Sync:** State persisted across device reboots via `SharedPreferences`, with fallback queries to `UsageStatsManager.queryEvents()` if the service was not yet active.
 - **Clean Material 3 Dashboard:**
   - Status indicator (Active / Inactive).
   - One-tap setup buttons for **Usage Access** and **Accessibility Service**.

@@ -6,20 +6,22 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.instaguard.app.R
 import com.instaguard.app.databinding.ActivityMainBinding
+import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
 import com.instaguard.app.util.UsageStatsHelper
 
 /**
- * Main Dashboard Activity for InstaGuard.
- * Features a high-precision 33ms (~30 FPS) millisecond UI timer,
- * test mode toggle, live usage progress bar, and permission setup cards.
+ * Main Dashboard Activity for InstaGuard v3.0 (All-in-One Multi-App Focus).
+ * Displays independent real-time millisecond usage and cooldown timers for
+ * Instagram, YouTube, Facebook, and TikTok ticking smoothly at 33ms (~30 FPS).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -29,7 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private val liveTickerRunnable = object : Runnable {
         override fun run() {
-            updateLiveTimerDisplay()
+            updateAllAppCards()
             uiHandler.postDelayed(this, 33L) // 33ms (~30 FPS)
         }
     }
@@ -48,11 +50,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // If timer is at zero, fallback sync with UsageStatsManager
+        // Sync in-memory states
+        AppBlockerService.syncFromPreferences(guardManager.prefs)
         guardManager.syncWithUsageStatsIfEmpty()
 
         updatePermissionsUI()
-        updateLiveTimerDisplay()
+        updateAllAppCards()
 
         uiHandler.removeCallbacks(liveTickerRunnable)
         uiHandler.post(liveTickerRunnable)
@@ -64,18 +67,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyMonospaceTypefaces() {
-        binding.tvUsedTime.typeface = Typeface.MONOSPACE
-        binding.tvAllowanceLimit.typeface = Typeface.MONOSPACE
-        binding.tvRemainingAllowance.typeface = Typeface.MONOSPACE
-        binding.tvDashboardCountdown.typeface = Typeface.MONOSPACE
+        // Monospace all timer textviews to prevent digit width jittering
+        val monospaceViews = listOf(
+            binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus,
+            binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus,
+            binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus,
+            binding.tvTikTokTimer, binding.tvTikTokLimit, binding.tvTikTokStatus
+        )
+        for (view in monospaceViews) {
+            view.typeface = Typeface.MONOSPACE
+        }
     }
 
     private fun setupTestModeSwitch() {
         binding.switchTestMode.isChecked = guardManager.prefs.isTestMode
         binding.switchTestMode.setOnCheckedChangeListener { _, isChecked ->
             guardManager.prefs.isTestMode = isChecked
-            guardManager.resetSession()
-            updateLiveTimerDisplay()
+            AppBlockerService.resetAll(guardManager.prefs)
+            updateAllAppCards()
             val msg = if (isChecked) {
                 "Test Mode (1m Limit / 2m Lock) Enabled"
             } else {
@@ -104,58 +113,112 @@ class MainActivity : AppCompatActivity() {
 
         // Refresh Button
         binding.btnRefresh.setOnClickListener {
-            updatePermissionsUI()
+            AppBlockerService.syncFromPreferences(guardManager.prefs)
             guardManager.syncWithUsageStatsIfEmpty()
-            updateLiveTimerDisplay()
+            updatePermissionsUI()
+            updateAllAppCards()
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
         }
 
-        // Reset Session Button
-        binding.btnResetSession.setOnClickListener {
-            guardManager.resetSession()
-            updateLiveTimerDisplay()
-            Toast.makeText(this, R.string.session_reset_confirmed, Toast.LENGTH_SHORT).show()
+        // Reset All Timers Button
+        binding.btnResetAllTimers.setOnClickListener {
+            AppBlockerService.resetAll(guardManager.prefs)
+            updateAllAppCards()
+            Toast.makeText(this, "All social app timers have been reset.", Toast.LENGTH_SHORT).show()
         }
     }
 
     /**
-     * Updates the UI timer every 33ms with exact millisecond precision.
+     * Updates all 4 social app cards smoothly in real-time every 33ms.
      */
-    private fun updateLiveTimerDisplay() {
-        val isLocked = guardManager.isCooldownActive()
-        val currentUsageMs = guardManager.getCurrentSessionUsageMs()
-        val limitMs = guardManager.prefs.getUsageLimitMs()
-        val remainingAllowanceMs = guardManager.getRemainingAllowanceMs()
+    private fun updateAllAppCards() {
+        val prefs = guardManager.prefs
+        val limitMs = prefs.getUsageLimitMs()
 
-        binding.tvUsedTime.text = guardManager.formatWithMillis(currentUsageMs)
-        binding.tvAllowanceLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
-        binding.tvRemainingAllowance.text = guardManager.formatWithMillis(remainingAllowanceMs) + " left"
+        // 1. Instagram
+        renderAppCard(
+            app = TrackedApp.INSTAGRAM,
+            tvBadge = binding.tvInstagramBadge,
+            tvTimer = binding.tvInstagramTimer,
+            tvLimit = binding.tvInstagramLimit,
+            tvStatus = binding.tvInstagramStatus,
+            progressIndicator = binding.progressInstagram,
+            limitMs = limitMs
+        )
 
-        // Scale progress bar across 1000 units for smooth visual transitions
-        val progressInt = if (limitMs > 0L) {
-            ((currentUsageMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
-        } else 0
-        binding.progressUsage.progress = progressInt
+        // 2. YouTube
+        renderAppCard(
+            app = TrackedApp.YOUTUBE,
+            tvBadge = binding.tvYouTubeBadge,
+            tvTimer = binding.tvYouTubeTimer,
+            tvLimit = binding.tvYouTubeLimit,
+            tvStatus = binding.tvYouTubeStatus,
+            progressIndicator = binding.progressYouTube,
+            limitMs = limitMs
+        )
+
+        // 3. Facebook
+        renderAppCard(
+            app = TrackedApp.FACEBOOK,
+            tvBadge = binding.tvFacebookBadge,
+            tvTimer = binding.tvFacebookTimer,
+            tvLimit = binding.tvFacebookLimit,
+            tvStatus = binding.tvFacebookStatus,
+            progressIndicator = binding.progressFacebook,
+            limitMs = limitMs
+        )
+
+        // 4. TikTok
+        renderAppCard(
+            app = TrackedApp.TIKTOK,
+            tvBadge = binding.tvTikTokBadge,
+            tvTimer = binding.tvTikTokTimer,
+            tvLimit = binding.tvTikTokLimit,
+            tvStatus = binding.tvTikTokStatus,
+            progressIndicator = binding.progressTikTok,
+            limitMs = limitMs
+        )
+    }
+
+    private fun renderAppCard(
+        app: TrackedApp,
+        tvBadge: TextView,
+        tvTimer: TextView,
+        tvLimit: TextView,
+        tvStatus: TextView,
+        progressIndicator: LinearProgressIndicator,
+        limitMs: Long
+    ) {
+        val prefs = guardManager.prefs
+        val isLocked = AppBlockerService.isAppLocked(app.key, prefs)
+        val liveUsageMs = AppBlockerService.getLiveUsageMs(app.key, prefs)
+
+        tvTimer.text = guardManager.formatWithMillis(liveUsageMs)
+        tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
 
         if (isLocked) {
-            binding.tvLockBadge.text = "LOCKED"
-            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_red))
-            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_red_bg)
+            tvBadge.text = "LOCKED"
+            tvBadge.setTextColor(ContextCompat.getColor(this, R.color.status_red))
+            tvBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_red_bg)
 
-            binding.layoutLockCooldownInfo.visibility = View.VISIBLE
-            val remainingCooldownMs = guardManager.getRemainingCooldownMs()
-            binding.tvCooldownTitle.text = if (guardManager.prefs.isTestMode) {
-                "Instagram Cooldown Active (2 Min)"
-            } else {
-                "Instagram Cooldown Active (3 Hours)"
-            }
-            binding.tvDashboardCountdown.text = "Remaining: " + guardManager.formatWithMillis(remainingCooldownMs)
+            val remainingCooldown = AppBlockerService.getRemainingCooldownMs(app.key, prefs)
+            tvStatus.text = "Unlocks: " + guardManager.formatWithMillis(remainingCooldown)
+            tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_red))
+
+            progressIndicator.progress = 1000
         } else {
-            binding.tvLockBadge.text = "UNLOCKED"
-            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
-            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_green_bg)
+            tvBadge.text = "ALLOWED"
+            tvBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
+            tvBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_green_bg)
 
-            binding.layoutLockCooldownInfo.visibility = View.GONE
+            val remainingAllowance = maxOf(0L, limitMs - liveUsageMs)
+            tvStatus.text = guardManager.formatWithMillis(remainingAllowance) + " left"
+            tvStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary_light))
+
+            val progress = if (limitMs > 0L) {
+                ((liveUsageMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
+            } else 0
+            progressIndicator.progress = progress
         }
     }
 
@@ -167,7 +230,6 @@ class MainActivity : AppCompatActivity() {
         val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
         val isServiceFullyActive = hasUsage && hasAccessibility
 
-        // Overall Protection Status Card
         if (isServiceFullyActive) {
             binding.cardOverallStatus.strokeColor = ContextCompat.getColor(this, R.color.status_green)
             binding.layoutOverallStatusBg.setBackgroundColor(ContextCompat.getColor(this, R.color.status_green_bg))
@@ -175,7 +237,7 @@ class MainActivity : AppCompatActivity() {
             binding.imgOverallStatus.setColorFilter(ContextCompat.getColor(this, R.color.status_green))
             binding.tvOverallStatusTitle.text = getString(R.string.service_active)
             binding.tvOverallStatusTitle.setTextColor(ContextCompat.getColor(this, R.color.status_green))
-            binding.tvOverallStatusDesc.text = getString(R.string.service_active_desc)
+            binding.tvOverallStatusDesc.text = "Active protection for Instagram, YouTube, Facebook & TikTok."
         } else {
             binding.cardOverallStatus.strokeColor = ContextCompat.getColor(this, R.color.status_amber)
             binding.layoutOverallStatusBg.setBackgroundColor(ContextCompat.getColor(this, R.color.status_amber_bg))

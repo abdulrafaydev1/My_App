@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Process
 import com.instaguard.app.data.GuardPreferences
+import com.instaguard.app.model.TrackedApp
 import java.util.Calendar
 
 /**
@@ -38,12 +39,12 @@ object UsageStatsHelper {
     }
 
     /**
-     * Queries total foreground time (in milliseconds) for a specific package
+     * Queries total foreground time (in milliseconds) for a list of packages
      * between startTime and endTime using UsageEvents for maximum accuracy.
      */
     fun getForegroundUsageTime(
         context: Context,
-        targetPackage: String,
+        targetPackages: List<String>,
         startTime: Long,
         endTime: Long
     ): Long {
@@ -64,7 +65,7 @@ object UsageStatsHelper {
 
             while (usageEvents.hasNextEvent()) {
                 usageEvents.getNextEvent(event)
-                if (event.packageName == targetPackage) {
+                if (targetPackages.contains(event.packageName)) {
                     when (event.eventType) {
                         UsageEvents.Event.ACTIVITY_RESUMED -> {
                             lastResumeTime = event.timeStamp
@@ -92,19 +93,25 @@ object UsageStatsHelper {
     }
 
     /**
-     * Fallback query: Returns foreground time for Instagram in the last 1 hour.
-     * Used when AccessibilityService was not yet active so the timer is never stuck at zero.
+     * Fallback query: Returns foreground time for a tracked app in the last 1 hour.
      */
-    fun getInstagramUsagePastHour(context: Context, targetPackage: String = GuardPreferences.TARGET_PACKAGE): Long {
+    fun getAppUsagePastHour(context: Context, app: TrackedApp): Long {
         val now = System.currentTimeMillis()
         val oneHourAgo = now - GuardPreferences.USAGE_LIMIT_MS
-        return getForegroundUsageTime(context, targetPackage, oneHourAgo, now)
+        return getForegroundUsageTime(context, app.packageNames, oneHourAgo, now)
     }
 
     /**
-     * Queries total Instagram foreground usage since midnight of today.
+     * Legacy single-package query for backward compatibility.
      */
-    fun getInstagramUsageToday(context: Context, targetPackage: String = GuardPreferences.TARGET_PACKAGE): Long {
+    fun getInstagramUsagePastHour(context: Context): Long {
+        return getAppUsagePastHour(context, TrackedApp.INSTAGRAM)
+    }
+
+    /**
+     * Queries total foreground usage since midnight of today for a tracked app.
+     */
+    fun getAppUsageToday(context: Context, app: TrackedApp): Long {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -113,6 +120,6 @@ object UsageStatsHelper {
         }
         val startOfDay = calendar.timeInMillis
         val now = System.currentTimeMillis()
-        return getForegroundUsageTime(context, targetPackage, startOfDay, now)
+        return getForegroundUsageTime(context, app.packageNames, startOfDay, now)
     }
 }

@@ -17,6 +17,18 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- Queries declarations for supported social packages -->
+    <queries>
+        <package android:name="com.instagram.android" />
+        <package android:name="com.instagram.lite" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.zhiliaoapp.musically.go" />
+    </queries>
+
     <application
         android:name=".InstaGuardApp"
         android:allowBackup="true"
@@ -40,7 +52,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Full-Screen Lock / Cooldown Activity -->
+        <!-- Full-Screen Dynamic Lock / Cooldown Activity -->
         <activity
             android:name=".ui.LockScreenActivity"
             android:exported="false"
@@ -51,7 +63,7 @@
             android:turnScreenOn="true"
             android:theme="@style/Theme.InstaGuard.LockScreen" />
 
-        <!-- Accessibility Service to Intercept Instagram Launches -->
+        <!-- Accessibility Service to Intercept Tracked Social Apps -->
         <service
             android:name=".service.AppBlockerService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
