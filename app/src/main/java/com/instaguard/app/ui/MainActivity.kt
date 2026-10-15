@@ -15,16 +15,14 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.instaguard.app.R
 import com.instaguard.app.databinding.ActivityMainBinding
-import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
 import com.instaguard.app.util.UsageStatsHelper
 
 /**
- * Main Dashboard Activity for InstaGuard v3.0 (All-in-One Multi-App Focus).
- * Displays independent real-time millisecond usage and cooldown timers for
+ * Main Dashboard Activity for InstaGuard v3.3 (Isolated Multi-App Focus).
+ * Displays strictly isolated real-time millisecond usage and cooldown timers for
  * Instagram, YouTube, Facebook, and TikTok ticking smoothly at 33ms (~30 FPS).
- * Supports Overlay Permission setup for PiP defense.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -53,9 +51,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Sync in-memory states
-        AppBlockerService.syncFromPreferences(guardManager.prefs)
-        guardManager.syncWithUsageStatsIfEmpty()
+        // Sync in-memory states strictly from per-app preferences
+        AppBlockerService.syncFromPrefs(this)
 
         updatePermissionsUI()
         updateAllAppCards()
@@ -86,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         binding.switchTestMode.isChecked = guardManager.prefs.isTestMode
         binding.switchTestMode.setOnCheckedChangeListener { _, isChecked ->
             guardManager.prefs.isTestMode = isChecked
-            AppBlockerService.resetAll(guardManager.prefs)
+            AppBlockerService.resetAll(this)
             updateAllAppCards()
             val msg = if (isChecked) {
                 "Test Mode (1m Limit / 2m Lock) Enabled"
@@ -131,8 +128,7 @@ class MainActivity : AppCompatActivity() {
 
         // Refresh Button
         binding.btnRefresh.setOnClickListener {
-            AppBlockerService.syncFromPreferences(guardManager.prefs)
-            guardManager.syncWithUsageStatsIfEmpty()
+            AppBlockerService.syncFromPrefs(this)
             updatePermissionsUI()
             updateAllAppCards()
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
@@ -140,14 +136,14 @@ class MainActivity : AppCompatActivity() {
 
         // Reset All Timers Button
         binding.btnResetAllTimers.setOnClickListener {
-            AppBlockerService.resetAll(guardManager.prefs)
+            AppBlockerService.resetAll(this)
             updateAllAppCards()
             Toast.makeText(this, "All social app timers have been reset.", Toast.LENGTH_SHORT).show()
         }
     }
 
     /**
-     * Updates all 4 social app cards smoothly in real-time every 33ms.
+     * Updates each of the 4 cards strictly using its independent app key.
      */
     private fun updateAllAppCards() {
         val prefs = guardManager.prefs
@@ -155,7 +151,7 @@ class MainActivity : AppCompatActivity() {
 
         // 1. Instagram
         renderAppCard(
-            app = TrackedApp.INSTAGRAM,
+            appKey = "INSTAGRAM",
             tvBadge = binding.tvInstagramBadge,
             tvTimer = binding.tvInstagramTimer,
             tvLimit = binding.tvInstagramLimit,
@@ -166,7 +162,7 @@ class MainActivity : AppCompatActivity() {
 
         // 2. YouTube
         renderAppCard(
-            app = TrackedApp.YOUTUBE,
+            appKey = "YOUTUBE",
             tvBadge = binding.tvYouTubeBadge,
             tvTimer = binding.tvYouTubeTimer,
             tvLimit = binding.tvYouTubeLimit,
@@ -177,7 +173,7 @@ class MainActivity : AppCompatActivity() {
 
         // 3. Facebook
         renderAppCard(
-            app = TrackedApp.FACEBOOK,
+            appKey = "FACEBOOK",
             tvBadge = binding.tvFacebookBadge,
             tvTimer = binding.tvFacebookTimer,
             tvLimit = binding.tvFacebookLimit,
@@ -188,7 +184,7 @@ class MainActivity : AppCompatActivity() {
 
         // 4. TikTok
         renderAppCard(
-            app = TrackedApp.TIKTOK,
+            appKey = "TIKTOK",
             tvBadge = binding.tvTikTokBadge,
             tvTimer = binding.tvTikTokTimer,
             tvLimit = binding.tvTikTokLimit,
@@ -199,7 +195,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderAppCard(
-        app: TrackedApp,
+        appKey: String,
         tvBadge: TextView,
         tvTimer: TextView,
         tvLimit: TextView,
@@ -207,20 +203,17 @@ class MainActivity : AppCompatActivity() {
         progressIndicator: LinearProgressIndicator,
         limitMs: Long
     ) {
-        val prefs = guardManager.prefs
-        val isLocked = AppBlockerService.isAppLocked(app.key, prefs)
-        val liveUsageMs = AppBlockerService.getLiveUsageMs(app.key, prefs)
+        val lockRemaining = AppBlockerService.getRemainingLockMs(appKey, this)
+        val usedMs = AppBlockerService.getLiveUsageMs(appKey, this).coerceAtMost(limitMs)
 
-        tvTimer.text = guardManager.formatWithMillis(liveUsageMs)
-        tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
-
-        if (isLocked) {
+        if (lockRemaining > 0L) {
             tvBadge.text = "LOCKED"
             tvBadge.setTextColor(ContextCompat.getColor(this, R.color.status_red))
             tvBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_red_bg)
 
-            val remainingCooldown = AppBlockerService.getRemainingCooldownMs(app.key, prefs)
-            tvStatus.text = "Unlocks: " + guardManager.formatWithMillis(remainingCooldown)
+            tvTimer.text = guardManager.formatWithMillis(limitMs)
+            tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
+            tvStatus.text = "Unlocks in: " + guardManager.formatWithMillis(lockRemaining)
             tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_red))
 
             progressIndicator.progress = 1000
@@ -229,12 +222,15 @@ class MainActivity : AppCompatActivity() {
             tvBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
             tvBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_green_bg)
 
-            val remainingAllowance = maxOf(0L, limitMs - liveUsageMs)
+            tvTimer.text = guardManager.formatWithMillis(usedMs)
+            tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
+
+            val remainingAllowance = maxOf(0L, limitMs - usedMs)
             tvStatus.text = guardManager.formatWithMillis(remainingAllowance) + " left"
             tvStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary_light))
 
             val progress = if (limitMs > 0L) {
-                ((liveUsageMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
+                ((usedMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
             } else 0
             progressIndicator.progress = progress
         }

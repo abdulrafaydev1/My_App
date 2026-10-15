@@ -57,7 +57,7 @@
             android:name=".ui.LockScreenActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTop"
             android:noHistory="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"

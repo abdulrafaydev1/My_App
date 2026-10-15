@@ -31,15 +31,14 @@ class LockScreenActivity : AppCompatActivity() {
     private lateinit var guardManager: GuardManager
     private val timerHandler = Handler(Looper.getMainLooper())
 
-    private var appKey: String = TrackedApp.INSTAGRAM.key
-    private var appName: String = TrackedApp.INSTAGRAM.displayName
+    private var lockedAppKey: String = "INSTAGRAM"
+    private var appName: String = "Instagram"
 
     private val countdownRunnable = object : Runnable {
         override fun run() {
-            val remainingMs = AppBlockerService.getRemainingCooldownMs(appKey, guardManager.prefs)
+            val remainingMs = AppBlockerService.getRemainingLockMs(lockedAppKey, this@LockScreenActivity)
             if (remainingMs <= 0L) {
                 binding.tvCountdownTimer.text = "00:00:00.000"
-                AppBlockerService.unlockApp(appKey, guardManager.prefs)
                 Toast.makeText(
                     this@LockScreenActivity,
                     "$appName cooldown completed. You may now return.",
@@ -60,8 +59,7 @@ class LockScreenActivity : AppCompatActivity() {
 
         guardManager = GuardManager(applicationContext)
 
-        extractAppDetails(intent)
-        applyDynamicTexts()
+        updateLockedAppFromIntent()
         applyMonospaceTypeface()
         configureWindowFlags()
         setupBackPressInterceptor()
@@ -70,8 +68,21 @@ class LockScreenActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        setIntent(intent)
-        intent?.let { extractAppDetails(it) }
+        if (intent != null) setIntent(intent)
+        updateLockedAppFromIntent()
+    }
+
+    private fun updateLockedAppFromIntent() {
+        val currentIntent = intent
+        lockedAppKey = currentIntent?.getStringExtra("EXTRA_APP_KEY")
+            ?: currentIntent?.getStringExtra(EXTRA_APP_KEY)
+            ?: "INSTAGRAM"
+
+        val trackedApp = TrackedApp.fromKey(lockedAppKey)
+        appName = currentIntent?.getStringExtra("EXTRA_APP_NAME")
+            ?: currentIntent?.getStringExtra(EXTRA_APP_NAME)
+            ?: (trackedApp?.displayName ?: lockedAppKey)
+
         applyDynamicTexts()
     }
 
@@ -80,14 +91,18 @@ class LockScreenActivity : AppCompatActivity() {
         // Force-pause media playback and seize audio focus whenever lock screen is active
         stopAllMediaPlayback()
 
-        if (!AppBlockerService.isAppLocked(appKey, guardManager.prefs)) {
+        val remainingMs = AppBlockerService.getRemainingLockMs(lockedAppKey, this)
+        if (remainingMs <= 0L) {
             Toast.makeText(this, "$appName cooldown completed.", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
-        val unlockTime = guardManager.prefs.getUnlockTimestamp(appKey)
-        binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
+        val unlockTime = AppBlockerService.unlockTimestampMap[lockedAppKey]
+            ?: guardManager.prefs.getUnlockTimestamp(lockedAppKey)
+        if (unlockTime > 0L) {
+            binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
+        }
 
         timerHandler.removeCallbacks(countdownRunnable)
         timerHandler.post(countdownRunnable)
@@ -96,12 +111,6 @@ class LockScreenActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         timerHandler.removeCallbacks(countdownRunnable)
-    }
-
-    private fun extractAppDetails(intent: Intent) {
-        appKey = intent.getStringExtra(EXTRA_APP_KEY) ?: TrackedApp.INSTAGRAM.key
-        appName = intent.getStringExtra(EXTRA_APP_NAME)
-            ?: (TrackedApp.fromKey(appKey)?.displayName ?: "App")
     }
 
     private fun applyDynamicTexts() {

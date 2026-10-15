@@ -13,32 +13,11 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Business logic and helper methods for InstaGuard v3.0 Multi-App Focus.
+ * Business logic and helper methods for InstaGuard v3.3 Multi-App Focus.
  */
 class GuardManager(private val context: Context) {
 
     val prefs = GuardPreferences(context)
-
-    /**
-     * Seeds initial usage stats for all 4 apps if not yet tracked.
-     */
-    @Synchronized
-    fun syncWithUsageStatsIfEmpty() {
-        for (app in TrackedApp.entries) {
-            val appKey = app.key
-            val current = prefs.getAccumulatedUsage(appKey)
-            val unlock = prefs.getUnlockTimestamp(appKey)
-            if (current == 0L && unlock == 0L && AppBlockerService.currentForegroundAppKey != appKey) {
-                val pastUsage = UsageStatsHelper.getAppUsagePastHour(context, app)
-                if (pastUsage > 0L) {
-                    val limit = prefs.getUsageLimitMs()
-                    val seeded = pastUsage.coerceAtMost(limit)
-                    prefs.setAccumulatedUsage(appKey, seeded)
-                    AppBlockerService.accumulatedUsageMs[appKey] = seeded
-                }
-            }
-        }
-    }
 
     /**
      * Formats milliseconds into high-precision HH:MM:SS.mmm format.
@@ -65,20 +44,20 @@ class GuardManager(private val context: Context) {
      */
     @Synchronized
     fun resetSession() {
-        AppBlockerService.resetAll(prefs)
+        AppBlockerService.resetAll(context)
     }
 
     // Legacy helpers for Instagram
     fun isCooldownActive(): Boolean {
-        return AppBlockerService.isAppLocked(TrackedApp.INSTAGRAM.key, prefs)
+        return AppBlockerService.isAppLocked(TrackedApp.INSTAGRAM.key, context)
     }
 
     fun getRemainingCooldownMs(): Long {
-        return AppBlockerService.getRemainingCooldownMs(TrackedApp.INSTAGRAM.key, prefs)
+        return AppBlockerService.getRemainingLockMs(TrackedApp.INSTAGRAM.key, context)
     }
 
     fun getCurrentSessionUsageMs(): Long {
-        return AppBlockerService.getLiveUsageMs(TrackedApp.INSTAGRAM.key, prefs)
+        return AppBlockerService.getLiveUsageMs(TrackedApp.INSTAGRAM.key, context)
     }
 
     fun getRemainingAllowanceMs(): Long {
