@@ -1,7 +1,7 @@
 package com.instaguard.app.ui
 
 import android.content.Intent
-import android.net.Uri
+import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,7 +11,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.instaguard.app.R
-import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.databinding.ActivityMainBinding
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
@@ -19,8 +18,8 @@ import com.instaguard.app.util.UsageStatsHelper
 
 /**
  * Main Dashboard Activity for InstaGuard.
- * Provides permission setup controls, service status monitor,
- * live usage metrics, and restricted settings guidance.
+ * Features a high-precision 33ms (~30 FPS) millisecond UI timer,
+ * test mode toggle, live usage progress bar, and permission setup cards.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -28,10 +27,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var guardManager: GuardManager
     private val uiHandler = Handler(Looper.getMainLooper())
 
-    private val liveUpdateRunnable = object : Runnable {
+    private val liveTickerRunnable = object : Runnable {
         override fun run() {
-            refreshDashboard()
-            uiHandler.postDelayed(this, 1000L)
+            updateLiveTimerDisplay()
+            uiHandler.postDelayed(this, 33L) // 33ms (~30 FPS)
         }
     }
 
@@ -42,19 +41,48 @@ class MainActivity : AppCompatActivity() {
 
         guardManager = GuardManager(applicationContext)
 
+        applyMonospaceTypefaces()
         setupListeners()
+        setupTestModeSwitch()
     }
 
     override fun onResume() {
         super.onResume()
-        refreshDashboard()
-        uiHandler.removeCallbacks(liveUpdateRunnable)
-        uiHandler.post(liveUpdateRunnable)
+        // If timer is at zero, fallback sync with UsageStatsManager
+        guardManager.syncWithUsageStatsIfEmpty()
+
+        updatePermissionsUI()
+        updateLiveTimerDisplay()
+
+        uiHandler.removeCallbacks(liveTickerRunnable)
+        uiHandler.post(liveTickerRunnable)
     }
 
     override fun onPause() {
         super.onPause()
-        uiHandler.removeCallbacks(liveUpdateRunnable)
+        uiHandler.removeCallbacks(liveTickerRunnable)
+    }
+
+    private fun applyMonospaceTypefaces() {
+        binding.tvUsedTime.typeface = Typeface.MONOSPACE
+        binding.tvAllowanceLimit.typeface = Typeface.MONOSPACE
+        binding.tvRemainingAllowance.typeface = Typeface.MONOSPACE
+        binding.tvDashboardCountdown.typeface = Typeface.MONOSPACE
+    }
+
+    private fun setupTestModeSwitch() {
+        binding.switchTestMode.isChecked = guardManager.prefs.isTestMode
+        binding.switchTestMode.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isTestMode = isChecked
+            guardManager.resetSession()
+            updateLiveTimerDisplay()
+            val msg = if (isChecked) {
+                "Test Mode (1m Limit / 2m Lock) Enabled"
+            } else {
+                "Normal Mode (1h Limit / 3h Lock) Enabled"
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun setupListeners() {
@@ -76,30 +104,67 @@ class MainActivity : AppCompatActivity() {
 
         // Refresh Button
         binding.btnRefresh.setOnClickListener {
-            refreshDashboard()
+            updatePermissionsUI()
+            guardManager.syncWithUsageStatsIfEmpty()
+            updateLiveTimerDisplay()
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
         }
 
         // Reset Session Button
         binding.btnResetSession.setOnClickListener {
             guardManager.resetSession()
-            refreshDashboard()
+            updateLiveTimerDisplay()
             Toast.makeText(this, R.string.session_reset_confirmed, Toast.LENGTH_SHORT).show()
         }
     }
 
     /**
-     * Refreshes permission status indicators, usage progress bar, and lock state.
+     * Updates the UI timer every 33ms with exact millisecond precision.
      */
-    private fun refreshDashboard() {
-        val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
-        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+    private fun updateLiveTimerDisplay() {
+        val isLocked = guardManager.isCooldownActive()
+        val currentUsageMs = guardManager.getCurrentSessionUsageMs()
+        val limitMs = guardManager.prefs.getUsageLimitMs()
+        val remainingAllowanceMs = guardManager.getRemainingAllowanceMs()
 
-        updatePermissionsUI(hasUsage, hasAccessibility)
-        updateUsageDashboard()
+        binding.tvUsedTime.text = guardManager.formatWithMillis(currentUsageMs)
+        binding.tvAllowanceLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
+        binding.tvRemainingAllowance.text = guardManager.formatWithMillis(remainingAllowanceMs) + " left"
+
+        // Scale progress bar across 1000 units for smooth visual transitions
+        val progressInt = if (limitMs > 0L) {
+            ((currentUsageMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
+        } else 0
+        binding.progressUsage.progress = progressInt
+
+        if (isLocked) {
+            binding.tvLockBadge.text = "LOCKED"
+            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_red))
+            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_red_bg)
+
+            binding.layoutLockCooldownInfo.visibility = View.VISIBLE
+            val remainingCooldownMs = guardManager.getRemainingCooldownMs()
+            binding.tvCooldownTitle.text = if (guardManager.prefs.isTestMode) {
+                "Instagram Cooldown Active (2 Min)"
+            } else {
+                "Instagram Cooldown Active (3 Hours)"
+            }
+            binding.tvDashboardCountdown.text = "Remaining: " + guardManager.formatWithMillis(remainingCooldownMs)
+        } else {
+            binding.tvLockBadge.text = "UNLOCKED"
+            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
+            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_green_bg)
+
+            binding.layoutLockCooldownInfo.visibility = View.GONE
+        }
     }
 
-    private fun updatePermissionsUI(hasUsage: Boolean, hasAccessibility: Boolean) {
+    /**
+     * Refreshes permission status indicators.
+     */
+    private fun updatePermissionsUI() {
+        val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
+        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
         val isServiceFullyActive = hasUsage && hasAccessibility
 
         // Overall Protection Status Card
@@ -153,37 +218,6 @@ class MainActivity : AppCompatActivity() {
             binding.tvAccessibilityStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_amber))
             binding.btnEnableAccessibility.isEnabled = true
             binding.btnEnableAccessibility.text = getString(R.string.btn_enable_accessibility)
-        }
-    }
-
-    private fun updateUsageDashboard() {
-        val isLocked = guardManager.isCooldownActive()
-        val currentUsageMs = guardManager.getCurrentSessionUsageMs()
-        val remainingAllowanceMs = guardManager.getRemainingAllowanceMs()
-
-        val progressPercent = ((currentUsageMs.toFloat() / GuardPreferences.USAGE_LIMIT_MS) * 100).toInt().coerceIn(0, 100)
-        binding.progressUsage.progress = progressPercent
-
-        binding.tvUsedTime.text = guardManager.formatMinutesSeconds(currentUsageMs)
-        binding.tvRemainingAllowance.text = getString(
-            R.string.usage_remaining_format,
-            guardManager.formatMinutesSeconds(remainingAllowanceMs)
-        )
-
-        if (isLocked) {
-            binding.tvLockBadge.text = "LOCKED"
-            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_red))
-            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_red_bg)
-
-            binding.layoutLockCooldownInfo.visibility = View.VISIBLE
-            val remainingCooldownMs = guardManager.getRemainingCooldownMs()
-            binding.tvDashboardCountdown.text = "Cooldown Remaining: " + guardManager.formatCountdown(remainingCooldownMs)
-        } else {
-            binding.tvLockBadge.text = "UNLOCKED"
-            binding.tvLockBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
-            binding.tvLockBadge.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_green_bg)
-
-            binding.layoutLockCooldownInfo.visibility = View.GONE
         }
     }
 }

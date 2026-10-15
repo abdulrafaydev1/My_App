@@ -8,15 +8,16 @@ InstaGuard is a lightweight, production-ready Native Android application built i
 
 ## 🚀 Key Features
 
-- **Real-Time Foreground Detection:** Leverages an Android `AccessibilityService` listening to `TYPE_WINDOW_STATE_CHANGED` to detect Instagram launches in milliseconds with negligible battery consumption.
-- **Accurate 1-Hour Allowance Session:** Tracks active foreground time up to **60 minutes (3,600,000 ms)**. Automatically pauses tracking when the user leaves Instagram.
-- **Strict 3-Hour Cooldown Lock:** The moment 60 minutes of usage is reached, a **3-hour (10,800,000 ms)** cooldown lock is enforced.
+- **High-Precision Real-Time Tracking:** Tracks foreground Instagram usage in milliseconds without jumpy bucket aggregation. Runs a continuous 100ms background enforcement loop while Instagram is active.
+- **Smooth 30 FPS Millisecond UI Timers:** Live tickers update at 33ms (~30 FPS) displaying `HH:MM:SS.mmm` with monospace formatting to prevent layout jitter.
+- **Accurate Allowance Sessions:** Enforces 60-minute (3,600,000 ms) usage limit and 3-hour (10,800,000 ms) cooldown lock.
+- **Instant Test Mode (1m Limit / 2m Lock):** Built-in dashboard toggle switch for fast testing without waiting a full hour.
 - **Non-Bypassable Lock Screen:**
   - Dark-themed minimalist UI: *"Instagram is Locked for Focus"*.
-  - Live countdown timer (`HH:MM:SS`) dynamically calculating remaining cooldown.
+  - Live millisecond countdown timer (`HH:MM:SS.mmm`) dynamically ticking down remaining cooldown.
   - Intercepts back navigation and redirects to the Android Home screen.
-  - Automatically dismisses and resets when the 3 hours conclude.
-- **Reboot Persistence:** `session_start_time`, `accumulated_usage_ms`, and `unlock_timestamp` are persisted across device reboots via `SharedPreferences`.
+  - Automatically dismisses and resets when the cooldown concludes.
+- **Reboot Persistence & Fallback Sync:** State persisted across device reboots via `SharedPreferences` (`InstaGuardPrefs`), with fallback to `UsageStatsManager.queryEvents()` if the service was not yet active.
 - **Clean Material 3 Dashboard:**
   - Status indicator (Active / Inactive).
   - One-tap setup buttons for **Usage Access** and **Accessibility Service**.

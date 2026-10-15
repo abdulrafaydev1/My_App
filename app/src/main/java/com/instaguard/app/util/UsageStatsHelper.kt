@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import com.instaguard.app.data.GuardPreferences
 import java.util.Calendar
 
 /**
@@ -91,9 +92,19 @@ object UsageStatsHelper {
     }
 
     /**
+     * Fallback query: Returns foreground time for Instagram in the last 1 hour.
+     * Used when AccessibilityService was not yet active so the timer is never stuck at zero.
+     */
+    fun getInstagramUsagePastHour(context: Context, targetPackage: String = GuardPreferences.TARGET_PACKAGE): Long {
+        val now = System.currentTimeMillis()
+        val oneHourAgo = now - GuardPreferences.USAGE_LIMIT_MS
+        return getForegroundUsageTime(context, targetPackage, oneHourAgo, now)
+    }
+
+    /**
      * Queries total Instagram foreground usage since midnight of today.
      */
-    fun getInstagramUsageToday(context: Context, targetPackage: String): Long {
+    fun getInstagramUsageToday(context: Context, targetPackage: String = GuardPreferences.TARGET_PACKAGE): Long {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)

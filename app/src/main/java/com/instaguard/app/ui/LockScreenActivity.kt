@@ -1,27 +1,43 @@
 package com.instaguard.app.ui
 
 import android.content.Intent
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
-import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.instaguard.app.R
-import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.databinding.ActivityLockScreenBinding
 import com.instaguard.app.util.GuardManager
 
 /**
- * Full-screen, non-bypassable lock activity displayed when Instagram's
- * 1-hour usage limit has been reached and the 3-hour cooldown is active.
+ * Full-screen, non-bypassable lock activity displayed during the focus cooldown period.
+ * Ticks smoothly at 33ms (~30 FPS) displaying live countdown with millisecond precision.
  */
 class LockScreenActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLockScreenBinding
     private lateinit var guardManager: GuardManager
-    private var countDownTimer: CountDownTimer? = null
+    private val timerHandler = Handler(Looper.getMainLooper())
+
+    private val countdownRunnable = object : Runnable {
+        override fun run() {
+            val remainingMs = guardManager.getRemainingCooldownMs()
+            if (remainingMs <= 0L) {
+                binding.tvCountdownTimer.text = "00:00:00.000"
+                guardManager.resetSession()
+                Toast.makeText(this@LockScreenActivity, R.string.lock_cooldown_finished, Toast.LENGTH_LONG).show()
+                finish()
+            } else {
+                binding.tvCountdownTimer.text = guardManager.formatWithMillis(remainingMs)
+                timerHandler.postDelayed(this, 33L)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,19 +46,31 @@ class LockScreenActivity : AppCompatActivity() {
 
         guardManager = GuardManager(applicationContext)
 
+        binding.tvCountdownTimer.typeface = Typeface.MONOSPACE
+
         configureWindowFlags()
         setupBackPressInterceptor()
         setupListeners()
-        startCountdown()
     }
 
     override fun onResume() {
         super.onResume()
         if (!guardManager.isCooldownActive()) {
-            // Cooldown already expired: dismiss lock screen
             Toast.makeText(this, R.string.lock_cooldown_finished, Toast.LENGTH_SHORT).show()
             finish()
+            return
         }
+
+        val unlockTime = guardManager.prefs.unlockTimestampMs
+        binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
+
+        timerHandler.removeCallbacks(countdownRunnable)
+        timerHandler.post(countdownRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        timerHandler.removeCallbacks(countdownRunnable)
     }
 
     private fun configureWindowFlags() {
@@ -89,42 +117,8 @@ class LockScreenActivity : AppCompatActivity() {
         finish()
     }
 
-    /**
-     * Launches a live 1-second countdown ticker for the remaining 3-hour cooldown duration.
-     */
-    private fun startCountdown() {
-        countDownTimer?.cancel()
-
-        val remainingMs = guardManager.getRemainingCooldownMs()
-        val prefs = GuardPreferences(applicationContext)
-        val unlockTime = prefs.unlockTimestamp
-
-        if (remainingMs <= 0L) {
-            binding.tvCountdownTimer.text = "00:00:00"
-            finish()
-            return
-        }
-
-        binding.tvUnlockTimeEstimate.text = getString(
-            R.string.status_unlocked
-        ).let { "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}" }
-
-        countDownTimer = object : CountDownTimer(remainingMs, 1000L) {
-            override fun onTick(millisUntilFinished: Long) {
-                binding.tvCountdownTimer.text = guardManager.formatCountdown(millisUntilFinished)
-            }
-
-            override fun onFinish() {
-                binding.tvCountdownTimer.text = "00:00:00"
-                guardManager.resetSession()
-                Toast.makeText(this@LockScreenActivity, R.string.lock_cooldown_finished, Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }.start()
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        countDownTimer?.cancel()
+        timerHandler.removeCallbacks(countdownRunnable)
     }
 }

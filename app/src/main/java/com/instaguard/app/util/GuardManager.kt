@@ -9,30 +9,30 @@ import com.instaguard.app.data.GuardPreferences
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /**
  * Core business logic and state machine for InstaGuard.
- * Manages active session usage, cooldown triggers, auto-reset, and formatting.
+ * Manages high-precision millisecond usage calculation, cooldown triggers,
+ * auto-reset, fallback sync with UsageStatsManager, and time formatting.
  */
 class GuardManager(private val context: Context) {
 
-    private val prefs = GuardPreferences(context)
+    val prefs = GuardPreferences(context)
 
     /**
-     * Checks if Instagram is currently in an active 3-hour cooldown lock.
+     * Checks if Instagram is currently in an active cooldown lock.
      * Automatically handles cooldown expiration and session reset.
      */
     @Synchronized
     fun isCooldownActive(): Boolean {
-        val unlockTime = prefs.unlockTimestamp
+        val unlockTime = prefs.unlockTimestampMs
         if (unlockTime == 0L) {
             return false
         }
 
         val now = System.currentTimeMillis()
         if (now >= unlockTime) {
-            // 3-Hour Cooldown has expired: automatically reset session
+            // Cooldown has expired: automatically reset session
             prefs.resetSession()
             return false
         }
@@ -41,33 +41,33 @@ class GuardManager(private val context: Context) {
     }
 
     /**
-     * Returns remaining milliseconds in the 3-hour cooldown period.
+     * Returns remaining milliseconds in the cooldown period.
      * Returns 0L if not locked.
      */
     fun getRemainingCooldownMs(): Long {
         if (!isCooldownActive()) return 0L
-        val remaining = prefs.unlockTimestamp - System.currentTimeMillis()
-        return if (remaining > 0L) remaining else 0L
+        val remaining = prefs.unlockTimestampMs - System.currentTimeMillis()
+        return maxOf(0L, remaining)
     }
 
     /**
-     * Calculates the total active foreground usage time of Instagram
-     * in the current tracking session (in milliseconds).
+     * Calculates the live active foreground usage time of Instagram
+     * in the current tracking session (in milliseconds with real-time precision).
      */
     @Synchronized
     fun getCurrentSessionUsageMs(): Long {
         if (isCooldownActive()) {
-            return GuardPreferences.USAGE_LIMIT_MS
+            return prefs.getUsageLimitMs()
         }
 
         var total = prefs.accumulatedUsageMs
-        if (prefs.isInstagramForeground && prefs.lastForegroundStart > 0L) {
-            val currentChunk = System.currentTimeMillis() - prefs.lastForegroundStart
-            if (currentChunk > 0L) {
-                total += currentChunk
+        if (prefs.isInstaInForeground && prefs.instaForegroundStartMs > 0L) {
+            val liveDelta = System.currentTimeMillis() - prefs.instaForegroundStartMs
+            if (liveDelta > 0L) {
+                total += liveDelta
             }
         }
-        return total.coerceAtMost(GuardPreferences.USAGE_LIMIT_MS)
+        return total.coerceAtMost(prefs.getUsageLimitMs())
     }
 
     /**
@@ -76,120 +76,35 @@ class GuardManager(private val context: Context) {
     fun getRemainingAllowanceMs(): Long {
         if (isCooldownActive()) return 0L
         val used = getCurrentSessionUsageMs()
-        val remaining = GuardPreferences.USAGE_LIMIT_MS - used
-        return if (remaining > 0L) remaining else 0L
+        val limit = prefs.getUsageLimitMs()
+        return maxOf(0L, limit - used)
     }
 
     /**
-     * Called when Instagram enters the foreground.
-     * Returns true if Instagram is blocked (due to active cooldown or limit reached).
+     * Gracefully fallbacks to querying UsageStatsManager if the session timer is at zero
+     * (e.g. before AccessibilityService was turned on or on initial launch).
      */
     @Synchronized
-    fun onInstagramForeground(): Boolean {
-        if (isCooldownActive()) {
-            return true
-        }
-
-        val now = System.currentTimeMillis()
-
-        if (prefs.sessionStartTime == 0L) {
-            prefs.sessionStartTime = now
-        }
-
-        prefs.lastForegroundStart = now
-        prefs.isInstagramForeground = true
-
-        // Verify if limit was already reached
-        if (getCurrentSessionUsageMs() >= GuardPreferences.USAGE_LIMIT_MS) {
-            triggerCooldown()
-            return true
-        }
-
-        return false
-    }
-
-    /**
-     * Called when Instagram leaves the foreground.
-     */
-    @Synchronized
-    fun onInstagramBackground() {
-        if (prefs.isInstagramForeground) {
-            val now = System.currentTimeMillis()
-            val chunk = now - prefs.lastForegroundStart
-            if (chunk > 0L) {
-                prefs.accumulatedUsageMs += chunk
-            }
-            prefs.isInstagramForeground = false
-            prefs.lastForegroundStart = 0L
-
-            if (prefs.accumulatedUsageMs >= GuardPreferences.USAGE_LIMIT_MS) {
-                triggerCooldown()
+    fun syncWithUsageStatsIfEmpty() {
+        if (prefs.accumulatedUsageMs == 0L && !prefs.isInstaInForeground && prefs.unlockTimestampMs == 0L) {
+            val pastUsage = UsageStatsHelper.getInstagramUsagePastHour(context)
+            if (pastUsage > 0L) {
+                val limit = prefs.getUsageLimitMs()
+                prefs.accumulatedUsageMs = pastUsage.coerceAtMost(limit)
             }
         }
     }
 
     /**
-     * Periodic check while Instagram is open in foreground.
-     * Triggers cooldown immediately if 1-hour limit is reached.
+     * Formats milliseconds into high-precision HH:MM:SS.mmm format.
      */
-    @Synchronized
-    fun checkForegroundProgress(): Boolean {
-        if (isCooldownActive()) {
-            return true
-        }
-
-        if (prefs.isInstagramForeground) {
-            val total = getCurrentSessionUsageMs()
-            if (total >= GuardPreferences.USAGE_LIMIT_MS) {
-                triggerCooldown()
-                return true
-            }
-        }
-        return false
-    }
-
-    /**
-     * Enforces the 3-hour cooldown lock period.
-     */
-    @Synchronized
-    fun triggerCooldown() {
-        val now = System.currentTimeMillis()
-        prefs.unlockTimestamp = now + GuardPreferences.COOLDOWN_DURATION_MS
-        prefs.accumulatedUsageMs = GuardPreferences.USAGE_LIMIT_MS
-        prefs.isInstagramForeground = false
-        prefs.lastForegroundStart = 0L
-    }
-
-    /**
-     * Manually resets the session counter.
-     */
-    @Synchronized
-    fun resetSession() {
-        prefs.resetSession()
-    }
-
-    /**
-     * Formats milliseconds into a clean string (e.g., "42m" or "1h 00m").
-     */
-    fun formatMinutesSeconds(ms: Long): String {
-        val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(ms)
-        val hours = totalMinutes / 60
-        val minutes = totalMinutes % 60
-        return if (hours > 0) {
-            String.format(Locale.getDefault(), "%dh %02dm", hours, minutes)
-        } else {
-            String.format(Locale.getDefault(), "%02dm", minutes)
-        }
-    }
-
-    /**
-     * Formats milliseconds into a live countdown timer "HH:MM:SS".
-     */
-    fun formatCountdown(ms: Long): String {
-        val hours = TimeUnit.MILLISECONDS.toHours(ms)
-        val minutes = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
-        val seconds = TimeUnit.MILLISECONDS.toSeconds(ms) % 60
-        return String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
+    fun formatWithMillis(ms: Long): String {
+        val safeMs = maxOf(0L, ms)
+        val hours = safeMs / 3_600_000
+        val minutes = (safeMs % 3_600_000) / 60_000
+        val seconds = (safeMs % 60_000) / 1_000
+        val millis = safeMs % 1_000
+        return String.format(Locale.US, "%02d:%02d:%02d.%03d", hours, minutes, seconds, millis)
     }
 
     /**
@@ -198,6 +113,14 @@ class GuardManager(private val context: Context) {
     fun formatTimeOfDay(epochMs: Long): String {
         val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
         return sdf.format(Date(epochMs))
+    }
+
+    /**
+     * Manually resets the session counter and lock state.
+     */
+    @Synchronized
+    fun resetSession() {
+        prefs.resetSession()
     }
 
     companion object {

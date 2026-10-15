@@ -12,32 +12,48 @@ import com.instaguard.app.util.GuardManager
 
 /**
  * AccessibilityService that intercepts Instagram launches in real-time,
- * tracks active foreground time, and deploys the LockScreenActivity
- * whenever cooldown is active or the 1-hour allowance is depleted.
+ * maintains high-precision foreground tracking, and continuously enforces
+ * the allowance limit every 100ms while Instagram is open.
  */
 class AppBlockerService : AccessibilityService() {
 
+    private lateinit var prefs: GuardPreferences
     private lateinit var guardManager: GuardManager
-    private val handler = Handler(Looper.getMainLooper())
-    private var isMonitoringInstagram = false
+    private val enforcementHandler = Handler(Looper.getMainLooper())
+    private var isLoopRunning = false
 
-    private val usageTickerRunnable = object : Runnable {
+    private val enforcementRunnable = object : Runnable {
         override fun run() {
-            if (isMonitoringInstagram) {
-                val shouldBlock = guardManager.checkForegroundProgress()
-                if (shouldBlock) {
+            if (prefs.isInstaInForeground) {
+                val startMs = prefs.instaForegroundStartMs
+                val liveDelta = if (startMs > 0L) (System.currentTimeMillis() - startMs) else 0L
+                val currentTotalMs = prefs.accumulatedUsageMs + liveDelta
+                val limitMs = prefs.getUsageLimitMs()
+
+                if (currentTotalMs >= limitMs) {
+                    Log.w(TAG, "Limit reached ($currentTotalMs ms >= $limitMs ms). Triggering cooldown lock.")
+                    val cooldownMs = prefs.getCooldownDurationMs()
+                    prefs.unlockTimestampMs = System.currentTimeMillis() + cooldownMs
+                    prefs.accumulatedUsageMs = 0L
+                    prefs.isInstaInForeground = false
+                    prefs.instaForegroundStartMs = 0L
+                    stopEnforcementLoop()
                     enforceLockScreen()
-                    isMonitoringInstagram = false
-                } else {
-                    handler.postDelayed(this, 1000L)
+                    return
                 }
+
+                enforcementHandler.postDelayed(this, 100L)
+            } else {
+                stopEnforcementLoop()
             }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        prefs = GuardPreferences(applicationContext)
         guardManager = GuardManager(applicationContext)
+        guardManager.syncWithUsageStatsIfEmpty()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -48,82 +64,98 @@ class AppBlockerService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         val className = event.className?.toString() ?: ""
 
-        // Ignore events caused by our own LockScreenActivity to prevent recursion
-        if (packageName == applicationContext.packageName) {
+        // Ignore system overlays/popups (volume panel, notification shade, power menu)
+        if (packageName == "android" || packageName == "com.android.systemui") {
             return
         }
 
+        // Ignore events caused by our own LockScreenActivity to prevent self-interception
+        if (packageName == applicationContext.packageName) {
+            if (className.contains("LockScreenActivity")) {
+                return
+            }
+        }
+
         if (packageName == GuardPreferences.TARGET_PACKAGE) {
-            handleInstagramWindowOpened(className)
+            handleInstagramWindowOpened()
         } else {
             handleNonInstagramWindowOpened()
         }
     }
 
-    private fun handleInstagramWindowOpened(className: String) {
-        Log.d(TAG, "Instagram window detected: $className")
+    private fun handleInstagramWindowOpened() {
+        val now = System.currentTimeMillis()
+        val unlockTime = prefs.unlockTimestampMs
 
-        if (guardManager.isCooldownActive()) {
-            Log.w(TAG, "Instagram opened during active 3-hour cooldown. Blocking immediately.")
-            enforceLockScreen()
-            return
+        // 1. Check if cooldown is active
+        if (unlockTime > 0L) {
+            if (now < unlockTime) {
+                Log.w(TAG, "Instagram opened during active cooldown. Blocking immediately.")
+                enforceLockScreen()
+                return
+            } else {
+                // Cooldown expired
+                prefs.resetSession()
+            }
         }
 
-        // Start tracking active foreground usage
-        val limitReached = guardManager.onInstagramForeground()
-        if (limitReached) {
-            Log.w(TAG, "Instagram 1-hour allowance reached. Triggering cooldown lock.")
-            enforceLockScreen()
-            return
+        // 2. Mark in foreground if not already marked
+        if (!prefs.isInstaInForeground) {
+            prefs.isInstaInForeground = true
+            prefs.instaForegroundStartMs = now
         }
 
-        // Begin active 1-second ticker while Instagram is in foreground
-        if (!isMonitoringInstagram) {
-            isMonitoringInstagram = true
-            handler.removeCallbacks(usageTickerRunnable)
-            handler.postDelayed(usageTickerRunnable, 1000L)
-        }
+        // 3. Start 100ms background enforcement loop
+        startEnforcementLoop()
     }
 
     private fun handleNonInstagramWindowOpened() {
-        if (isMonitoringInstagram) {
-            Log.d(TAG, "User exited Instagram. Pausing usage session counter.")
-            isMonitoringInstagram = false
-            handler.removeCallbacks(usageTickerRunnable)
-            guardManager.onInstagramBackground()
+        if (prefs.isInstaInForeground) {
+            val now = System.currentTimeMillis()
+            val startMs = prefs.instaForegroundStartMs
+            if (startMs > 0L) {
+                val delta = now - startMs
+                if (delta > 0L) {
+                    prefs.accumulatedUsageMs += delta
+                }
+            }
+            prefs.isInstaInForeground = false
+            prefs.instaForegroundStartMs = 0L
+            stopEnforcementLoop()
+            Log.d(TAG, "Exited Instagram. Saved accumulated usage: ${prefs.accumulatedUsageMs} ms")
         }
     }
 
-    /**
-     * Intercepts Instagram by launching the non-bypassable full-screen LockScreenActivity
-     * and redirecting the underlying app to the home screen.
-     */
-    private fun enforceLockScreen() {
-        // Send Instagram to background
-        performGlobalAction(GLOBAL_ACTION_HOME)
+    private fun startEnforcementLoop() {
+        if (!isLoopRunning) {
+            isLoopRunning = true
+            enforcementHandler.removeCallbacks(enforcementRunnable)
+            enforcementHandler.post(enforcementRunnable)
+        }
+    }
 
-        // Launch full-screen lock screen over everything
+    private fun stopEnforcementLoop() {
+        isLoopRunning = false
+        enforcementHandler.removeCallbacks(enforcementRunnable)
+    }
+
+    private fun enforceLockScreen() {
+        performGlobalAction(GLOBAL_ACTION_HOME)
         val lockIntent = Intent(applicationContext, LockScreenActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(lockIntent)
     }
 
     override fun onInterrupt() {
-        Log.w(TAG, "AccessibilityService interrupted")
-        isMonitoringInstagram = false
-        handler.removeCallbacks(usageTickerRunnable)
-        guardManager.onInstagramBackground()
+        stopEnforcementLoop()
+        handleNonInstagramWindowOpened()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        isMonitoringInstagram = false
-        handler.removeCallbacks(usageTickerRunnable)
-        guardManager.onInstagramBackground()
+        stopEnforcementLoop()
+        handleNonInstagramWindowOpened()
     }
 
     companion object {

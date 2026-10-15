@@ -30,12 +30,16 @@
     <string name="status_locked">LOCKED (Cooldown Active)</string>
     <string name="lock_cooldown_label">Unlock countdown:</string>
     <string name="btn_refresh">Refresh Stats</string>
-    <string name="btn_reset_session">Reset Session</string>
-    <string name="session_reset_confirmed">Session counters have been reset.</string>
+    <string name="btn_reset_session">Reset Timer</string>
+    <string name="session_reset_confirmed">Usage timer and lock state have been reset.</string>
+
+    <!-- Test Mode -->
+    <string name="test_mode_title">Test Mode (1 Min Limit / 2 Min Lock)</string>
+    <string name="test_mode_desc">Quick 60s allowance with 120s cooldown lock for immediate testing</string>
 
     <!-- Lock Screen -->
     <string name="lock_screen_title">Instagram is Locked for Focus</string>
-    <string name="lock_screen_subtitle">You have used your 1-hour Instagram allowance. Take a break while your focus resets.</string>
+    <string name="lock_screen_subtitle">You have used your Instagram allowance. Take a break while your focus resets.</string>
     <string name="lock_screen_cooldown_label">TIME REMAINING UNTIL UNLOCK</string>
     <string name="btn_go_home">Go Back to Home</string>
     <string name="lock_cooldown_finished">Cooldown completed. You may now return.</string>
