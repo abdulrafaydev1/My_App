@@ -1,11 +1,17 @@
 package com.instaguard.app.ui
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -18,7 +24,7 @@ import com.instaguard.app.util.GuardManager
 /**
  * Full-screen, non-bypassable lock activity displayed during an app's focus cooldown period.
  * Dynamically adapts to whichever of the 4 social apps is locked (Instagram, YouTube, Facebook, TikTok).
- * Ticks smoothly at 33ms (~30 FPS) displaying a live millisecond countdown.
+ * Configured with overlay window flags and audio focus seizure to prevent PiP bypasses.
  */
 class LockScreenActivity : AppCompatActivity() {
 
@@ -49,6 +55,17 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Configure overlay window type if permission is available
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (Settings.canDrawOverlays(this)) {
+                try {
+                    window.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not set TYPE_APPLICATION_OVERLAY: ${e.message}")
+                }
+            }
+        }
+
         super.onCreate(savedInstanceState)
         binding = ActivityLockScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -72,6 +89,8 @@ class LockScreenActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        seizeAudioFocus()
+
         if (!AppBlockerService.isAppLocked(appKey, guardManager.prefs)) {
             Toast.makeText(this, "$appName cooldown completed.", Toast.LENGTH_SHORT).show()
             finish()
@@ -117,7 +136,11 @@ class LockScreenActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_FULLSCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+        )
     }
 
     /**
@@ -147,12 +170,38 @@ class LockScreenActivity : AppCompatActivity() {
         finish()
     }
 
+    private fun seizeAudioFocus() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(audioAttributes)
+                    .build()
+                audioManager.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error seizing audio focus", e)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         timerHandler.removeCallbacks(countdownRunnable)
     }
 
     companion object {
+        private const val TAG = "LockScreenActivity"
         const val EXTRA_APP_KEY = "extra_app_key"
         const val EXTRA_APP_NAME = "extra_app_name"
     }

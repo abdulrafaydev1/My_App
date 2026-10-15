@@ -18,6 +18,8 @@ InstaGuard v3.0 is a lightweight, production-ready Native Android application bu
   - Live millisecond countdown timer (`HH:MM:SS.mmm`) ticking down that specific app's remaining cooldown.
   - Intercepts back navigation and redirects to the Android Home screen.
   - Automatically dismisses and resets when the app's cooldown concludes.
+- **YouTube Picture-in-Picture (PiP) Defense:** Aggressively detects, intercepts, and dismisses floating PiP windows using Accessibility Window APIs (`isInPictureInPicture`). Seizes exclusive transient audio focus to instantly pause background media playback.
+- **Full-Screen System Overlay:** Renders an impenetrable full-screen overlay (`TYPE_ACCESSIBILITY_OVERLAY` & `TYPE_APPLICATION_OVERLAY`) on top of all windows and system dialogs, preventing PiP from floating over the lock interface.
 - **Reboot Persistence & Fallback Sync:** State persisted across device reboots via `SharedPreferences`, with fallback queries to `UsageStatsManager.queryEvents()` if the service was not yet active.
 - **Clean Material 3 Dashboard:**
   - Status indicator (Active / Inactive).

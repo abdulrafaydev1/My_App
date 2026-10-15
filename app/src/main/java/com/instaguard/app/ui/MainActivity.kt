@@ -2,6 +2,8 @@ package com.instaguard.app.ui
 
 import android.content.Intent
 import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +24,7 @@ import com.instaguard.app.util.UsageStatsHelper
  * Main Dashboard Activity for InstaGuard v3.0 (All-in-One Multi-App Focus).
  * Displays independent real-time millisecond usage and cooldown timers for
  * Instagram, YouTube, Facebook, and TikTok ticking smoothly at 33ms (~30 FPS).
+ * Supports Overlay Permission setup for PiP defense.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -109,6 +112,21 @@ class MainActivity : AppCompatActivity() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             startActivity(intent)
+        }
+
+        // Permission 3: Display Over Other Apps Settings (PiP Defense)
+        binding.btnGrantOverlay.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(this, "Overlay permission not required on this Android version.", Toast.LENGTH_SHORT).show()
+            }
         }
 
         // Refresh Button
@@ -228,6 +246,10 @@ class MainActivity : AppCompatActivity() {
     private fun updatePermissionsUI() {
         val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
         val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+        val hasOverlay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else true
+
         val isServiceFullyActive = hasUsage && hasAccessibility
 
         if (isServiceFullyActive) {
@@ -280,6 +302,23 @@ class MainActivity : AppCompatActivity() {
             binding.tvAccessibilityStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_amber))
             binding.btnEnableAccessibility.isEnabled = true
             binding.btnEnableAccessibility.text = getString(R.string.btn_enable_accessibility)
+        }
+
+        // Overlay Permission Card (PiP Defense)
+        if (hasOverlay) {
+            binding.imgOverlayStatus.setImageResource(R.drawable.ic_check_circle)
+            binding.imgOverlayStatus.setColorFilter(ContextCompat.getColor(this, R.color.status_green))
+            binding.tvOverlayStatusBadge.text = getString(R.string.status_granted)
+            binding.tvOverlayStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_green))
+            binding.btnGrantOverlay.isEnabled = false
+            binding.btnGrantOverlay.text = getString(R.string.status_granted)
+        } else {
+            binding.imgOverlayStatus.setImageResource(R.drawable.ic_warning)
+            binding.imgOverlayStatus.setColorFilter(ContextCompat.getColor(this, R.color.status_amber))
+            binding.tvOverlayStatusBadge.text = getString(R.string.status_action_required)
+            binding.tvOverlayStatusBadge.setTextColor(ContextCompat.getColor(this, R.color.status_amber))
+            binding.btnGrantOverlay.isEnabled = true
+            binding.btnGrantOverlay.text = getString(R.string.btn_grant_overlay)
         }
     }
 }

@@ -17,6 +17,8 @@
     <string name="desc_accessibility">Allows instant detection and lock screen enforcement when Instagram launches.</string>
     <string name="status_granted">Granted</string>
     <string name="status_action_required">Tap to Enable</string>
+    <string name="btn_grant_overlay">3. Display Over Other Apps (PiP Defense)</string>
+    <string name="desc_overlay">Enables impenetrable full-screen system overlays to completely block floating Picture-in-Picture windows.</string>
 
     <!-- Restricted Settings Guide (Android 13+) -->
     <string name="restricted_settings_title">Android 13+ Setup Note (Sideloaded APK)</string>
