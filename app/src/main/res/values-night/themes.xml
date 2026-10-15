@@ -1,11 +1,11 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.InstaGuard" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.InstaGuard" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">@color/accent</item>
-        <item name="android:statusBarColor">#0F172A</item>
+        <item name="android:statusBarColor">@color/cyber_bg</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
-        <item name="android:windowBackground">#0F172A</item>
+        <item name="android:windowBackground">@color/cyber_bg</item>
     </style>
 </resources>

@@ -13,7 +13,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Business logic and helper methods for InstaGuard v3.3 Multi-App Focus.
+ * Business logic and helper methods for InstaGuard Pro v4.0 Multi-App Focus.
  */
 class GuardManager(private val context: Context) {
 
@@ -39,15 +39,7 @@ class GuardManager(private val context: Context) {
         return sdf.format(Date(epochMs))
     }
 
-    /**
-     * Resets all app timers and cooldown states.
-     */
-    @Synchronized
-    fun resetSession() {
-        AppBlockerService.resetAll(context)
-    }
-
-    // Legacy helpers for Instagram
+    // Helper queries
     fun isCooldownActive(): Boolean {
         return AppBlockerService.isAppLocked(TrackedApp.INSTAGRAM.key, context)
     }

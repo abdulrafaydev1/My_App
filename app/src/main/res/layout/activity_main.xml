@@ -4,35 +4,44 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_light">
+    android:background="@color/cyber_bg">
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/nestedScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true">
 
         <LinearLayout
+            android:id="@+id/layoutMainContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="20dp">
 
-            <!-- Top Header -->
+            <!-- Hero Header Section -->
             <LinearLayout
+                android:id="@+id/layoutHeader"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="18dp">
 
-                <ImageView
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:src="@drawable/ic_shield"
-                    app:tint="@color/primary"
+                <FrameLayout
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:background="@drawable/ic_launcher_background"
-                    android:padding="8dp"
-                    android:contentDescription="@string/app_name" />
+                    android:backgroundTint="@color/cyber_surface"
+                    android:padding="10dp">
+
+                    <ImageView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ic_shield"
+                        app:tint="@color/primary"
+                        android:contentDescription="@string/app_name" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -42,18 +51,22 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard v3.3 (Isolated Multi-App)"
-                        android:textColor="@color/text_primary_light"
+                        android:text="InstaGuard Pro v4.0"
+                        android:textColor="@color/cyber_text_primary"
                         android:textSize="22sp"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:letterSpacing="0.01" />
 
                     <TextView
+                        android:id="@+id/tvHeaderSubtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="All-in-One Blocker (IG, YT, FB, TikTok)"
-                        android:textColor="@color/text_secondary_light"
+                        android:layout_marginTop="2dp"
+                        android:text="Strict 1h Limit • 5h Cooldown Engine"
+                        android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -67,30 +80,39 @@
                     android:contentDescription="@string/btn_refresh" />
             </LinearLayout>
 
-            <!-- Overall Status Card -->
+            <!-- Live Status Hero Pill Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardOverallStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
+                app:cardElevation="0dp"
                 app:strokeWidth="1dp"
-                app:strokeColor="@color/status_green">
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:id="@+id/layoutOverallStatusBg"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@color/status_green_bg"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:padding="16dp">
 
+                    <View
+                        android:id="@+id/viewStatusDot"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:layout_marginStart="2dp"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/ic_launcher_background"
+                        android:backgroundTint="@color/status_green" />
+
                     <ImageView
                         android:id="@+id/imgOverallStatus"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
                         android:src="@drawable/ic_check_circle"
                         app:tint="@color/status_green"
                         android:contentDescription="@null" />
@@ -98,7 +120,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
+                        android:layout_marginStart="12dp"
                         android:orientation="vertical">
 
                         <TextView
@@ -107,102 +129,114 @@
                             android:layout_height="wrap_content"
                             android:text="@string/service_active"
                             android:textColor="@color/status_green"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.05" />
 
                         <TextView
                             android:id="@+id/tvOverallStatusDesc"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Active protection for Instagram, YouTube, Facebook &amp; TikTok."
-                            android:textColor="@color/text_secondary_light"
+                            android:text="Hardened protection active for IG, YT, FB &amp; TikTok."
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Test Mode & Global Reset Card -->
+            <!-- Test Mode Anti-Bypass Card (NO Reset Button) -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardTestMode"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="20dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
                     android:padding="16dp">
 
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/test_mode_title"
-                                android:textColor="@color/text_primary_light"
-                                android:textSize="14sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/test_mode_desc"
-                                android:textColor="@color/text_secondary_light"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-
-                        <androidx.appcompat.widget.SwitchCompat
-                            android:id="@+id/switchTestMode"
+                        <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp" />
+                            android:text="@string/test_mode_title"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Debug: 60s Limit / 120s Lock. Locked when active."
+                            android:textColor="@color/cyber_text_secondary"
+                            android:textSize="11sp" />
                     </LinearLayout>
 
-                    <Button
-                        android:id="@+id/btnResetAllTimers"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="match_parent"
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchTestMode"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Reset All Timers"
-                        android:textSize="13sp" />
+                        android:layout_marginStart="10dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Section Title -->
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/layoutSectionTitle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:text="Tracked Social Apps (Independent)"
-                android:textColor="@color/text_primary_light"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tracked Social Platforms"
+                    android:textColor="@color/cyber_text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1h Limit • 5h Lock"
+                    android:textColor="@color/cyber_text_secondary"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
 
             <!-- 1. Instagram Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardInstagram"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="14dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -222,7 +256,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="📸 Instagram"
-                            android:textColor="@color/text_primary_light"
+                            android:textColor="@color/cyber_text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
 
@@ -230,8 +264,6 @@
                             android:id="@+id/tvInstagramBadge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/ic_launcher_background"
-                            android:backgroundTint="@color/status_green_bg"
                             android:paddingHorizontal="10dp"
                             android:paddingVertical="4dp"
                             android:text="ALLOWED"
@@ -243,7 +275,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="12dp"
                         android:gravity="bottom"
                         android:orientation="horizontal">
 
@@ -253,7 +285,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="monospace"
                             android:text="00:00:00.000"
-                            android:textColor="@color/primary"
+                            android:textColor="@color/cyber_timer_allowed"
                             android:textSize="20sp"
                             android:textStyle="bold" />
 
@@ -265,7 +297,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="/ 01:00:00.000"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
                         <View
@@ -280,7 +312,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="01:00:00.000 left"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -289,11 +321,11 @@
                         android:id="@+id/progressInstagram"
                         android:layout_width="match_parent"
                         android:layout_height="8dp"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:max="1000"
                         android:progress="0"
-                        app:indicatorColor="@color/primary"
-                        app:trackColor="@color/primary_light"
+                        app:indicatorColor="@color/status_green"
+                        app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -303,10 +335,12 @@
                 android:id="@+id/cardYouTube"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="14dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -326,7 +360,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="▶️ YouTube"
-                            android:textColor="@color/text_primary_light"
+                            android:textColor="@color/cyber_text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
 
@@ -334,8 +368,6 @@
                             android:id="@+id/tvYouTubeBadge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/ic_launcher_background"
-                            android:backgroundTint="@color/status_green_bg"
                             android:paddingHorizontal="10dp"
                             android:paddingVertical="4dp"
                             android:text="ALLOWED"
@@ -347,7 +379,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="12dp"
                         android:gravity="bottom"
                         android:orientation="horizontal">
 
@@ -357,7 +389,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="monospace"
                             android:text="00:00:00.000"
-                            android:textColor="@color/status_red"
+                            android:textColor="@color/cyber_timer_allowed"
                             android:textSize="20sp"
                             android:textStyle="bold" />
 
@@ -369,7 +401,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="/ 01:00:00.000"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
                         <View
@@ -384,7 +416,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="01:00:00.000 left"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -393,11 +425,11 @@
                         android:id="@+id/progressYouTube"
                         android:layout_width="match_parent"
                         android:layout_height="8dp"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:max="1000"
                         android:progress="0"
-                        app:indicatorColor="@color/status_red"
-                        app:trackColor="@color/status_red_bg"
+                        app:indicatorColor="@color/status_green"
+                        app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -407,10 +439,12 @@
                 android:id="@+id/cardFacebook"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
+                android:layout_marginBottom="14dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -430,7 +464,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="📘 Facebook"
-                            android:textColor="@color/text_primary_light"
+                            android:textColor="@color/cyber_text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
 
@@ -438,8 +472,6 @@
                             android:id="@+id/tvFacebookBadge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/ic_launcher_background"
-                            android:backgroundTint="@color/status_green_bg"
                             android:paddingHorizontal="10dp"
                             android:paddingVertical="4dp"
                             android:text="ALLOWED"
@@ -451,7 +483,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="12dp"
                         android:gravity="bottom"
                         android:orientation="horizontal">
 
@@ -461,7 +493,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="monospace"
                             android:text="00:00:00.000"
-                            android:textColor="#1877F2"
+                            android:textColor="@color/cyber_timer_allowed"
                             android:textSize="20sp"
                             android:textStyle="bold" />
 
@@ -473,7 +505,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="/ 01:00:00.000"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
                         <View
@@ -488,7 +520,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="01:00:00.000 left"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -497,11 +529,11 @@
                         android:id="@+id/progressFacebook"
                         android:layout_width="match_parent"
                         android:layout_height="8dp"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:max="1000"
                         android:progress="0"
-                        app:indicatorColor="#1877F2"
-                        app:trackColor="#E7F3FF"
+                        app:indicatorColor="@color/status_green"
+                        app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -511,10 +543,12 @@
                 android:id="@+id/cardTikTok"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="20dp"
                 app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -534,7 +568,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:text="🎵 TikTok"
-                            android:textColor="@color/text_primary_light"
+                            android:textColor="@color/cyber_text_primary"
                             android:textSize="16sp"
                             android:textStyle="bold" />
 
@@ -542,8 +576,6 @@
                             android:id="@+id/tvTikTokBadge"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/ic_launcher_background"
-                            android:backgroundTint="@color/status_green_bg"
                             android:paddingHorizontal="10dp"
                             android:paddingVertical="4dp"
                             android:text="ALLOWED"
@@ -555,7 +587,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="12dp"
                         android:gravity="bottom"
                         android:orientation="horizontal">
 
@@ -565,7 +597,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="monospace"
                             android:text="00:00:00.000"
-                            android:textColor="#FE2C55"
+                            android:textColor="@color/cyber_timer_allowed"
                             android:textSize="20sp"
                             android:textStyle="bold" />
 
@@ -577,7 +609,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="/ 01:00:00.000"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
                         <View
@@ -592,7 +624,7 @@
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
                             android:text="01:00:00.000 left"
-                            android:textColor="@color/text_secondary_light"
+                            android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -601,11 +633,11 @@
                         android:id="@+id/progressTikTok"
                         android:layout_width="match_parent"
                         android:layout_height="8dp"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="10dp"
                         android:max="1000"
                         android:progress="0"
-                        app:indicatorColor="#FE2C55"
-                        app:trackColor="#FFE9EE"
+                        app:indicatorColor="@color/status_green"
+                        app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -614,9 +646,9 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
+                android:layout_marginBottom="12dp"
                 android:text="@string/setup_required_title"
-                android:textColor="@color/text_primary_light"
+                android:textColor="@color/cyber_text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -627,8 +659,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 app:cardCornerRadius="14dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -644,8 +678,8 @@
 
                         <ImageView
                             android:id="@+id/imgUsageStatus"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
                             android:src="@drawable/ic_warning"
                             app:tint="@color/status_amber"
                             android:contentDescription="@null" />
@@ -656,8 +690,8 @@
                             android:layout_weight="1"
                             android:layout_marginStart="10dp"
                             android:text="@string/btn_grant_usage_access"
-                            android:textColor="@color/text_primary_light"
-                            android:textSize="15sp"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -675,7 +709,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="@string/desc_usage_access"
-                        android:textColor="@color/text_secondary_light"
+                        android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
 
                     <Button
@@ -685,6 +719,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:text="@string/btn_grant_usage_access"
+                        android:textColor="#FFFFFF"
+                        app:backgroundTint="@color/primary"
                         android:textSize="13sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -694,10 +730,12 @@
                 android:id="@+id/cardAccessibility"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 app:cardCornerRadius="14dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -713,8 +751,8 @@
 
                         <ImageView
                             android:id="@+id/imgAccessibilityStatus"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
                             android:src="@drawable/ic_warning"
                             app:tint="@color/status_amber"
                             android:contentDescription="@null" />
@@ -725,8 +763,8 @@
                             android:layout_weight="1"
                             android:layout_marginStart="10dp"
                             android:text="@string/btn_enable_accessibility"
-                            android:textColor="@color/text_primary_light"
-                            android:textSize="15sp"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -744,7 +782,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="@string/desc_accessibility"
-                        android:textColor="@color/text_secondary_light"
+                        android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
 
                     <Button
@@ -754,6 +792,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:text="@string/btn_enable_accessibility"
+                        android:textColor="#FFFFFF"
+                        app:backgroundTint="@color/primary"
                         android:textSize="13sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -765,8 +805,10 @@
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="14dp"
-                app:cardElevation="1dp"
-                app:cardBackgroundColor="@color/surface_light">
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -782,8 +824,8 @@
 
                         <ImageView
                             android:id="@+id/imgOverlayStatus"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
                             android:src="@drawable/ic_warning"
                             app:tint="@color/status_amber"
                             android:contentDescription="@null" />
@@ -794,8 +836,8 @@
                             android:layout_weight="1"
                             android:layout_marginStart="10dp"
                             android:text="@string/btn_grant_overlay"
-                            android:textColor="@color/text_primary_light"
-                            android:textSize="15sp"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="14sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -813,7 +855,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         android:text="@string/desc_overlay"
-                        android:textColor="@color/text_secondary_light"
+                        android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
 
                     <Button
@@ -823,6 +865,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:text="@string/btn_grant_overlay"
+                        android:textColor="#FFFFFF"
+                        app:backgroundTint="@color/primary"
                         android:textSize="13sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -835,8 +879,8 @@
                 app:cardCornerRadius="14dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp"
-                app:strokeColor="@color/divider_light"
-                app:cardBackgroundColor="@color/status_amber_bg">
+                app:strokeColor="#78350F"
+                app:cardBackgroundColor="#1F1608">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -851,8 +895,8 @@
                         android:orientation="horizontal">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
                             android:src="@drawable/ic_info"
                             app:tint="@color/status_amber"
                             android:contentDescription="@null" />
@@ -862,7 +906,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
                             android:text="@string/restricted_settings_title"
-                            android:textColor="#92400E"
+                            android:textColor="#FBBF24"
                             android:textSize="13sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -873,7 +917,7 @@
                         android:layout_marginTop="8dp"
                         android:lineSpacingExtra="3dp"
                         android:text="@string/restricted_settings_desc"
-                        android:textColor="#78350F"
+                        android:textColor="#D97706"
                         android:textSize="12sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

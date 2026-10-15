@@ -19,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * High-performance AccessibilityService that monitors Instagram, YouTube, Facebook,
  * and TikTok independently in real-time with millisecond precision.
- * Strictly isolates usage timers and cooldown locks per app so locking one app never locks others.
+ * Enforces a strict 1-hour usage limit and a hardened 5-hour cooldown lock per app.
+ * Includes auto-checkpoint persistence every 3 seconds to guarantee reboot/crash protection.
  * Defends against Picture-in-Picture (PiP) bypasses via hardware media keys and exclusive audio focus.
  */
 class AppBlockerService : AccessibilityService() {
@@ -27,6 +28,7 @@ class AppBlockerService : AccessibilityService() {
     private lateinit var prefs: GuardPreferences
     private val enforcementHandler = Handler(Looper.getMainLooper())
     private var isLoopRunning = false
+    private var checkpointTickCounter = 0
 
     private val enforcementRunnable = object : Runnable {
         override fun run() {
@@ -37,7 +39,7 @@ class AppBlockerService : AccessibilityService() {
                 val limitMs = prefs.getUsageLimitMs()
 
                 if (usedMs >= limitMs) {
-                    Log.w(TAG, "[$activeKey] Limit reached ($usedMs ms >= $limitMs ms). Triggering cooldown lock.")
+                    Log.w(TAG, "[$activeKey] Limit reached ($usedMs ms >= $limitMs ms). Triggering 5-hour cooldown lock.")
                     val cooldownMs = prefs.getCooldownDurationMs()
                     val unlockTime = now + cooldownMs
 
@@ -49,11 +51,30 @@ class AppBlockerService : AccessibilityService() {
 
                     currentForegroundAppKey = null
                     foregroundStartMs = 0L
+                    checkpointTickCounter = 0
                     stopEnforcementLoop()
 
                     val app = TrackedApp.fromKey(activeKey) ?: TrackedApp.INSTAGRAM
                     enforceLockScreen(app)
                     return
+                }
+
+                // Auto-checkpoint persistence: Flush live usage to SharedPreferences every 30 ticks (~3 seconds)
+                checkpointTickCounter++
+                if (checkpointTickCounter >= 30) {
+                    checkpointTickCounter = 0
+                    val start = foregroundStartMs
+                    if (start > 0L) {
+                        val delta = now - start
+                        if (delta > 0L) {
+                            val current = accumulatedUsageMap[activeKey] ?: prefs.getAccumulatedUsage(activeKey)
+                            val updated = current + delta
+                            accumulatedUsageMap[activeKey] = updated
+                            prefs.setAccumulatedUsage(activeKey, updated)
+                            foregroundStartMs = now
+                            Log.d(TAG, "[$activeKey] Periodic auto-checkpoint saved: $updated ms")
+                        }
+                    }
                 }
 
                 enforcementHandler.postDelayed(this, 100L)
@@ -68,6 +89,15 @@ class AppBlockerService : AccessibilityService() {
         appContext = applicationContext
         prefs = GuardPreferences(applicationContext)
         syncFromPrefs(applicationContext)
+        Log.i(TAG, "AppBlockerService created; per-app state loaded.")
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        appContext = applicationContext
+        prefs = GuardPreferences(applicationContext)
+        syncFromPrefs(applicationContext)
+        Log.i(TAG, "AppBlockerService connected; per-app state verified.")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -116,7 +146,7 @@ class AppBlockerService : AccessibilityService() {
 
         // 1. Check if ONLY the detected app is locked
         if (isAppLocked(detectedAppKey, applicationContext)) {
-            Log.w(TAG, "[${app.displayName}] Opened during active cooldown. Blocking immediately.")
+            Log.w(TAG, "[${app.displayName}] Opened during active 5h cooldown. Blocking immediately.")
             commitPreviousForegroundApp(now)
             stopEnforcementLoop()
             enforceLockScreen(app)
@@ -132,6 +162,7 @@ class AppBlockerService : AccessibilityService() {
         if (currentForegroundAppKey != detectedAppKey) {
             currentForegroundAppKey = detectedAppKey
             foregroundStartMs = now
+            checkpointTickCounter = 0
             startEnforcementLoop()
             Log.d(TAG, "[${app.displayName}] Foreground tracking started at $now")
         }
@@ -160,11 +191,13 @@ class AppBlockerService : AccessibilityService() {
         }
         currentForegroundAppKey = null
         foregroundStartMs = 0L
+        checkpointTickCounter = 0
     }
 
     private fun startEnforcementLoop() {
         if (!isLoopRunning) {
             isLoopRunning = true
+            checkpointTickCounter = 0
             enforcementHandler.removeCallbacks(enforcementRunnable)
             enforcementHandler.post(enforcementRunnable)
         }
@@ -172,6 +205,7 @@ class AppBlockerService : AccessibilityService() {
 
     private fun stopEnforcementLoop() {
         isLoopRunning = false
+        checkpointTickCounter = 0
         enforcementHandler.removeCallbacks(enforcementRunnable)
     }
 
@@ -261,9 +295,18 @@ class AppBlockerService : AccessibilityService() {
         fun syncFromPrefs(context: Context) {
             appContext = context.applicationContext
             val prefs = GuardPreferences(context)
+            val now = System.currentTimeMillis()
             for (key in APP_KEYS) {
-                accumulatedUsageMap[key] = prefs.getAccumulatedUsage(key)
-                unlockTimestampMap[key] = prefs.getUnlockTimestamp(key)
+                val usage = prefs.getAccumulatedUsage(key)
+                val unlock = prefs.getUnlockTimestamp(key)
+                if (unlock > 0L && unlock <= now) {
+                    accumulatedUsageMap[key] = 0L
+                    unlockTimestampMap[key] = 0L
+                    prefs.resetApp(key)
+                } else {
+                    accumulatedUsageMap[key] = usage
+                    unlockTimestampMap[key] = unlock
+                }
             }
         }
 
@@ -314,17 +357,6 @@ class AppBlockerService : AccessibilityService() {
             accumulatedUsageMap[appKey] = 0L
             val ctx = context ?: appContext
             ctx?.let { GuardPreferences(it).resetApp(appKey) }
-        }
-
-        fun resetAll(context: Context? = null) {
-            currentForegroundAppKey = null
-            foregroundStartMs = 0L
-            for (key in APP_KEYS) {
-                accumulatedUsageMap[key] = 0L
-                unlockTimestampMap[key] = 0L
-            }
-            val ctx = context ?: appContext
-            ctx?.let { GuardPreferences(it).resetAllApps() }
         }
     }
 }

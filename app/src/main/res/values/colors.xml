@@ -1,30 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#4F46E5</color>
-    <color name="primary_dark">#3730A3</color>
+    <!-- Brand / Primary -->
+    <color name="primary">#6366F1</color>
+    <color name="primary_dark">#4338CA</color>
     <color name="primary_light">#EEF2FF</color>
-    <color name="accent">#E1306C</color>
+    <color name="accent">#EC4899</color>
 
     <!-- Status Colors -->
     <color name="status_green">#10B981</color>
-    <color name="status_green_bg">#ECFDF5</color>
+    <color name="status_green_bg">#064E3B</color>
     <color name="status_red">#EF4444</color>
-    <color name="status_red_bg">#FEF2F2</color>
+    <color name="status_red_bg">#7F1D1D</color>
     <color name="status_amber">#F59E0B</color>
-    <color name="status_amber_bg">#FFFBEB</color>
+    <color name="status_amber_bg">#78350F</color>
 
-    <!-- Neutrals (Light) -->
-    <color name="background_light">#F8FAFC</color>
-    <color name="surface_light">#FFFFFF</color>
-    <color name="text_primary_light">#0F172A</color>
-    <color name="text_secondary_light">#64748B</color>
-    <color name="divider_light">#E2E8F0</color>
+    <!-- Cyber-Dark Theme Palette (v4.0) -->
+    <color name="cyber_bg">#0B0F19</color>
+    <color name="cyber_surface">#161F30</color>
+    <color name="cyber_stroke">#2A364F</color>
+    <color name="cyber_text_primary">#F8FAFC</color>
+    <color name="cyber_text_secondary">#94A3B8</color>
+    <color name="cyber_timer_allowed">#38BDF8</color>
+    <color name="cyber_timer_locked">#F87171</color>
+    <color name="cyber_accent_green">#10B981</color>
+    <color name="cyber_accent_red">#EF4444</color>
+    <color name="cyber_accent_amber">#F59E0B</color>
+
+    <!-- Backward Compatibility Colors -->
+    <color name="background_light">#0B0F19</color>
+    <color name="surface_light">#161F30</color>
+    <color name="text_primary_light">#F8FAFC</color>
+    <color name="text_secondary_light">#94A3B8</color>
+    <color name="divider_light">#2A364F</color>
 
     <!-- Lock Screen (Pure Deep Focus Dark Theme) -->
     <color name="lock_bg">#090D16</color>
-    <color name="lock_surface">#131B2E</color>
-    <color name="lock_accent_red">#FF4D4D</color>
+    <color name="lock_surface">#151C2C</color>
+    <color name="lock_accent_red">#EF4444</color>
     <color name="lock_text_primary">#F8FAFC</color>
     <color name="lock_text_secondary">#94A3B8</color>
-    <color name="lock_timer_bg">#1E293B</color>
+    <color name="lock_timer_bg">#111827</color>
 </resources>

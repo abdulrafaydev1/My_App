@@ -1,5 +1,7 @@
 package com.instaguard.app.ui
 
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
@@ -11,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -21,15 +24,18 @@ import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
 
 /**
- * Full-screen, non-bypassable lock activity displayed during an app's focus cooldown period.
+ * Full-screen, non-bypassable lock activity displayed during an app's 5-hour focus cooldown period.
  * Dynamically adapts to whichever of the 4 social apps is locked (Instagram, YouTube, Facebook, TikTok).
- * Dispatches media pause/stop keys and seizes exclusive audio focus to guarantee zero Picture-in-Picture bypasses.
+ * Features breathing lock icon animation, millisecond precision countdown, and media suppression.
  */
 class LockScreenActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLockScreenBinding
     private lateinit var guardManager: GuardManager
     private val timerHandler = Handler(Looper.getMainLooper())
+
+    private var pulseScaleXAnimator: ObjectAnimator? = null
+    private var pulseScaleYAnimator: ObjectAnimator? = null
 
     private var lockedAppKey: String = "INSTAGRAM"
     private var appName: String = "Instagram"
@@ -64,6 +70,7 @@ class LockScreenActivity : AppCompatActivity() {
         configureWindowFlags()
         setupBackPressInterceptor()
         setupListeners()
+        startLockIconBreathingAnimation()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -115,12 +122,34 @@ class LockScreenActivity : AppCompatActivity() {
 
     private fun applyDynamicTexts() {
         binding.tvLockBadgeTitle.text = "${appName.uppercase()} FOCUS SHIELD"
-        binding.tvLockTitle.text = "$appName is Locked for Focus"
-        binding.tvLockSubtitle.text = "You have used your $appName allowance. Take a break while your focus resets."
+        binding.tvLockTitle.text = "$appName is Locked!"
+        binding.tvLockSubtitle.text = "1-Hour limit reached. Take a 5-Hour focus break."
     }
 
     private fun applyMonospaceTypeface() {
         binding.tvCountdownTimer.typeface = Typeface.MONOSPACE
+    }
+
+    /**
+     * Breathing scale animation on the lock icon for premium visual feedback.
+     */
+    private fun startLockIconBreathingAnimation() {
+        pulseScaleXAnimator?.cancel()
+        pulseScaleYAnimator?.cancel()
+
+        pulseScaleXAnimator = ObjectAnimator.ofFloat(binding.imgLockIcon, View.SCALE_X, 1.0f, 1.14f).apply {
+            duration = 1100
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
+
+        pulseScaleYAnimator = ObjectAnimator.ofFloat(binding.imgLockIcon, View.SCALE_Y, 1.0f, 1.14f).apply {
+            duration = 1100
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
     }
 
     private fun configureWindowFlags() {
@@ -203,6 +232,8 @@ class LockScreenActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         timerHandler.removeCallbacks(countdownRunnable)
+        pulseScaleXAnimator?.cancel()
+        pulseScaleYAnimator?.cancel()
     }
 
     companion object {

@@ -6,7 +6,8 @@ import com.instaguard.app.model.TrackedApp
 
 /**
  * Thread-safe wrapper for SharedPreferences to persist strictly isolated per-app
- * real-time usage and cooldown timestamps for Instagram, YouTube, Facebook, and TikTok.
+ * real-time usage and hardened 5-hour cooldown timestamps for Instagram, YouTube,
+ * Facebook, and TikTok.
  */
 class GuardPreferences(context: Context) {
 
@@ -20,9 +21,9 @@ class GuardPreferences(context: Context) {
 
         const val KEY_IS_TEST_MODE = "is_test_mode"
 
-        // Normal Mode: 1 Hour Limit (3,600,000 ms), 3 Hours Cooldown (10,800,000 ms)
-        const val USAGE_LIMIT_MS = 60 * 60 * 1000L // 3,600,000 ms
-        const val COOLDOWN_DURATION_MS = 3 * 60 * 60 * 1000L // 10,800,000 ms
+        // Normal Mode: 1 Hour Limit (3,600,000 ms), 5 Hours Cooldown (18,000,000 ms)
+        const val USAGE_LIMIT_MS = 60 * 60 * 1000L // 3,600,000 ms (1 hour)
+        const val COOLDOWN_DURATION_MS = 5 * 60 * 60 * 1000L // 18,000,000 ms (5 hours)
 
         // Test Mode: 1 Minute Limit (60,000 ms), 2 Minutes Cooldown (120,000 ms)
         const val TEST_USAGE_LIMIT_MS = 60 * 1000L // 60,000 ms
@@ -76,7 +77,7 @@ class GuardPreferences(context: Context) {
     }
 
     /**
-     * Resets usage and cooldown state for an individual app.
+     * Resets usage and cooldown state for an individual app when cooldown completes naturally.
      */
     fun resetApp(appKey: String) {
         prefs.edit()
@@ -86,7 +87,7 @@ class GuardPreferences(context: Context) {
     }
 
     /**
-     * Resets usage and cooldown for all 4 social apps and cleans out legacy shared keys.
+     * Resets usage and cooldown for all apps and scrubs legacy keys.
      */
     fun resetAllApps() {
         val editor = prefs.edit()
@@ -94,7 +95,6 @@ class GuardPreferences(context: Context) {
             editor.putLong(usageKey(app.key), 0L)
             editor.putLong(unlockKey(app.key), 0L)
         }
-        // Scrub legacy keys to avoid any possible state bleeding
         editor.remove("accumulated_usage_ms")
         editor.remove("insta_foreground_start_ms")
         editor.remove("is_insta_in_foreground")
