@@ -10,8 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
-import android.util.Log
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -24,7 +23,7 @@ import com.instaguard.app.util.GuardManager
 /**
  * Full-screen, non-bypassable lock activity displayed during an app's focus cooldown period.
  * Dynamically adapts to whichever of the 4 social apps is locked (Instagram, YouTube, Facebook, TikTok).
- * Configured with overlay window flags and audio focus seizure to prevent PiP bypasses.
+ * Dispatches media pause/stop keys and seizes exclusive audio focus to guarantee zero Picture-in-Picture bypasses.
  */
 class LockScreenActivity : AppCompatActivity() {
 
@@ -55,17 +54,6 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Configure overlay window type if permission is available
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (Settings.canDrawOverlays(this)) {
-                try {
-                    window.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not set TYPE_APPLICATION_OVERLAY: ${e.message}")
-                }
-            }
-        }
-
         super.onCreate(savedInstanceState)
         binding = ActivityLockScreenBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -89,7 +77,8 @@ class LockScreenActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        seizeAudioFocus()
+        // Force-pause media playback and seize audio focus whenever lock screen is active
+        stopAllMediaPlayback()
 
         if (!AppBlockerService.isAppLocked(appKey, guardManager.prefs)) {
             Toast.makeText(this, "$appName cooldown completed.", Toast.LENGTH_SHORT).show()
@@ -162,6 +151,7 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     private fun redirectToHomeScreen() {
+        stopAllMediaPlayback()
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -170,28 +160,34 @@ class LockScreenActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun seizeAudioFocus() {
+    /**
+     * Dispatches hardware media pause/stop keys and seizes exclusive audio focus,
+     * preventing YouTube/TikTok videos from playing in PiP or in the background.
+     */
+    private fun stopAllMediaPlayback() {
         try {
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-                    .setAudioAttributes(audioAttributes)
-                    .build()
-                audioManager.requestAudioFocus(focusRequest)
-            } else {
-                @Suppress("DEPRECATION")
-                audioManager.requestAudioFocus(
-                    null,
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
-                )
-            }
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+            // 1. Dispatch Hardware Media PAUSE and STOP key events to immediately pause YouTube/TikTok video
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PAUSE))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP))
+
+            // 2. Seize Exclusive Audio Focus so Android OS forces YouTube to pause playback immediately
+            val playbackAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                .build()
+
+            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(playbackAttributes)
+                .setOnAudioFocusChangeListener { }
+                .build()
+
+            audioManager.requestAudioFocus(focusRequest)
         } catch (e: Exception) {
-            Log.e(TAG, "Error seizing audio focus", e)
+            e.printStackTrace()
         }
     }
 
@@ -201,7 +197,6 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val TAG = "LockScreenActivity"
         const val EXTRA_APP_KEY = "extra_app_key"
         const val EXTRA_APP_NAME = "extra_app_name"
     }
