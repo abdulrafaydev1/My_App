@@ -9,6 +9,10 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -17,10 +21,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.KeyEvent
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.instaguard.app.R
 import com.instaguard.app.data.GuardPreferences
@@ -54,6 +63,7 @@ class AppBlockerService : AccessibilityService() {
     private var tickCounter = 0
     private var lastTamperBlockMs = 0L
     private var lastScrollCountTimestampMs = 0L
+    private var lastPillText = ""
 
     /**
      * Monotonic 50ms Delta-Tick Stopwatch Ticker.
@@ -74,6 +84,7 @@ class AppBlockerService : AccessibilityService() {
             val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if (pm != null && !pm.isInteractive) {
                 currentForegroundAppKey = null
+                removeFloatingPill()
                 tickerHandler.postDelayed(this, 50L)
                 return
             }
@@ -103,6 +114,7 @@ class AppBlockerService : AccessibilityService() {
             if (activeKey != null) {
                 if (isAppLocked(activeKey, applicationContext)) {
                     currentForegroundAppKey = null
+                    removeFloatingPill()
                     stopAllMediaPlayback()
                     launchLockScreen(activeKey)
                 } else {
@@ -115,12 +127,15 @@ class AppBlockerService : AccessibilityService() {
                     dailyTotalMap[activeKey] = currentDaily + deltaMs
 
                     val limitMs = prefs.getUsageLimitMs()
+                    val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
+                    updateFloatingPill(activeKey, remainingAllowance)
 
                     // Smart Warning Notifications (5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
 
                     if (updatedUsage >= limitMs) {
                         Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
+                        removeFloatingPill()
                         val cooldownMs = prefs.getCooldownDurationMs()
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
@@ -134,6 +149,10 @@ class AppBlockerService : AccessibilityService() {
                         stopAllMediaPlayback()
                         launchLockScreen(activeKey)
                     }
+                }
+            } else {
+                if (isPillAttached) {
+                    removeFloatingPill()
                 }
             }
 
@@ -249,6 +268,8 @@ class AppBlockerService : AccessibilityService() {
                     val todayDateStr = getTodayDateStr()
                     prefs.setScrollToday(todayDateStr, activeKey, todayCount)
                     prefs.setScrollTotal(activeKey, totalCount)
+
+                    pulseFloatingPill(activeKey)
                 }
             }
             return
@@ -272,6 +293,7 @@ class AppBlockerService : AccessibilityService() {
         if (packageName == applicationContext.packageName) {
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
+            removeFloatingPill()
             return
         }
 
@@ -281,6 +303,7 @@ class AppBlockerService : AccessibilityService() {
             if (isAppLocked(detectedKey, applicationContext)) {
                 Log.w(TAG, "[$detectedKey] Opened during active cooldown lock. Enforcing LockScreen.")
                 currentForegroundAppKey = null
+                removeFloatingPill()
                 stopAllMediaPlayback()
                 launchLockScreen(detectedKey)
             } else {
@@ -289,11 +312,16 @@ class AppBlockerService : AccessibilityService() {
                 }
                 currentForegroundAppKey = detectedKey
                 Log.d(TAG, "[$detectedKey] Foreground active via TYPE_WINDOW_STATE_CHANGED")
+                val limitMs = prefs.getUsageLimitMs()
+                val usedMs = accumulatedUsageMap[detectedKey] ?: 0L
+                val remainingAllowance = maxOf(0L, limitMs - usedMs)
+                showFloatingScrollCounterPill(detectedKey, remainingAllowance)
             }
         } else {
             // User switched to another real application or Home Launcher
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
+            removeFloatingPill()
         }
     }
 
@@ -504,6 +532,7 @@ class AppBlockerService : AccessibilityService() {
     }
 
     private fun launchLockScreen(appKey: String) {
+        removeFloatingPill()
         val tracked = TrackedApp.fromKey(appKey)
         val appDisplayName = tracked?.displayName ?: run {
             try {
@@ -572,6 +601,153 @@ class AppBlockerService : AccessibilityService() {
 
     private fun hasAnyActiveSession(): Boolean {
         return getAllTrackedKeys().any { getLiveUsageMs(it, applicationContext) > 0L }
+    }
+
+    private fun createPillLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = dpToPx(36f)
+        }
+    }
+
+    private fun showFloatingScrollCounterPill(activeKey: String, remainingMs: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            removeFloatingPill()
+            return
+        }
+
+        val timeStr = formatPillTime(remainingMs)
+        val scrolls = scrollCountTodayMap[activeKey] ?: 0
+        val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+
+        // 1. Single Persistent Instance: Never re-add or re-create if already attached
+        val currentView = floatingPillView
+        if (currentView != null && isPillAttached) {
+            val tv = pillTextView
+            if (tv != null && tv.text != targetText) {
+                tv.text = targetText
+                lastPillText = targetText
+            }
+            return
+        }
+
+        // 2. Build the pill view once
+        val tv = TextView(this).apply {
+            textSize = 12f
+            typeface = Typeface.MONOSPACE
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#F8FAFC"))
+            setPadding(dpToPx(14f), dpToPx(6f), dpToPx(14f), dpToPx(6f))
+            gravity = Gravity.CENTER
+            val bg = GradientDrawable().apply {
+                setColor(Color.parseColor("#E60F172A"))
+                cornerRadius = dpToPx(20f).toFloat()
+                setStroke(dpToPx(1.5f), Color.parseColor("#38BDF8"))
+            }
+            background = bg
+            text = targetText
+            elevation = dpToPx(4f).toFloat()
+        }
+
+        pillTextView = tv
+        floatingPillView = tv
+        lastPillText = targetText
+
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            if (wm != null) {
+                wm.addView(tv, createPillLayoutParams())
+                isPillAttached = true
+                Log.d(TAG, "Floating pill attached to WindowManager.")
+            } else {
+                isPillAttached = false
+                floatingPillView = null
+                pillTextView = null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to attach floating pill: ${e.message}")
+            isPillAttached = false
+            floatingPillView = null
+            pillTextView = null
+        }
+    }
+
+    private fun updateFloatingPill(activeKey: String, remainingMs: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            removeFloatingPill()
+            return
+        }
+
+        val currentView = floatingPillView
+        if (currentView == null || !isPillAttached) {
+            showFloatingScrollCounterPill(activeKey, remainingMs)
+            return
+        }
+
+        val timeStr = formatPillTime(remainingMs)
+        val scrolls = scrollCountTodayMap[activeKey] ?: 0
+        val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+
+        // Zero-Flicker View Mutator Pattern: Only update TextView text if content changed!
+        val tv = pillTextView
+        if (tv != null && tv.text != targetText) {
+            tv.text = targetText
+            lastPillText = targetText
+        }
+    }
+
+    private fun pulseFloatingPill(activeKey: String) {
+        val limitMs = prefs.getUsageLimitMs()
+        val usedMs = accumulatedUsageMap[activeKey] ?: 0L
+        val remainingMs = maxOf(0L, limitMs - usedMs)
+
+        updateFloatingPill(activeKey, remainingMs)
+
+        val pill = floatingPillView ?: return
+        pill.animate()
+            .scaleX(1.1f)
+            .scaleY(1.1f)
+            .setDuration(80)
+            .withEndAction {
+                floatingPillView?.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(80)?.start()
+            }
+            .start()
+    }
+
+    private fun removeFloatingPill() {
+        val view = floatingPillView
+        if (isPillAttached && view != null) {
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                wm?.removeView(view)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing floating pill: ${e.message}")
+            }
+            isPillAttached = false
+            floatingPillView = null
+            pillTextView = null
+            lastPillText = ""
+        }
+    }
+
+    private fun formatPillTime(ms: Long): String {
+        val totalSec = maxOf(0L, ms) / 1000L
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return String.format(Locale.US, "%02d:%02d", min, sec)
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        val density = resources.displayMetrics.density
+        return (dp * density + 0.5f).toInt()
     }
 
     /**
@@ -653,12 +829,14 @@ class AppBlockerService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        removeFloatingPill()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        removeFloatingPill()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -720,6 +898,15 @@ class AppBlockerService : AccessibilityService() {
 
         @Volatile
         var appContext: Context? = null
+
+        @Volatile
+        var floatingPillView: View? = null
+
+        @Volatile
+        var pillTextView: TextView? = null
+
+        @Volatile
+        var isPillAttached: Boolean = false
 
         fun getTodayDateStr(): String {
             return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
