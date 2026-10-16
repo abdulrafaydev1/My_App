@@ -611,16 +611,10 @@ class AppBlockerService : AccessibilityService() {
     }
 
     private fun createPillLayoutParams(): WindowManager.LayoutParams {
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        else
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            type,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
@@ -642,7 +636,8 @@ class AppBlockerService : AccessibilityService() {
         val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
 
         // 1. Single Persistent Instance: Never re-add or re-create if already attached
-        if (floatingPillView != null && isPillAttached) {
+        val currentView = floatingPillView
+        if (currentView != null && isPillAttached) {
             if (pillTextView?.text != targetText) {
                 pillTextView?.text = targetText
                 lastPillText = targetText
@@ -672,10 +667,16 @@ class AppBlockerService : AccessibilityService() {
         lastPillText = targetText
 
         try {
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            wm.addView(tv, createPillLayoutParams())
-            isPillAttached = true
-            Log.d(TAG, "Floating pill attached to WindowManager.")
+            val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            if (wm != null) {
+                wm.addView(tv, createPillLayoutParams())
+                isPillAttached = true
+                Log.d(TAG, "Floating pill attached to WindowManager.")
+            } else {
+                isPillAttached = false
+                floatingPillView = null
+                pillTextView = null
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach floating pill: ${e.message}")
             isPillAttached = false
@@ -691,7 +692,8 @@ class AppBlockerService : AccessibilityService() {
         }
 
         // Never remove/re-add on ticks!
-        if (floatingPillView == null || !isPillAttached) {
+        val currentView = floatingPillView
+        if (currentView == null || !isPillAttached) {
             showFloatingScrollCounterPill(activeKey, remainingMs)
             return
         }
@@ -715,7 +717,8 @@ class AppBlockerService : AccessibilityService() {
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
         val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
 
-        if (floatingPillView == null || !isPillAttached) {
+        val currentView = floatingPillView
+        if (currentView == null || !isPillAttached) {
             showFloatingScrollCounterPill(activeKey, remainingMs)
         } else {
             if (pillTextView?.text != targetText) {
@@ -724,20 +727,21 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        floatingPillView?.animate()
+        currentView?.animate()
             ?.scaleX(1.1f)?.scaleY(1.1f)
             ?.setDuration(80)
             ?.withEndAction {
-                floatingPillView?.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(80)?.start()
+                currentView.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(80)?.start()
             }
             ?.start()
     }
 
     private fun removeFloatingPill() {
-        if (isPillAttached && floatingPillView != null) {
+        val view = floatingPillView
+        if (isPillAttached && view != null) {
             try {
-                val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                wm.removeView(floatingPillView)
+                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                wm?.removeView(view)
             } catch (e: Exception) {
                 Log.e(TAG, "Error removing floating pill: ${e.message}")
             }
