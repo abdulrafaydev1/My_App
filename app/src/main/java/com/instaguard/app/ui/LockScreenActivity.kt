@@ -39,19 +39,27 @@ class LockScreenActivity : AppCompatActivity() {
 
     private var lockedAppKey: String = "INSTAGRAM"
     private var appName: String = "Instagram"
+    private var tamperWarningMessage: String? = null
     private var mediaSuppressTick: Int = 0
 
     private val countdownRunnable = object : Runnable {
         override fun run() {
             val remainingMs = AppBlockerService.getRemainingLockMs(lockedAppKey, this@LockScreenActivity)
             if (remainingMs <= 0L) {
-                binding.tvCountdownTimer.text = "00:00:00.000"
-                Toast.makeText(
-                    this@LockScreenActivity,
-                    "$appName cooldown completed. You may now return.",
-                    Toast.LENGTH_LONG
-                ).show()
-                finish()
+                if (!tamperWarningMessage.isNullOrEmpty()) {
+                    val activeUsageMs = AppBlockerService.getLiveUsageMs(lockedAppKey, this@LockScreenActivity)
+                    binding.tvCountdownTimer.text = guardManager.formatWithMillis(activeUsageMs)
+                    binding.tvUnlockTimeEstimate.text = "Active Session Protected — Uninstall/Reset Blocked"
+                    timerHandler.postDelayed(this, 50L)
+                } else {
+                    binding.tvCountdownTimer.text = "00:00:00.000"
+                    Toast.makeText(
+                        this@LockScreenActivity,
+                        "$appName cooldown completed. You may now return.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    finish()
+                }
             } else {
                 binding.tvCountdownTimer.text = guardManager.formatWithMillis(remainingMs)
                 mediaSuppressTick++
@@ -70,6 +78,7 @@ class LockScreenActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         guardManager = GuardManager(applicationContext)
+        AppBlockerService.syncAndReconstructFromSystemEvents(applicationContext)
 
         updateLockedAppFromIntent()
         applyMonospaceTypeface()
@@ -96,7 +105,13 @@ class LockScreenActivity : AppCompatActivity() {
             ?: currentIntent?.getStringExtra(EXTRA_APP_NAME)
             ?: (trackedApp?.displayName ?: lockedAppKey)
 
+        tamperWarningMessage = currentIntent?.getStringExtra(EXTRA_TAMPER_WARNING)
+
         applyDynamicTexts()
+
+        if (!tamperWarningMessage.isNullOrEmpty()) {
+            Toast.makeText(this, tamperWarningMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onResume() {
@@ -105,7 +120,7 @@ class LockScreenActivity : AppCompatActivity() {
         stopAllMediaPlayback()
 
         val remainingMs = AppBlockerService.getRemainingLockMs(lockedAppKey, this)
-        if (remainingMs <= 0L) {
+        if (remainingMs <= 0L && tamperWarningMessage.isNullOrEmpty()) {
             Toast.makeText(this, "$appName cooldown completed.", Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -115,6 +130,8 @@ class LockScreenActivity : AppCompatActivity() {
             ?: guardManager.prefs.getUnlockTimestamp(lockedAppKey)
         if (unlockTime > 0L) {
             binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
+        } else if (!tamperWarningMessage.isNullOrEmpty()) {
+            binding.tvUnlockTimeEstimate.text = "Active Session Protected — Uninstall/Reset Blocked"
         }
 
         timerHandler.removeCallbacks(countdownRunnable)
@@ -127,9 +144,16 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     private fun applyDynamicTexts() {
-        binding.tvLockBadgeTitle.text = "${appName.uppercase()} FOCUS SHIELD"
-        binding.tvLockTitle.text = "$appName is Locked!"
-        binding.tvLockSubtitle.text = "1-Hour limit reached. Take a 5-Hour focus break."
+        val warning = tamperWarningMessage
+        if (!warning.isNullOrEmpty()) {
+            binding.tvLockBadgeTitle.text = "ANTI-TAMPER PROTECTION SHIELD"
+            binding.tvLockTitle.text = "Tamper Blocked!"
+            binding.tvLockSubtitle.text = warning
+        } else {
+            binding.tvLockBadgeTitle.text = "${appName.uppercase()} FOCUS SHIELD"
+            binding.tvLockTitle.text = "$appName is Locked!"
+            binding.tvLockSubtitle.text = "1-Hour limit reached. Take a 5-Hour focus break."
+        }
     }
 
     private fun applyMonospaceTypeface() {
@@ -255,5 +279,6 @@ class LockScreenActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_APP_KEY = "extra_app_key"
         const val EXTRA_APP_NAME = "extra_app_name"
+        const val EXTRA_TAMPER_WARNING = "extra_tamper_warning"
     }
 }
