@@ -1,194 +1,256 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/lock_bg"
-    android:paddingHorizontal="18dp"
-    android:paddingVertical="24dp">
+    android:fillViewport="true"
+    android:background="@color/lock_bg">
 
-    <!-- Top Badge -->
     <LinearLayout
-        android:id="@+id/layoutTopBadge"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:background="@drawable/ic_launcher_background"
-        android:backgroundTint="@color/lock_surface"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="20dp">
 
-        <ImageView
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@drawable/ic_shield"
-            app:tint="@color/lock_accent_red"
-            android:contentDescription="@null" />
-
-        <TextView
-            android:id="@+id/tvLockBadgeTitle"
+        <!-- Top Badge -->
+        <LinearLayout
+            android:id="@+id/layoutTopBadge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="INSTAGUARD FOCUS SHIELD"
-            android:textColor="@color/lock_text_secondary"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08" />
-    </LinearLayout>
+            android:layout_marginTop="16dp"
+            android:background="@drawable/ic_launcher_background"
+            android:backgroundTint="@color/lock_surface"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp">
 
-    <!-- Centered Glass-Style Lock Card -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/cardLockContainer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:cardCornerRadius="24dp"
-        app:cardElevation="0dp"
-        app:strokeWidth="1.5dp"
-        app:strokeColor="@color/lock_accent_red"
-        app:cardBackgroundColor="@color/lock_surface"
-        app:layout_constraintBottom_toTopOf="@+id/btnGoHome"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/layoutTopBadge">
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_shield"
+                app:tint="@color/lock_accent_red"
+                android:contentDescription="@null" />
 
-        <LinearLayout
+            <TextView
+                android:id="@+id/tvLockBadgeTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="INSTAGUARD FOCUS SHIELD"
+                android:textColor="@color/lock_text_secondary"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
+
+        <!-- Centered Glass-Style Lock Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardLockContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:paddingVertical="32dp"
-            android:paddingHorizontal="18dp">
+            android:layout_marginTop="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1.5dp"
+            app:strokeColor="@color/lock_accent_red"
+            app:cardBackgroundColor="@color/lock_surface">
 
-            <!-- Pulsing Lock Icon Container -->
-            <FrameLayout
-                android:id="@+id/frameLockIcon"
-                android:layout_width="96dp"
-                android:layout_height="96dp"
-                android:background="@drawable/ic_launcher_background"
-                android:backgroundTint="#261A1D"
-                android:padding="22dp">
-
-                <ImageView
-                    android:id="@+id/imgLockIcon"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:src="@drawable/ic_lock"
-                    app:tint="@color/lock_accent_red"
-                    android:contentDescription="@string/lock_screen_title" />
-            </FrameLayout>
-
-            <!-- Dynamic Title -->
-            <TextView
-                android:id="@+id/tvLockTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="App is Locked!"
-                android:textAlignment="center"
-                android:textColor="@color/lock_text_primary"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-
-            <!-- Subtitle -->
-            <TextView
-                android:id="@+id/tvLockSubtitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:paddingHorizontal="12dp"
-                android:text="1-Hour limit reached. Take a 5-Hour focus break."
-                android:textAlignment="center"
-                android:textColor="@color/lock_text_secondary"
-                android:textSize="14sp"
-                android:lineSpacingExtra="3dp" />
-
-            <!-- Countdown Timer Container Box -->
-            <com.google.android.material.card.MaterialCardView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
-                app:cardCornerRadius="18dp"
-                app:cardElevation="0dp"
-                app:strokeWidth="1dp"
-                app:strokeColor="#2A364F"
-                app:cardBackgroundColor="@color/lock_timer_bg">
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingVertical="26dp"
+                android:paddingHorizontal="18dp">
 
-                <LinearLayout
+                <!-- Pulsing Lock Icon Container -->
+                <FrameLayout
+                    android:id="@+id/frameLockIcon"
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
+                    android:background="@drawable/ic_launcher_background"
+                    android:backgroundTint="#261A1D"
+                    android:padding="20dp">
+
+                    <ImageView
+                        android:id="@+id/imgLockIcon"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ic_lock"
+                        app:tint="@color/lock_accent_red"
+                        android:contentDescription="@string/lock_screen_title" />
+                </FrameLayout>
+
+                <!-- Dynamic Title -->
+                <TextView
+                    android:id="@+id/tvLockTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="App is Locked!"
+                    android:textAlignment="center"
+                    android:textColor="@color/lock_text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <!-- Subtitle -->
+                <TextView
+                    android:id="@+id/tvLockSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:paddingHorizontal="12dp"
+                    android:text="1-Hour limit reached. Take a 5-Hour focus break."
+                    android:textAlignment="center"
+                    android:textColor="@color/lock_text_secondary"
+                    android:textSize="13sp"
+                    android:lineSpacingExtra="3dp" />
+
+                <!-- Countdown Timer Container Box -->
+                <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:paddingVertical="20dp"
-                    android:paddingHorizontal="10dp">
+                    android:layout_marginTop="22dp"
+                    app:cardCornerRadius="18dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#2A364F"
+                    app:cardBackgroundColor="@color/lock_timer_bg">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="REMAINING 5-HOUR COOLDOWN"
-                        android:textColor="@color/lock_text_secondary"
-                        android:textSize="11sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.08" />
-
-                    <!-- Countdown Display in Coral Red (Single-line auto-sizing so 12-char timer never wraps) -->
-                    <TextView
-                        android:id="@+id/tvCountdownTimer"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:fontFamily="monospace"
                         android:gravity="center"
-                        android:maxLines="1"
-                        android:singleLine="true"
-                        android:ellipsize="none"
-                        android:text="04:59:59.980"
-                        android:textColor="#F87171"
-                        android:textSize="28sp"
-                        android:textStyle="bold"
-                        app:autoSizeTextType="uniform"
-                        app:autoSizeMinTextSize="16sp"
-                        app:autoSizeMaxTextSize="28sp"
-                        app:autoSizeStepGranularity="1sp" />
+                        android:orientation="vertical"
+                        android:paddingVertical="18dp"
+                        android:paddingHorizontal="10dp">
 
-                    <TextView
-                        android:id="@+id/tvUnlockTimeEstimate"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Unlocks at 08:30 PM"
-                        android:textColor="#FCA5A5"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="REMAINING 5-HOUR COOLDOWN"
+                            android:textColor="@color/lock_text_secondary"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08" />
 
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+                        <!-- Countdown Display in Coral Red -->
+                        <TextView
+                            android:id="@+id/tvCountdownTimer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:maxLines="1"
+                            android:singleLine="true"
+                            android:ellipsize="none"
+                            android:text="04:59:59.980"
+                            android:textColor="#F87171"
+                            android:textSize="28sp"
+                            android:textStyle="bold"
+                            app:autoSizeTextType="uniform"
+                            app:autoSizeMinTextSize="16sp"
+                            app:autoSizeMaxTextSize="28sp"
+                            app:autoSizeStepGranularity="1sp" />
 
-    <!-- Bottom Action Button: Go Back to Home -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnGoHome"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:layout_marginBottom="28dp"
-        android:text="@string/btn_go_home"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:backgroundTint="@color/lock_accent_red"
-        app:cornerRadius="16dp"
-        app:icon="@drawable/ic_home"
-        app:iconGravity="textStart"
-        app:iconPadding="10dp"
-        app:iconTint="#FFFFFF"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+                        <TextView
+                            android:id="@+id/tvUnlockTimeEstimate"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Unlocks at 08:30 PM"
+                            android:textColor="#FCA5A5"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Feature 4: Motivational & Focus Quotes Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardMotivationalQuote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#2A364F"
+            app:cardBackgroundColor="@color/lock_surface">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <TextView
+                    android:id="@+id/tvMotivationalQuote"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="“Discipline is choosing between what you want now and what you want most.”"
+                    android:textAlignment="center"
+                    android:textColor="#E2E8F0"
+                    android:textSize="13sp"
+                    android:textStyle="italic"
+                    android:lineSpacingExtra="2dp" />
+
+                <TextView
+                    android:id="@+id/tvQuoteAuthor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="💡 FOCUS WISDOM • TAP FOR NEXT"
+                    android:textColor="#94A3B8"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.08"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Primary Action Button: Go Back to Home -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGoHome"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="18dp"
+            android:text="@string/btn_go_home"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/lock_accent_red"
+            app:cornerRadius="16dp"
+            app:icon="@drawable/ic_home"
+            app:iconGravity="textStart"
+            app:iconPadding="10dp"
+            app:iconTint="#FFFFFF" />
+
+        <!-- Feature 3: Secondary Emergency Bypass Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmergencyUnlock"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="16dp"
+            android:text="🚨 Emergency 5-Min Unlock (1/Day)"
+            android:textColor="#FCA5A5"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:strokeColor="#7F1D1D"
+            app:strokeWidth="1.2dp"
+            app:cornerRadius="16dp" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v4.3 (Precision Timer)"
+                        android:text="InstaGuard Pro v5.0 (Master Edition)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -65,7 +65,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Strict 1h Limit • 5h Cooldown Engine"
+                        android:text="AI Focus Suite • 1h Limit • 5h Lock • Analytics"
                         android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -194,6 +194,21 @@
                         android:layout_marginStart="10dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Feature 3: Master PIN Settings Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMasterPinSettings"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:text="🔐 Master PIN Settings (Default: 1234)"
+                android:textColor="@color/cyber_text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:strokeColor="@color/cyber_stroke"
+                app:strokeWidth="1dp"
+                app:cornerRadius="14dp" />
 
             <!-- Section Title -->
             <LinearLayout
@@ -639,6 +654,194 @@
                         app:indicatorColor="@color/status_green"
                         app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Feature 5: Usage Analytics & 7-Day History Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardAnalyticsReport"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="📊 Usage Analytics"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="4dp"
+                            android:text="PRO SUITE"
+                            android:textColor="@color/primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvAnalyticsTodayTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="Today's Total Screen Time: 00h 00m 00s"
+                        android:textColor="@color/cyber_timer_allowed"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginVertical="12dp"
+                        android:background="@color/cyber_stroke" />
+
+                    <!-- App Breakdown Header -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="TODAY'S APP BREAKDOWN"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <!-- Instagram Breakdown -->
+                    <TextView
+                        android:id="@+id/tvAnalyticsInstagram"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="📷 Instagram: 00m 00s (0%)"
+                        android:textColor="@color/cyber_text_primary"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressAnalyticsInstagram"
+                        android:layout_width="match_parent"
+                        android:layout_height="6dp"
+                        android:layout_marginTop="4dp"
+                        android:max="100"
+                        android:progress="0"
+                        app:indicatorColor="#E1306C"
+                        app:trackColor="#1E293B"
+                        app:trackCornerRadius="3dp" />
+
+                    <!-- YouTube Breakdown -->
+                    <TextView
+                        android:id="@+id/tvAnalyticsYouTube"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="▶️ YouTube: 00m 00s (0%)"
+                        android:textColor="@color/cyber_text_primary"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressAnalyticsYouTube"
+                        android:layout_width="match_parent"
+                        android:layout_height="6dp"
+                        android:layout_marginTop="4dp"
+                        android:max="100"
+                        android:progress="0"
+                        app:indicatorColor="#FF0000"
+                        app:trackColor="#1E293B"
+                        app:trackCornerRadius="3dp" />
+
+                    <!-- Facebook Breakdown -->
+                    <TextView
+                        android:id="@+id/tvAnalyticsFacebook"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="👥 Facebook: 00m 00s (0%)"
+                        android:textColor="@color/cyber_text_primary"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressAnalyticsFacebook"
+                        android:layout_width="match_parent"
+                        android:layout_height="6dp"
+                        android:layout_marginTop="4dp"
+                        android:max="100"
+                        android:progress="0"
+                        app:indicatorColor="#1877F2"
+                        app:trackColor="#1E293B"
+                        app:trackCornerRadius="3dp" />
+
+                    <!-- TikTok Breakdown -->
+                    <TextView
+                        android:id="@+id/tvAnalyticsTikTok"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🎵 TikTok: 00m 00s (0%)"
+                        android:textColor="@color/cyber_text_primary"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressAnalyticsTikTok"
+                        android:layout_width="match_parent"
+                        android:layout_height="6dp"
+                        android:layout_marginTop="4dp"
+                        android:max="100"
+                        android:progress="0"
+                        app:indicatorColor="#00F2FE"
+                        app:trackColor="#1E293B"
+                        app:trackCornerRadius="3dp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginVertical="12dp"
+                        android:background="@color/cyber_stroke" />
+
+                    <!-- 7-Day History Chart -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="7-DAY USAGE HISTORY (DAILY TOTALS)"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvAnalytics7DayReport"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@color/cyber_bg"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:padding="12dp"
+                        android:text="Loading 7-day history..."
+                        android:textColor="@color/cyber_timer_allowed"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

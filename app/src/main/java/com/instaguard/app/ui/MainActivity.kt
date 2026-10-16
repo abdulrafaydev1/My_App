@@ -13,9 +13,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.InputFilter
+import android.text.InputType
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
@@ -25,11 +30,15 @@ import com.instaguard.app.databinding.ActivityMainBinding
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
 import com.instaguard.app.util.UsageStatsHelper
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 /**
- * Main Dashboard Activity for InstaGuard Pro v4.0.
+ * Main Dashboard Activity for InstaGuard Pro v5.0.
  * Features a Cyber-Dark UI, strictly isolated per-app 1h limit and 5h cooldown monitoring,
- * smooth entrance and pulse animations, dynamic border highlights, and anti-bypass guards.
+ * smooth entrance and pulse animations, dynamic border highlights, Master PIN settings,
+ * 7-day usage analytics dashboard, and anti-bypass guards.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -38,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private val uiHandler = Handler(Looper.getMainLooper())
     private var statusPulseAnimator: ObjectAnimator? = null
     private var hasAnimatedEntrance = false
+    private var last7DayReportRenderMs: Long = 0L
 
     private val liveTickerRunnable = object : Runnable {
         override fun run() {
@@ -52,6 +62,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         guardManager = GuardManager(applicationContext)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
 
         applyMonospaceTypefaces()
         setupListeners()
@@ -86,7 +102,9 @@ class MainActivity : AppCompatActivity() {
             binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus,
             binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus,
             binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus,
-            binding.tvTikTokTimer, binding.tvTikTokLimit, binding.tvTikTokStatus
+            binding.tvTikTokTimer, binding.tvTikTokLimit, binding.tvTikTokStatus,
+            binding.tvAnalyticsTodayTotal, binding.tvAnalyticsInstagram, binding.tvAnalyticsYouTube,
+            binding.tvAnalyticsFacebook, binding.tvAnalyticsTikTok, binding.tvAnalytics7DayReport
         )
         for (view in monospaceViews) {
             view.typeface = Typeface.MONOSPACE
@@ -104,11 +122,13 @@ class MainActivity : AppCompatActivity() {
             binding.layoutHeader,
             binding.cardOverallStatus,
             binding.cardTestMode,
+            binding.btnMasterPinSettings,
             binding.layoutSectionTitle,
             binding.cardInstagram,
             binding.cardYouTube,
             binding.cardFacebook,
-            binding.cardTikTok
+            binding.cardTikTok,
+            binding.cardAnalyticsReport
         )
 
         for ((index, view) in viewsToAnimate.withIndex()) {
@@ -204,6 +224,11 @@ class MainActivity : AppCompatActivity() {
             updateAllAppCards()
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
         }
+
+        // Feature 3: Master PIN Settings Dialog
+        binding.btnMasterPinSettings.setOnClickListener {
+            showMasterPinSettingsDialog()
+        }
     }
 
     /**
@@ -265,6 +290,9 @@ class MainActivity : AppCompatActivity() {
             limitMs = limitMs,
             cooldownMs = cooldownMs
         )
+
+        // 5. Usage Analytics Dashboard (Feature 5)
+        updateAnalyticsDashboard()
     }
 
     private fun renderAppCard(
@@ -430,6 +458,201 @@ class MainActivity : AppCompatActivity() {
             binding.tvOverlayStatusBadge.setTextColor(Color.parseColor("#F59E0B"))
             binding.btnGrantOverlay.isEnabled = true
             binding.btnGrantOverlay.text = getString(R.string.btn_grant_overlay)
+        }
+    }
+
+    private fun showMasterPinSettingsDialog() {
+        val anyLocked = AppBlockerService.APP_KEYS.any { AppBlockerService.isAppLocked(it, this) }
+        if (anyLocked) {
+            Toast.makeText(this, "Cannot change Master PIN while any app is locked!", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(24f), dpToPx(16f), dpToPx(24f), dpToPx(8f))
+        }
+
+        val tvCurrentLabel = TextView(this).apply {
+            text = "Current 4-Digit PIN:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 13f
+        }
+        val etCurrentPin = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(InputFilter.LengthFilter(4))
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+        }
+
+        val tvNewLabel = TextView(this).apply {
+            text = "New 4-Digit PIN:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 13f
+            setPadding(0, dpToPx(12f), 0, 0)
+        }
+        val etNewPin = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(InputFilter.LengthFilter(4))
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+        }
+
+        val tvConfirmLabel = TextView(this).apply {
+            text = "Confirm New PIN:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 13f
+            setPadding(0, dpToPx(12f), 0, 0)
+        }
+        val etConfirmPin = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(InputFilter.LengthFilter(4))
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+        }
+
+        container.addView(tvCurrentLabel)
+        container.addView(etCurrentPin)
+        container.addView(tvNewLabel)
+        container.addView(etNewPin)
+        container.addView(tvConfirmLabel)
+        container.addView(etConfirmPin)
+
+        AlertDialog.Builder(this)
+            .setTitle("🔐 Master PIN Settings")
+            .setMessage("Change your 4-digit Master PIN for emergency 5-minute unlock.")
+            .setView(container)
+            .setPositiveButton("SAVE PIN") { dialog, _ ->
+                val currentEntered = etCurrentPin.text.toString().trim()
+                val newEntered = etNewPin.text.toString().trim()
+                val confirmEntered = etConfirmPin.text.toString().trim()
+
+                if (currentEntered != guardManager.prefs.masterPin) {
+                    Toast.makeText(this, "Incorrect current PIN!", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (newEntered.length != 4 || !newEntered.all { it.isDigit() }) {
+                    Toast.makeText(this, "New PIN must be exactly 4 digits!", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                if (newEntered != confirmEntered) {
+                    Toast.makeText(this, "New PIN and confirmation do not match!", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                guardManager.prefs.masterPin = newEntered
+                Toast.makeText(this, "Master PIN updated successfully!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun updateAnalyticsDashboard() {
+        val instaMs = AppBlockerService.getLiveDailyTotalMs("INSTAGRAM", this)
+        val ytMs = AppBlockerService.getLiveDailyTotalMs("YOUTUBE", this)
+        val fbMs = AppBlockerService.getLiveDailyTotalMs("FACEBOOK", this)
+        val ttMs = AppBlockerService.getLiveDailyTotalMs("TIKTOK", this)
+
+        val totalTodayMs = instaMs + ytMs + fbMs + ttMs
+
+        binding.tvAnalyticsTodayTotal.text = "Today's Total Screen Time: " + formatDurationHoursMinutesSeconds(totalTodayMs)
+
+        val instaPct = if (totalTodayMs > 0L) ((instaMs * 100) / totalTodayMs).toInt() else 0
+        val ytPct = if (totalTodayMs > 0L) ((ytMs * 100) / totalTodayMs).toInt() else 0
+        val fbPct = if (totalTodayMs > 0L) ((fbMs * 100) / totalTodayMs).toInt() else 0
+        val ttPct = if (totalTodayMs > 0L) ((ttMs * 100) / totalTodayMs).toInt() else 0
+
+        binding.tvAnalyticsInstagram.text = "📷 Instagram: ${formatDuration(instaMs)} ($instaPct%)"
+        binding.progressAnalyticsInstagram.progress = instaPct
+
+        binding.tvAnalyticsYouTube.text = "▶️ YouTube: ${formatDuration(ytMs)} ($ytPct%)"
+        binding.progressAnalyticsYouTube.progress = ytPct
+
+        binding.tvAnalyticsFacebook.text = "👥 Facebook: ${formatDuration(fbMs)} ($fbPct%)"
+        binding.progressAnalyticsFacebook.progress = fbPct
+
+        binding.tvAnalyticsTikTok.text = "🎵 TikTok: ${formatDuration(ttMs)} ($ttPct%)"
+        binding.progressAnalyticsTikTok.progress = ttPct
+
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - last7DayReportRenderMs > 1500L) {
+            last7DayReportRenderMs = now
+            render7DayHistoryTable()
+        }
+    }
+
+    private fun render7DayHistoryTable() {
+        val sdfKey = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val sdfDay = SimpleDateFormat("EEE (dd)", Locale.US)
+        val cal = Calendar.getInstance()
+
+        val sb = StringBuilder()
+        sb.append(String.format(Locale.US, "%-8s | %-4s | %-4s | %-4s | %-4s | %-6s\n", "DAY", "IG", "YT", "FB", "TT", "TOTAL"))
+        sb.append("---------------------------------------\n")
+
+        for (i in 0..6) {
+            val dateKey = sdfKey.format(cal.time)
+            val dayLabel = if (i == 0) "Today" else sdfDay.format(cal.time)
+
+            val ig = if (i == 0) AppBlockerService.getLiveDailyTotalMs("INSTAGRAM", this) else guardManager.prefs.getDailyTotal(dateKey, "INSTAGRAM")
+            val yt = if (i == 0) AppBlockerService.getLiveDailyTotalMs("YOUTUBE", this) else guardManager.prefs.getDailyTotal(dateKey, "YOUTUBE")
+            val fb = if (i == 0) AppBlockerService.getLiveDailyTotalMs("FACEBOOK", this) else guardManager.prefs.getDailyTotal(dateKey, "FACEBOOK")
+            val tt = if (i == 0) AppBlockerService.getLiveDailyTotalMs("TIKTOK", this) else guardManager.prefs.getDailyTotal(dateKey, "TIKTOK")
+
+            val dayTotal = ig + yt + fb + tt
+
+            sb.append(
+                String.format(
+                    Locale.US,
+                    "%-8s | %-4s | %-4s | %-4s | %-4s | %-6s",
+                    dayLabel.take(8),
+                    formatShortDuration(ig),
+                    formatShortDuration(yt),
+                    formatShortDuration(fb),
+                    formatShortDuration(tt),
+                    formatShortDuration(dayTotal)
+                )
+            )
+            if (i < 6) sb.append("\n")
+
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        binding.tvAnalytics7DayReport.text = sb.toString()
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val safeMs = maxOf(0L, ms)
+        val hours = safeMs / 3_600_000
+        val minutes = (safeMs % 3_600_000) / 60_000
+        val seconds = (safeMs % 60_000) / 1_000
+        return if (hours > 0) {
+            String.format(Locale.US, "%02dh %02dm %02ds", hours, minutes, seconds)
+        } else {
+            String.format(Locale.US, "%02dm %02ds", minutes, seconds)
+        }
+    }
+
+    private fun formatDurationHoursMinutesSeconds(ms: Long): String {
+        val safeMs = maxOf(0L, ms)
+        val hours = safeMs / 3_600_000
+        val minutes = (safeMs % 3_600_000) / 60_000
+        val seconds = (safeMs % 60_000) / 1_000
+        return String.format(Locale.US, "%02dh %02dm %02ds", hours, minutes, seconds)
+    }
+
+    private fun formatShortDuration(ms: Long): String {
+        val safeMs = maxOf(0L, ms)
+        val hours = safeMs / 3_600_000
+        val minutes = (safeMs % 3_600_000) / 60_000
+        return if (hours > 0) {
+            String.format(Locale.US, "%dh%02d", hours, minutes)
+        } else {
+            String.format(Locale.US, "%02dm", minutes)
         }
     }
 

@@ -6,8 +6,8 @@ import com.instaguard.app.model.TrackedApp
 
 /**
  * Thread-safe wrapper for SharedPreferences to persist strictly isolated per-app
- * real-time usage and hardened 5-hour cooldown timestamps for Instagram, YouTube,
- * Facebook, and TikTok.
+ * real-time usage, hardened 5-hour cooldown timestamps, daily history archives,
+ * Master PIN, and emergency bypass status for Instagram, YouTube, Facebook, and TikTok.
  */
 class GuardPreferences(context: Context) {
 
@@ -20,6 +20,9 @@ class GuardPreferences(context: Context) {
         const val PREFS_NAME = "InstaGuardPrefs"
 
         const val KEY_IS_TEST_MODE = "is_test_mode"
+        const val KEY_LAST_ACTIVE_DATE = "last_active_date"
+        const val KEY_MASTER_PIN = "master_pin"
+        const val DEFAULT_MASTER_PIN = "1234"
 
         // Normal Mode: 1 Hour Limit (3,600,000 ms), 5 Hours Cooldown (18,000,000 ms)
         const val USAGE_LIMIT_MS = 60 * 60 * 1000L // 3,600,000 ms (1 hour)
@@ -31,6 +34,8 @@ class GuardPreferences(context: Context) {
 
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
+        fun dailyTotalKey(dateStr: String, appKey: String): String = "daily_total_ms_${dateStr}_${appKey.uppercase()}"
+        fun emergencyKey(appKey: String): String = "emergency_used_date_${appKey.uppercase()}"
     }
 
     /**
@@ -74,6 +79,48 @@ class GuardPreferences(context: Context) {
      */
     fun setUnlockTimestamp(appKey: String, value: Long) {
         prefs.edit().putLong(unlockKey(appKey), maxOf(0L, value)).apply()
+    }
+
+    /**
+     * Last active date string ("yyyy-MM-dd") to detect midnight 12:00 AM crossovers.
+     */
+    var lastActiveDate: String
+        get() = prefs.getString(KEY_LAST_ACTIVE_DATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_ACTIVE_DATE, value).apply()
+
+    /**
+     * Master PIN for emergency bypass and settings authorization (defaults to "1234").
+     */
+    var masterPin: String
+        get() = prefs.getString(KEY_MASTER_PIN, DEFAULT_MASTER_PIN) ?: DEFAULT_MASTER_PIN
+        set(value) = prefs.edit().putString(KEY_MASTER_PIN, value).apply()
+
+    /**
+     * Reads daily total usage (in ms) for a specific date and app.
+     */
+    fun getDailyTotal(dateStr: String, appKey: String): Long {
+        return prefs.getLong(dailyTotalKey(dateStr, appKey), 0L)
+    }
+
+    /**
+     * Persists daily total usage (in ms) for a specific date and app.
+     */
+    fun setDailyTotal(dateStr: String, appKey: String, value: Long) {
+        prefs.edit().putLong(dailyTotalKey(dateStr, appKey), maxOf(0L, value)).apply()
+    }
+
+    /**
+     * Reads the date string on which emergency bypass was last used for an app.
+     */
+    fun getEmergencyUsedDate(appKey: String): String {
+        return prefs.getString(emergencyKey(appKey), "") ?: ""
+    }
+
+    /**
+     * Persists the date string on which emergency bypass was used for an app.
+     */
+    fun setEmergencyUsedDate(appKey: String, dateStr: String) {
+        prefs.edit().putString(emergencyKey(appKey), dateStr).apply()
     }
 
     /**

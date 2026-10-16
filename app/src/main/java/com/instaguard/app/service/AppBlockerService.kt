@@ -2,6 +2,9 @@ package com.instaguard.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.app.ActivityManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
@@ -9,6 +12,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -17,18 +21,27 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.app.NotificationCompat
+import com.instaguard.app.R
 import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.ui.LockScreenActivity
+import com.instaguard.app.ui.MainActivity
 import com.instaguard.app.util.UsageStatsHelper
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * High-performance AccessibilityService that monitors Instagram, YouTube, Facebook,
  * and TikTok independently in real-time with millisecond precision.
- * v4.3 Features:
- * - Monotonic 50ms Delta Stopwatch Engine (SystemClock.elapsedRealtime) with zero timer freeze/drift.
+ * v5.0 Master Edition Features:
+ * - Monotonic 50ms Delta Stopwatch Engine (SystemClock.elapsedRealtime) with zero timer drift.
  * - Strict 1-hour usage limit and hardened 5-hour cooldown lock per app.
+ * - Feature 1: Midnight Auto-Reset (12:00 AM) & Daily History Archiving.
+ * - Feature 2: Smart Warning Notifications at 5 Minutes & 1 Minute remaining.
+ * - Feature 3: Emergency 5-Minute Master PIN Bypass support.
  * - Layer 1: OS-level UsageEvents reconstruction when data is empty.
  * - Layer 2: Anti-Uninstall, Anti-Force-Stop, and Anti-Clear-Data Tamper Shield.
  * - 3-Layer YouTube/Shorts Picture-in-Picture (PiP) Killer Logic.
@@ -44,7 +57,7 @@ class AppBlockerService : AccessibilityService() {
     /**
      * Monotonic 50ms Delta-Tick Stopwatch Ticker.
      * Continuously computes elapsed time delta using SystemClock.elapsedRealtime()
-     * and adds delta directly to active app's accumulated usage.
+     * and adds delta directly to active app's accumulated usage and daily totals.
      */
     private val tickerRunnable = object : Runnable {
         override fun run() {
@@ -84,7 +97,7 @@ class AppBlockerService : AccessibilityService() {
                 }
             }
 
-            // 4. Increment usage counter for active tracked app
+            // 4. Increment usage counter and daily total for active tracked app
             val activeKey = currentForegroundAppKey
             if (activeKey != null) {
                 if (isAppLocked(activeKey, applicationContext)) {
@@ -95,13 +108,27 @@ class AppBlockerService : AccessibilityService() {
                     val updatedUsage = (accumulatedUsageMap[activeKey] ?: 0L) + deltaMs
                     accumulatedUsageMap[activeKey] = updatedUsage
 
+                    // Update today's daily archive counter in memory
+                    val todayStr = getTodayDateStr()
+                    val currentDaily = dailyTotalMap[activeKey] ?: prefs.getDailyTotal(todayStr, activeKey)
+                    dailyTotalMap[activeKey] = currentDaily + deltaMs
+
                     val limitMs = prefs.getUsageLimitMs()
+
+                    // Feature 2: Smart Warning Notifications (5-Min & 1-Min)
+                    checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
+
                     if (updatedUsage >= limitMs) {
                         Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
                         val cooldownMs = prefs.getCooldownDurationMs()
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
                         currentForegroundAppKey = null
+
+                        // Reset warning flags on lock
+                        warned5MinMap[activeKey] = false
+                        warned1MinMap[activeKey] = false
+
                         saveStateToPrefs(activeKey)
                         stopAllMediaPlayback()
                         launchLockScreen(activeKey)
@@ -113,6 +140,7 @@ class AppBlockerService : AccessibilityService() {
             tickCounter++
             if (tickCounter >= 40) {
                 tickCounter = 0
+                checkMidnightCrossover()
                 if (activeKey != null) {
                     saveStateToPrefs(activeKey)
                 }
@@ -126,7 +154,9 @@ class AppBlockerService : AccessibilityService() {
         super.onCreate()
         appContext = applicationContext
         prefs = GuardPreferences(applicationContext)
+        initNotificationChannel()
         syncFromPrefs(applicationContext)
+        checkMidnightCrossover()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService created; Monotonic 50ms Stopwatch Engine started.")
     }
@@ -135,9 +165,26 @@ class AppBlockerService : AccessibilityService() {
         super.onServiceConnected()
         appContext = applicationContext
         prefs = GuardPreferences(applicationContext)
+        initNotificationChannel()
         syncFromPrefs(applicationContext)
+        checkMidnightCrossover()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService connected; Monotonic 50ms Stopwatch Engine running.")
+    }
+
+    private fun initNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                ALERTS_CHANNEL_ID,
+                "Focus Limit Warnings",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts when your daily focus quota is almost up"
+                enableVibration(true)
+            }
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
     }
 
     private fun startStopwatchTicker() {
@@ -168,7 +215,6 @@ class AppBlockerService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: ""
 
         // 2. LAYER 2: Anti-Uninstall / Anti-Force-Stop / Anti-Clear-Data Shield
-        // Runs on both TYPE_WINDOW_STATE_CHANGED and TYPE_WINDOW_CONTENT_CHANGED inside Settings/Installer
         if (packageName in SYSTEM_TAMPER_PACKAGES) {
             if (isAnyAppLocked() || hasAnyActiveSession()) {
                 if (inspectAndBlockTamperAttempt(packageName)) {
@@ -218,6 +264,92 @@ class AppBlockerService : AccessibilityService() {
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
         }
+    }
+
+    /**
+     * Feature 2: Fires high-importance heads-up notifications when 5 minutes
+     * or 1 minute of active allowance remains.
+     */
+    private fun checkAndTriggerWarningNotifications(appKey: String, usedMs: Long, limitMs: Long) {
+        val remainingMs = limitMs - usedMs
+        val isTestMode = prefs.isTestMode
+        val threshold5Min = if (isTestMode) 15_000L else 300_000L // 5 min or 15 sec
+        val threshold1Min = if (isTestMode) 5_000L else 60_000L   // 1 min or 5 sec
+
+        val trackedApp = TrackedApp.fromKey(appKey)
+        val appDisplayName = trackedApp?.displayName ?: appKey
+
+        // 5-Minute Warning Alert
+        if (remainingMs in 1..threshold5Min && warned5MinMap[appKey] != true) {
+            warned5MinMap[appKey] = true
+            sendWarningNotification(
+                notificationId = NOTIF_ID_5MIN + appKey.hashCode(),
+                title = "⚠️ 5 Minutes Left on $appDisplayName!",
+                message = "Your 1-hour limit is almost up. Wrap up now before the 5-hour lock starts."
+            )
+        }
+
+        // 1-Minute Warning Alert
+        if (remainingMs in 1..threshold1Min && warned1MinMap[appKey] != true) {
+            warned1MinMap[appKey] = true
+            sendWarningNotification(
+                notificationId = NOTIF_ID_1MIN + appKey.hashCode(),
+                title = "🚨 Final 60 Seconds on $appDisplayName!",
+                message = "Locking $appDisplayName for 5 hours in less than 1 minute!"
+            )
+        }
+    }
+
+    private fun sendWarningNotification(notificationId: Int, title: String, message: String) {
+        try {
+            val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                notificationId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = NotificationCompat.Builder(applicationContext, ALERTS_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_shield)
+                .setContentTitle(title)
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(notificationId, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Feature 1: Detects midnight crossover (12:00 AM) and resets usage for unlocked apps.
+     */
+    private fun checkMidnightCrossover() {
+        val todayStr = getTodayDateStr()
+        val lastDate = prefs.lastActiveDate
+
+        if (lastDate.isNotEmpty() && lastDate != todayStr) {
+            Log.i(TAG, "Midnight crossover detected! Transitioning from $lastDate to $todayStr.")
+            for (key in APP_KEYS) {
+                // If not currently in 5-hour cooldown lock, reset quota for fresh day
+                if (!isAppLocked(key, applicationContext)) {
+                    accumulatedUsageMap[key] = 0L
+                    prefs.setAccumulatedUsage(key, 0L)
+                }
+            }
+            // Reset warning notification flags
+            warned5MinMap.clear()
+            warned1MinMap.clear()
+        }
+        prefs.lastActiveDate = todayStr
     }
 
     /**
@@ -367,8 +499,12 @@ class AppBlockerService : AccessibilityService() {
     private fun saveStateToPrefs(appKey: String) {
         val usage = accumulatedUsageMap[appKey] ?: 0L
         val unlock = unlockTimestampMap[appKey] ?: 0L
+        val todayStr = getTodayDateStr()
+        val daily = dailyTotalMap[appKey] ?: prefs.getDailyTotal(todayStr, appKey)
+
         prefs.setAccumulatedUsage(appKey, usage)
         prefs.setUnlockTimestamp(appKey, unlock)
+        prefs.setDailyTotal(todayStr, appKey, daily)
     }
 
     private fun isAnyAppLocked(): Boolean {
@@ -474,6 +610,10 @@ class AppBlockerService : AccessibilityService() {
         const val TAMPER_WARNING_MESSAGE =
             "Tamper Protection: Cannot Uninstall or Reset InstaGuard while Focus Timer is active!"
 
+        const val ALERTS_CHANNEL_ID = "instaguard_alerts_channel"
+        const val NOTIF_ID_5MIN = 1000
+        const val NOTIF_ID_1MIN = 2000
+
         val APP_KEYS = listOf("INSTAGRAM", "YOUTUBE", "FACEBOOK", "TIKTOK")
 
         val IGNORED_SYSTEM_PACKAGES = setOf(
@@ -501,6 +641,10 @@ class AppBlockerService : AccessibilityService() {
 
         val accumulatedUsageMap = ConcurrentHashMap<String, Long>()
         val unlockTimestampMap = ConcurrentHashMap<String, Long>()
+        val dailyTotalMap = ConcurrentHashMap<String, Long>()
+
+        val warned5MinMap = ConcurrentHashMap<String, Boolean>()
+        val warned1MinMap = ConcurrentHashMap<String, Boolean>()
 
         @Volatile
         var currentForegroundAppKey: String? = null
@@ -511,6 +655,10 @@ class AppBlockerService : AccessibilityService() {
         @Volatile
         var appContext: Context? = null
 
+        fun getTodayDateStr(): String {
+            return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        }
+
         fun mapPackageToAppKey(packageName: String): String? {
             return TrackedApp.fromPackageName(packageName)?.key
         }
@@ -519,11 +667,14 @@ class AppBlockerService : AccessibilityService() {
             appContext = context.applicationContext
             val prefs = GuardPreferences(context)
             val now = System.currentTimeMillis()
+            val todayStr = getTodayDateStr()
             var allZero = true
 
             for (key in APP_KEYS) {
                 val usage = prefs.getAccumulatedUsage(key)
                 val unlock = prefs.getUnlockTimestamp(key)
+                val daily = prefs.getDailyTotal(todayStr, key)
+
                 if (unlock > 0L && unlock <= now) {
                     accumulatedUsageMap[key] = 0L
                     unlockTimestampMap[key] = 0L
@@ -535,12 +686,47 @@ class AppBlockerService : AccessibilityService() {
                         allZero = false
                     }
                 }
+                dailyTotalMap[key] = daily
             }
 
             // Only reconstruct from OS system events if SharedPreferences is 100% empty
             if (allZero) {
                 syncAndReconstructFromSystemEvents(context)
             }
+        }
+
+        /**
+         * Feature 3: Grants exactly 5 minutes of emergency access for an app (1x per day).
+         */
+        fun grantEmergencyFiveMinutes(context: Context, appKey: String) {
+            appContext = context.applicationContext
+            val prefs = GuardPreferences(context)
+            val limitMs = prefs.getUsageLimitMs()
+            val emergencyAllowance = if (prefs.isTestMode) 20_000L else 300_000L // 5 min or 20 sec
+
+            unlockTimestampMap[appKey] = 0L
+            val restoredUsage = maxOf(0L, limitMs - emergencyAllowance)
+            accumulatedUsageMap[appKey] = restoredUsage
+
+            prefs.setUnlockTimestamp(appKey, 0L)
+            prefs.setAccumulatedUsage(appKey, restoredUsage)
+            prefs.setEmergencyUsedDate(appKey, getTodayDateStr())
+
+            // Mark 5-min warning as given so only final 1-min alert triggers
+            warned5MinMap[appKey] = true
+            warned1MinMap[appKey] = false
+            Log.i(TAG, "[$appKey] 5-Minute Emergency Bypass granted! Usage set to $restoredUsage ms")
+        }
+
+        /**
+         * Reads live daily total usage ms for an app for today's analytics.
+         */
+        fun getLiveDailyTotalMs(appKey: String, context: Context? = null): Long {
+            val todayStr = getTodayDateStr()
+            val inMem = dailyTotalMap[appKey]
+            if (inMem != null && inMem > 0L) return inMem
+            val ctx = context ?: appContext
+            return ctx?.let { GuardPreferences(it).getDailyTotal(todayStr, appKey) } ?: 0L
         }
 
         /**

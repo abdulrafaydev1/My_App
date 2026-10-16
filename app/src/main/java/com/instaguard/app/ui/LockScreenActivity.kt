@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Typeface
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -12,12 +13,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputFilter
+import android.text.InputType
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.instaguard.app.databinding.ActivityLockScreenBinding
 import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.service.AppBlockerService
@@ -26,7 +34,10 @@ import com.instaguard.app.util.GuardManager
 /**
  * Full-screen, non-bypassable lock activity displayed during an app's 5-hour focus cooldown period.
  * Dynamically adapts to whichever of the 4 social apps is locked (Instagram, YouTube, Facebook, TikTok).
- * Features breathing lock icon animation, millisecond precision countdown, and media suppression.
+ * v5.0 Master Edition Features:
+ * - Feature 3: Emergency 5-Minute Master PIN Bypass (strict 1x per day limit).
+ * - Feature 4: Motivational & Focus Quotes Engine with crossfade animations.
+ * - Breathing lock icon animation, single-line millisecond countdown, and continuous media suppression.
  */
 class LockScreenActivity : AppCompatActivity() {
 
@@ -41,6 +52,25 @@ class LockScreenActivity : AppCompatActivity() {
     private var appName: String = "Instagram"
     private var tamperWarningMessage: String? = null
     private var mediaSuppressTick: Int = 0
+    private var currentQuoteIndex: Int = 0
+
+    private val motivationalQuotes = listOf(
+        "“Discipline is choosing between what you want now and what you want most.”",
+        "“Stop scrolling other people's lives. Start building your own empire.”",
+        "“1 hour of deep coding beats 5 hours of mindless scrolling.”",
+        "“Your future self is watching you right now through your memories.”",
+        "“Don't trade your biggest dreams for cheap dopamine.”",
+        "“Focus is the new IQ in a distracted world.”",
+        "“Every hour saved from social media is an hour invested in your success.”",
+        "“Winners use technology as a tool; others let it use them.”",
+        "“The cost of a distraction is another day delayed from your destiny.”",
+        "“Self-control is strength. Right thought is mastery. Calmness is power.”",
+        "“Small daily disciplines compound into massive lifelong triumphs.”",
+        "“You cannot change your destination overnight, but you can change your direction today.”",
+        "“Do what is hard now and life will be easy later.”",
+        "“Your focus determines your reality. Guard it fiercely.”",
+        "“Break the habit before the habit breaks your potential.”"
+    )
 
     private val countdownRunnable = object : Runnable {
         override fun run() {
@@ -85,6 +115,7 @@ class LockScreenActivity : AppCompatActivity() {
         configureWindowFlags()
         setupBackPressInterceptor()
         setupListeners()
+        setupQuotesEngine()
         startLockIconBreathingAnimation()
     }
 
@@ -161,6 +192,34 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     /**
+     * Feature 4: Motivational & Focus Quotes Engine with smooth crossfade animation.
+     */
+    private fun setupQuotesEngine() {
+        currentQuoteIndex = (0 until motivationalQuotes.size).random()
+        binding.tvMotivationalQuote.text = motivationalQuotes[currentQuoteIndex]
+        binding.cardMotivationalQuote.setOnClickListener {
+            cycleToNextQuote()
+        }
+    }
+
+    private fun cycleToNextQuote() {
+        currentQuoteIndex = (currentQuoteIndex + 1) % motivationalQuotes.size
+        val nextQuote = motivationalQuotes[currentQuoteIndex]
+
+        binding.tvMotivationalQuote.animate()
+            .alpha(0f)
+            .setDuration(150)
+            .withEndAction {
+                binding.tvMotivationalQuote.text = nextQuote
+                binding.tvMotivationalQuote.animate()
+                    .alpha(1f)
+                    .setDuration(220)
+                    .start()
+            }
+            .start()
+    }
+
+    /**
      * Breathing scale animation on the lock icon for premium visual feedback.
      */
     private fun startLockIconBreathingAnimation() {
@@ -216,6 +275,72 @@ class LockScreenActivity : AppCompatActivity() {
         binding.btnGoHome.setOnClickListener {
             redirectToHomeScreen()
         }
+
+        // Feature 3: Emergency 5-Min Unlock (Strict 1x Per Day)
+        binding.btnEmergencyUnlock.setOnClickListener {
+            handleEmergencyBypassClick()
+        }
+    }
+
+    /**
+     * Feature 3: Verifies 1/day quota and authorizes 5-min bypass via Master PIN.
+     */
+    private fun handleEmergencyBypassClick() {
+        val todayStr = AppBlockerService.getTodayDateStr()
+        val usedDate = guardManager.prefs.getEmergencyUsedDate(lockedAppKey)
+
+        if (usedDate == todayStr) {
+            Toast.makeText(
+                this,
+                "❌ Emergency 5-Min Bypass already used today for $appName! Wait for cooldown.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        showMasterPinDialog()
+    }
+
+    private fun showMasterPinDialog() {
+        val container = FrameLayout(this).apply {
+            setPadding(56, 24, 56, 12)
+        }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            gravity = Gravity.CENTER
+            textSize = 22f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+            filters = arrayOf(InputFilter.LengthFilter(4))
+        }
+        container.addView(input)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("🚨 Emergency 5-Min Bypass")
+            .setMessage("Enter your 4-digit Master PIN to unlock 5 minutes of emergency access for $appName (Strict limit: 1x per day).")
+            .setView(container)
+            .setPositiveButton("Authorize") { dialog, _ ->
+                val entered = input.text.toString().trim()
+                val master = guardManager.prefs.masterPin
+                if (entered == master) {
+                    AppBlockerService.grantEmergencyFiveMinutes(applicationContext, lockedAppKey)
+                    Toast.makeText(
+                        this,
+                        "✅ 5-Minute Emergency Access Granted for $appName!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    dialog.dismiss()
+                    finish()
+                } else {
+                    Toast.makeText(this, "❌ Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
     }
 
     private fun redirectToHomeScreen() {
