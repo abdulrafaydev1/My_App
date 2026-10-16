@@ -727,11 +727,12 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        currentView?.animate()
+        val pill = floatingPillView ?: currentView
+        pill?.animate()
             ?.scaleX(1.1f)?.scaleY(1.1f)
             ?.setDuration(80)
             ?.withEndAction {
-                currentView.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(80)?.start()
+                pill?.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(80)?.start()
             }
             ?.start()
     }
