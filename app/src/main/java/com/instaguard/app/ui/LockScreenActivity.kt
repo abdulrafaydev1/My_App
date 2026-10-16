@@ -283,7 +283,7 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     /**
-     * Feature 3: Verifies 1/day quota and authorizes 5-min bypass via Master PIN.
+     * Feature 2: 3-Stage Hard Math Brain Challenge + Master PIN (Strict 1x Per Day).
      */
     private fun handleEmergencyBypassClick() {
         val todayStr = AppBlockerService.getTodayDateStr()
@@ -298,10 +298,70 @@ class LockScreenActivity : AppCompatActivity() {
             return
         }
 
-        showMasterPinDialog()
+        startMathBrainChallenge(step = 1)
     }
 
-    private fun showMasterPinDialog() {
+    private fun startMathBrainChallenge(step: Int) {
+        if (step > 3) {
+            // All 3 math steps passed! Now request Master PIN
+            showFinalMasterPinDialog()
+            return
+        }
+
+        // Generate hard arithmetic problem e.g. (17 × 6) + 29
+        val num1 = (14..28).random()
+        val num2 = (5..9).random()
+        val num3 = (20..85).random()
+        val isAddition = (0..1).random() == 1
+
+        val problemStr = if (isAddition) "($num1 × $num2) + $num3" else "($num1 × $num2) - $num3"
+        val expectedAnswer = if (isAddition) (num1 * num2) + num3 else (num1 * num2) - num3
+
+        val container = FrameLayout(this).apply {
+            setPadding(56, 24, 56, 12)
+        }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED
+            gravity = Gravity.CENTER
+            textSize = 22f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.WHITE)
+            hint = "Answer"
+            setHintTextColor(Color.parseColor("#64748B"))
+        }
+        container.addView(input)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle("🧠 Brain Challenge (Step $step of 3)")
+            .setMessage("Solve this problem to test your willpower and discipline before unlocking:\n\n$problemStr = ?")
+            .setView(container)
+            .setCancelable(false)
+            .setPositiveButton(if (step < 3) "Next Step ➔" else "Proceed to PIN ➔") { dialog, _ ->
+                val enteredText = input.text.toString().trim()
+                val enteredAnswer = enteredText.toIntOrNull()
+
+                if (enteredAnswer != null && enteredAnswer == expectedAnswer) {
+                    dialog.dismiss()
+                    Toast.makeText(this, "✅ Problem $step solved correctly!", Toast.LENGTH_SHORT).show()
+                    startMathBrainChallenge(step + 1)
+                } else {
+                    dialog.dismiss()
+                    Toast.makeText(
+                        this,
+                        "❌ Incorrect answer! Generating a new challenge to prevent guessing.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    startMathBrainChallenge(step = 1) // Reset challenge
+                }
+            }
+            .setNegativeButton("Give Up") { dialog, _ ->
+                dialog.dismiss()
+                Toast.makeText(this, "Good choice! Keep your focus streak alive.", Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun showFinalMasterPinDialog() {
         val container = FrameLayout(this).apply {
             setPadding(56, 24, 56, 12)
         }
@@ -318,9 +378,10 @@ class LockScreenActivity : AppCompatActivity() {
         container.addView(input)
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("🚨 Emergency 5-Min Bypass")
-            .setMessage("Enter your 4-digit Master PIN to unlock 5 minutes of emergency access for $appName (Strict limit: 1x per day).")
+            .setTitle("🔐 Final Step: Master PIN")
+            .setMessage("All 3 Math Challenges Passed! Enter your 4-digit Master PIN to unlock 5 minutes of emergency access for $appName (Strict limit: 1x per day).")
             .setView(container)
+            .setCancelable(false)
             .setPositiveButton("Authorize") { dialog, _ ->
                 val entered = input.text.toString().trim()
                 val master = guardManager.prefs.masterPin
@@ -334,7 +395,7 @@ class LockScreenActivity : AppCompatActivity() {
                     dialog.dismiss()
                     finish()
                 } else {
-                    Toast.makeText(this, "❌ Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "❌ Incorrect Master PIN! Emergency unlock aborted.", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel") { dialog, _ ->

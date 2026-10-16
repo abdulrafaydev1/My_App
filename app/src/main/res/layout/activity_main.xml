@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v5.0 (Master Edition)"
+                        android:text="InstaGuard Pro v6.0 (Ultimate Edition)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -65,7 +65,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="AI Focus Suite • 1h Limit • 5h Lock • Analytics"
+                        android:text="AI Focus Suite • Reel Counter • Focus Streak • Anti-Tamper"
                         android:textColor="@color/cyber_text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -79,6 +79,92 @@
                     app:tint="@color/primary"
                     android:contentDescription="@string/btn_refresh" />
             </LinearLayout>
+
+            <!-- Feature 3: Focus Streak & Discipline Score Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardFocusStreak"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvFocusStreak"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="🔥 1-Day Active Streak"
+                            android:textColor="#F59E0B"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvDisciplineRank"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="4dp"
+                            android:text="🏆 Grandmaster Focus"
+                            android:textColor="@color/status_green"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvDisciplineScore"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="monospace"
+                            android:text="Discipline Score: 100%"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvStreakSubtitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Consistency is your superpower"
+                            android:textColor="@color/cyber_text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressDisciplineScore"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:layout_marginTop="8dp"
+                        android:max="100"
+                        android:progress="100"
+                        app:indicatorColor="@color/status_green"
+                        app:trackColor="#1E293B"
+                        app:trackCornerRadius="4dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
             <!-- Live Status Hero Pill Card -->
             <com.google.android.material.card.MaterialCardView
@@ -201,9 +287,39 @@
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="10dp"
                 android:text="🔐 Master PIN Settings (Default: 1234)"
                 android:textColor="@color/cyber_text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:strokeColor="@color/cyber_stroke"
+                app:strokeWidth="1dp"
+                app:cornerRadius="14dp" />
+
+            <!-- Feature 4 C: Add / Manage Custom Apps to Block -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddCustomApp"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="10dp"
+                android:text="➕ Add / Manage Custom Apps to Block"
+                android:textColor="@color/cyber_timer_allowed"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                app:strokeColor="@color/cyber_stroke"
+                app:strokeWidth="1dp"
+                app:cornerRadius="14dp" />
+
+            <!-- Feature 4 D: PIN-Protected 5-Min Maintenance / Uninstall Mode -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMaintenanceMode"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:text="🔓 Maintenance / Uninstall Mode (5 Min)"
+                android:textColor="#F87171"
                 android:textSize="13sp"
                 android:textStyle="bold"
                 app:strokeColor="@color/cyber_stroke"
@@ -342,6 +458,16 @@
                         app:indicatorColor="@color/status_green"
                         app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvInstagramScrolls"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🎬 Today's Scrolls: 0  •  All-Time: 0"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -446,6 +572,16 @@
                         app:indicatorColor="@color/status_green"
                         app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvYouTubeScrolls"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🎬 Today's Scrolls: 0  •  All-Time: 0"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -550,6 +686,16 @@
                         app:indicatorColor="@color/status_green"
                         app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvFacebookScrolls"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🎬 Today's Scrolls: 0  •  All-Time: 0"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -558,7 +704,7 @@
                 android:id="@+id/cardTikTok"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="14dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
                 app:strokeWidth="1dp"
@@ -654,6 +800,74 @@
                         app:indicatorColor="@color/status_green"
                         app:trackColor="#1E293B"
                         app:trackCornerRadius="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvTikTokScrolls"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🎬 Today's Scrolls: 0  •  All-Time: 0"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Feature 4 C: Custom Tracked Apps Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardCustomApps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="📱 Custom Tracked Apps"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvCustomAppsCountBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="4dp"
+                            android:text="0 APPS"
+                            android:textColor="@color/primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvCustomAppsSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="2dp"
+                        android:text="No custom apps added yet. Tap '+ Add Custom App' to monitor any app."
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -710,6 +924,17 @@
                         android:text="Today's Total Screen Time: 00h 00m 00s"
                         android:textColor="@color/cyber_timer_allowed"
                         android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvAnalyticsScrollsTotal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:text="🔥 Total Reels/Shorts Scrolled Today: 0"
+                        android:textColor="#F59E0B"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <View

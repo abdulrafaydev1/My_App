@@ -32,10 +32,17 @@ class GuardPreferences(context: Context) {
         const val TEST_USAGE_LIMIT_MS = 60 * 1000L // 60,000 ms
         const val TEST_COOLDOWN_DURATION_MS = 2 * 60 * 1000L // 120,000 ms
 
+        const val KEY_FOCUS_STREAK_DAYS = "focus_streak_days"
+        const val KEY_LAST_STREAK_DATE = "last_streak_date"
+        const val KEY_CUSTOM_TRACKED_PACKAGES = "custom_tracked_packages"
+        const val KEY_MAINTENANCE_UNTIL_MS = "maintenance_until_ms"
+
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
         fun dailyTotalKey(dateStr: String, appKey: String): String = "daily_total_ms_${dateStr}_${appKey.uppercase()}"
         fun emergencyKey(appKey: String): String = "emergency_used_date_${appKey.uppercase()}"
+        fun scrollTodayKey(dateStr: String, appKey: String): String = "scroll_today_${dateStr}_${appKey.uppercase()}"
+        fun scrollTotalKey(appKey: String): String = "scroll_total_${appKey.uppercase()}"
     }
 
     /**
@@ -148,5 +155,41 @@ class GuardPreferences(context: Context) {
         editor.remove("unlock_timestamp_ms")
         editor.remove("unlock_time")
         editor.apply()
+    }
+
+    var focusStreakDays: Int
+        get() = prefs.getInt(KEY_FOCUS_STREAK_DAYS, 1)
+        set(value) = prefs.edit().putInt(KEY_FOCUS_STREAK_DAYS, maxOf(1, value)).apply()
+
+    var lastStreakDate: String
+        get() = prefs.getString(KEY_LAST_STREAK_DATE, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_STREAK_DATE, value).apply()
+
+    var maintenanceUntilMs: Long
+        get() = prefs.getLong(KEY_MAINTENANCE_UNTIL_MS, 0L)
+        set(value) = prefs.edit().putLong(KEY_MAINTENANCE_UNTIL_MS, value).apply()
+
+    fun getCustomTrackedPackages(): Set<String> {
+        return prefs.getStringSet(KEY_CUSTOM_TRACKED_PACKAGES, emptySet()) ?: emptySet()
+    }
+
+    fun setCustomTrackedPackages(packages: Set<String>) {
+        prefs.edit().putStringSet(KEY_CUSTOM_TRACKED_PACKAGES, packages).apply()
+    }
+
+    fun getScrollToday(dateStr: String, appKey: String): Int {
+        return prefs.getInt(scrollTodayKey(dateStr, appKey), 0)
+    }
+
+    fun setScrollToday(dateStr: String, appKey: String, count: Int) {
+        prefs.edit().putInt(scrollTodayKey(dateStr, appKey), count).apply()
+    }
+
+    fun getScrollTotal(appKey: String): Int {
+        return prefs.getInt(scrollTotalKey(appKey), 0)
+    }
+
+    fun setScrollTotal(appKey: String, count: Int) {
+        prefs.edit().putInt(scrollTotalKey(appKey), count).apply()
     }
 }

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Deep Cyber Space Background Base -->
+    <path
+        android:fillColor="#090D16"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Outer Neon Shield Glow Ring -->
+    <path
+        android:fillColor="#161F30"
+        android:strokeColor="#1E293B"
+        android:strokeWidth="2"
+        android:pathData="M54,12 L88,24 L88,54 C88,76 72,94 54,98 C36,94 20,76 20,54 L20,24 Z" />
+
+    <!-- Cyber Shield Hexagon Body -->
+    <path
+        android:fillColor="#0F172A"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="3"
+        android:pathData="M54,18 L82,28 L82,53 C82,71 69,87 54,91 C39,87 26,71 26,53 L26,28 Z" />
+
+    <!-- Inner Emerald Accent Wing -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,24 L76,32 L76,52 C76,66 66,79 54,83 L54,24 Z"
+        android:alpha="0.25" />
+
+    <!-- Glowing Cyber Lock Shackle -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M46,47 V39 C46,34.5 49.5,31 54,31 C58.5,31 62,34.5 62,39 V47" />
+
+    <!-- Lock Body (Modern Rounded Vault) -->
+    <path
+        android:fillColor="#1E293B"
+        android:strokeColor="#10B981"
+        android:strokeWidth="2.5"
+        android:pathData="M40,47 H68 C70.2,47 72,48.8 72,51 V67 C72,69.2 70.2,71 68,71 H40 C37.8,71 36,69.2 36,67 V51 C36,48.8 37.8,47 40,47 Z" />
+
+    <!-- Center Keyhole & Stopwatch Core Dot -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M54,54 A3,3 0 1,1 54,60 A3,3 0 1,1 54,54 Z" />
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,60 V65" />
+
+</vector>

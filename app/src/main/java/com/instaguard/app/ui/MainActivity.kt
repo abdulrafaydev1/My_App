@@ -15,8 +15,10 @@ import android.os.Looper
 import android.provider.Settings
 import android.text.InputFilter
 import android.text.InputType
+import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -35,10 +37,10 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Main Dashboard Activity for InstaGuard Pro v5.0.
- * Features a Cyber-Dark UI, strictly isolated per-app 1h limit and 5h cooldown monitoring,
- * smooth entrance and pulse animations, dynamic border highlights, Master PIN settings,
- * 7-day usage analytics dashboard, and anti-bypass guards.
+ * Main Dashboard Activity for InstaGuard Pro v6.0.
+ * Features a Cyber-Dark UI, live Top-Center Reel/Short counter, Focus Streak,
+ * Discipline Score gamification, Any-App picker, 5-min Maintenance mode,
+ * strictly isolated per-app 1h limit and 5h cooldown monitoring, and analytics.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -99,11 +101,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyMonospaceTypefaces() {
         val monospaceViews = listOf(
-            binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus,
-            binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus,
-            binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus,
-            binding.tvTikTokTimer, binding.tvTikTokLimit, binding.tvTikTokStatus,
-            binding.tvAnalyticsTodayTotal, binding.tvAnalyticsInstagram, binding.tvAnalyticsYouTube,
+            binding.tvFocusStreak, binding.tvDisciplineScore,
+            binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus, binding.tvInstagramScrolls,
+            binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus, binding.tvYouTubeScrolls,
+            binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus, binding.tvFacebookScrolls,
+            binding.tvTikTokTimer, binding.tvTikTokLimit, binding.tvTikTokStatus, binding.tvTikTokScrolls,
+            binding.tvCustomAppsSummary,
+            binding.tvAnalyticsTodayTotal, binding.tvAnalyticsScrollsTotal,
+            binding.tvAnalyticsInstagram, binding.tvAnalyticsYouTube,
             binding.tvAnalyticsFacebook, binding.tvAnalyticsTikTok, binding.tvAnalytics7DayReport
         )
         for (view in monospaceViews) {
@@ -118,16 +123,29 @@ class MainActivity : AppCompatActivity() {
         if (hasAnimatedEntrance) return
         hasAnimatedEntrance = true
 
+        // Feature 4 B: Sleek 450ms scale + fade-in launch animation on Header & Streak Card
+        binding.layoutHeader.scaleX = 0.88f
+        binding.layoutHeader.scaleY = 0.88f
+        binding.layoutHeader.animate().scaleX(1.0f).scaleY(1.0f).setDuration(450).start()
+
+        binding.cardFocusStreak.scaleX = 0.88f
+        binding.cardFocusStreak.scaleY = 0.88f
+        binding.cardFocusStreak.animate().scaleX(1.0f).scaleY(1.0f).setDuration(450).setStartDelay(80).start()
+
         val viewsToAnimate = listOf(
             binding.layoutHeader,
+            binding.cardFocusStreak,
             binding.cardOverallStatus,
             binding.cardTestMode,
             binding.btnMasterPinSettings,
+            binding.btnAddCustomApp,
+            binding.btnMaintenanceMode,
             binding.layoutSectionTitle,
             binding.cardInstagram,
             binding.cardYouTube,
             binding.cardFacebook,
             binding.cardTikTok,
+            binding.cardCustomApps,
             binding.cardAnalyticsReport
         )
 
@@ -138,7 +156,7 @@ class MainActivity : AppCompatActivity() {
                 .alpha(1f)
                 .translationY(0f)
                 .setDuration(350)
-                .setStartDelay((index * 60).toLong())
+                .setStartDelay((index * 45).toLong())
                 .start()
         }
     }
@@ -229,6 +247,16 @@ class MainActivity : AppCompatActivity() {
         binding.btnMasterPinSettings.setOnClickListener {
             showMasterPinSettingsDialog()
         }
+
+        // Feature 4 C: Add / Manage Custom Apps to Block
+        binding.btnAddCustomApp.setOnClickListener {
+            showAddCustomAppDialog()
+        }
+
+        // Feature 4 D: PIN-Protected Maintenance / Uninstall Mode
+        binding.btnMaintenanceMode.setOnClickListener {
+            showMaintenanceModeDialog()
+        }
     }
 
     /**
@@ -239,6 +267,9 @@ class MainActivity : AppCompatActivity() {
         val limitMs = prefs.getUsageLimitMs()
         val cooldownMs = prefs.getCooldownDurationMs()
 
+        // Feature 3: Focus Streak & Discipline Score Gamification
+        updateFocusStreakAndDisciplineScore()
+
         // 1. Instagram
         renderAppCard(
             appKey = "INSTAGRAM",
@@ -247,6 +278,7 @@ class MainActivity : AppCompatActivity() {
             tvTimer = binding.tvInstagramTimer,
             tvLimit = binding.tvInstagramLimit,
             tvStatus = binding.tvInstagramStatus,
+            tvScrolls = binding.tvInstagramScrolls,
             progressIndicator = binding.progressInstagram,
             limitMs = limitMs,
             cooldownMs = cooldownMs
@@ -260,6 +292,7 @@ class MainActivity : AppCompatActivity() {
             tvTimer = binding.tvYouTubeTimer,
             tvLimit = binding.tvYouTubeLimit,
             tvStatus = binding.tvYouTubeStatus,
+            tvScrolls = binding.tvYouTubeScrolls,
             progressIndicator = binding.progressYouTube,
             limitMs = limitMs,
             cooldownMs = cooldownMs
@@ -273,6 +306,7 @@ class MainActivity : AppCompatActivity() {
             tvTimer = binding.tvFacebookTimer,
             tvLimit = binding.tvFacebookLimit,
             tvStatus = binding.tvFacebookStatus,
+            tvScrolls = binding.tvFacebookScrolls,
             progressIndicator = binding.progressFacebook,
             limitMs = limitMs,
             cooldownMs = cooldownMs
@@ -286,10 +320,14 @@ class MainActivity : AppCompatActivity() {
             tvTimer = binding.tvTikTokTimer,
             tvLimit = binding.tvTikTokLimit,
             tvStatus = binding.tvTikTokStatus,
+            tvScrolls = binding.tvTikTokScrolls,
             progressIndicator = binding.progressTikTok,
             limitMs = limitMs,
             cooldownMs = cooldownMs
         )
+
+        // Feature 4 C: Custom Apps Card
+        updateCustomAppsCard()
 
         // 5. Usage Analytics Dashboard (Feature 5)
         updateAnalyticsDashboard()
@@ -302,6 +340,7 @@ class MainActivity : AppCompatActivity() {
         tvTimer: TextView,
         tvLimit: TextView,
         tvStatus: TextView,
+        tvScrolls: TextView,
         progressIndicator: LinearProgressIndicator,
         limitMs: Long,
         cooldownMs: Long
@@ -309,6 +348,10 @@ class MainActivity : AppCompatActivity() {
         val lockRemaining = AppBlockerService.getRemainingLockMs(appKey, this)
         val usedMs = AppBlockerService.getLiveUsageMs(appKey, this).coerceAtMost(limitMs)
         val isForegroundActive = AppBlockerService.currentForegroundAppKey == appKey
+
+        val todayScrolls = AppBlockerService.getScrollToday(appKey, this)
+        val totalScrolls = AppBlockerService.getScrollTotal(appKey, this)
+        tvScrolls.text = "🎬 Today's Scrolls: $todayScrolls  •  All-Time: $totalScrolls"
 
         if (lockRemaining > 0L) {
             // LOCKED STATE (Crimson Red Glowing Border)
@@ -551,6 +594,164 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun updateFocusStreakAndDisciplineScore() {
+        val streak = guardManager.prefs.focusStreakDays
+        binding.tvFocusStreak.text = "🔥 ${streak}-Day Active Streak"
+
+        val totalScrolls = AppBlockerService.getTotalScrollsToday(this)
+        val lockedCount = AppBlockerService.APP_KEYS.count { AppBlockerService.isAppLocked(it, this) }
+
+        // Start at 100, penalize 15 points per locked app, and 1 point per 10 scrolls over 50
+        val scrollPenalty = if (totalScrolls > 50) (totalScrolls - 50) / 10 else 0
+        val disciplineScore = (100 - (lockedCount * 15) - scrollPenalty).coerceIn(10, 100)
+
+        binding.tvDisciplineScore.text = "Discipline Score: $disciplineScore%"
+        binding.progressDisciplineScore.progress = disciplineScore
+
+        val (rankText, rankColor) = when {
+            disciplineScore >= 90 -> "🏆 Grandmaster Focus" to Color.parseColor("#10B981")
+            disciplineScore >= 75 -> "🧘 Focus Monk" to Color.parseColor("#38BDF8")
+            disciplineScore >= 50 -> "⚔️ Focus Warrior" to Color.parseColor("#F59E0B")
+            else -> "📱 Reel Rookie" to Color.parseColor("#EF4444")
+        }
+
+        binding.tvDisciplineRank.text = rankText
+        binding.tvDisciplineRank.setTextColor(rankColor)
+        val rankBg = GradientDrawable().apply {
+            cornerRadius = dpToPx(6f).toFloat()
+            setColor(Color.parseColor("#1E293B"))
+            setStroke(dpToPx(1f), rankColor)
+        }
+        binding.tvDisciplineRank.background = rankBg
+        binding.progressDisciplineScore.setIndicatorColor(rankColor)
+
+        binding.tvStreakSubtitle.text = when {
+            disciplineScore >= 90 -> "Peak focus! Iron discipline maintained."
+            disciplineScore >= 75 -> "Great work! Keep distractions locked away."
+            disciplineScore >= 50 -> "Watch your scroll count and stay on track."
+            else -> "High usage detected! Time to lock in."
+        }
+    }
+
+    private fun updateCustomAppsCard() {
+        val customPackages = guardManager.prefs.getCustomTrackedPackages()
+        binding.tvCustomAppsCountBadge.text = "${customPackages.size} APPS"
+
+        if (customPackages.isEmpty()) {
+            binding.tvCustomAppsSummary.text = "No custom apps added yet. Tap '+ Add Custom App' to monitor any app."
+        } else {
+            val pm = packageManager
+            val names = customPackages.map { pkg ->
+                try {
+                    val appInfo = pm.getApplicationInfo(pkg, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    pkg
+                }
+            }
+            binding.tvCustomAppsSummary.text = "Active Custom Shield:\n" + names.joinToString(separator = "  •  ")
+        }
+    }
+
+    private fun showAddCustomAppDialog() {
+        val pm = packageManager
+        val mainIntent = Intent(Intent.ACTION_MAIN, null).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+        val resolveList = pm.queryIntentActivities(mainIntent, 0)
+
+        // Filter out InstaGuard and default core apps
+        val corePackages = setOf(
+            packageName,
+            "com.instagram.android", "com.instagram.lite",
+            "com.google.android.youtube", "com.google.android.youtube.tv",
+            "com.facebook.katana", "com.facebook.lite", "com.facebook.orca",
+            "com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.ss.android.ugc.tiktok.live.lite"
+        )
+
+        data class AppEntry(val label: String, val packageName: String)
+        val appEntries = resolveList.mapNotNull { resolveInfo ->
+            val pkg = resolveInfo.activityInfo.packageName
+            if (corePackages.contains(pkg)) null
+            else {
+                val label = resolveInfo.loadLabel(pm).toString()
+                AppEntry(label, pkg)
+            }
+        }.distinctBy { it.packageName }.sortedBy { it.label.lowercase(Locale.ROOT) }
+
+        if (appEntries.isEmpty()) {
+            Toast.makeText(this, "No additional launchable apps found.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentTracked = guardManager.prefs.getCustomTrackedPackages().toMutableSet()
+        val appNames = appEntries.map { "${it.label} (${it.packageName})" }.toTypedArray()
+        val checkedItems = BooleanArray(appEntries.size) { i ->
+            currentTracked.contains(appEntries[i].packageName)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("📱 Select Apps to Block & Track")
+            .setMultiChoiceItems(appNames, checkedItems) { _, which, isChecked ->
+                val pkg = appEntries[which].packageName
+                if (isChecked) {
+                    currentTracked.add(pkg)
+                } else {
+                    currentTracked.remove(pkg)
+                }
+            }
+            .setPositiveButton("SAVE") { dialog, _ ->
+                guardManager.prefs.setCustomTrackedPackages(currentTracked)
+                updateCustomAppsCard()
+                Toast.makeText(this, "Shield updated: ${currentTracked.size} custom apps monitored!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
+    private fun showMaintenanceModeDialog() {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(24f), dpToPx(16f), dpToPx(24f), dpToPx(8f))
+        }
+
+        val tvInfo = TextView(this).apply {
+            text = "Enter your 4-digit Master PIN to unlock a 5-minute Maintenance Window. This temporarily pauses anti-tamper shields for uninstallation or system management."
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 13f
+        }
+
+        val etPin = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            filters = arrayOf(InputFilter.LengthFilter(4))
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+            setPadding(0, dpToPx(12f), 0, dpToPx(8f))
+        }
+
+        container.addView(tvInfo)
+        container.addView(etPin)
+
+        AlertDialog.Builder(this)
+            .setTitle("🛠️ 5-Minute Maintenance Mode")
+            .setView(container)
+            .setPositiveButton("ACTIVATE") { dialog, _ ->
+                val entered = etPin.text.toString().trim()
+                if (entered == guardManager.prefs.masterPin) {
+                    val maintenanceUntil = System.currentTimeMillis() + 5 * 60 * 1000L
+                    guardManager.prefs.maintenanceUntilMs = maintenanceUntil
+                    Toast.makeText(this, "🛠️ Maintenance Mode active for 5 minutes! Anti-tamper paused.", Toast.LENGTH_LONG).show()
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("CANCEL", null)
+            .show()
+    }
+
     private fun updateAnalyticsDashboard() {
         val instaMs = AppBlockerService.getLiveDailyTotalMs("INSTAGRAM", this)
         val ytMs = AppBlockerService.getLiveDailyTotalMs("YOUTUBE", this)
@@ -561,21 +762,29 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvAnalyticsTodayTotal.text = "Today's Total Screen Time: " + formatDurationHoursMinutesSeconds(totalTodayMs)
 
+        val totalScrollsToday = AppBlockerService.getTotalScrollsToday(this)
+        binding.tvAnalyticsScrollsTotal.text = "🔥 Total Reels/Shorts Scrolled Today: $totalScrollsToday"
+
         val instaPct = if (totalTodayMs > 0L) ((instaMs * 100) / totalTodayMs).toInt() else 0
         val ytPct = if (totalTodayMs > 0L) ((ytMs * 100) / totalTodayMs).toInt() else 0
         val fbPct = if (totalTodayMs > 0L) ((fbMs * 100) / totalTodayMs).toInt() else 0
         val ttPct = if (totalTodayMs > 0L) ((ttMs * 100) / totalTodayMs).toInt() else 0
 
-        binding.tvAnalyticsInstagram.text = "📷 Instagram: ${formatDuration(instaMs)} ($instaPct%)"
+        val instaScrolls = AppBlockerService.getScrollToday("INSTAGRAM", this)
+        val ytScrolls = AppBlockerService.getScrollToday("YOUTUBE", this)
+        val fbScrolls = AppBlockerService.getScrollToday("FACEBOOK", this)
+        val ttScrolls = AppBlockerService.getScrollToday("TIKTOK", this)
+
+        binding.tvAnalyticsInstagram.text = "📷 Instagram: ${formatDuration(instaMs)} ($instaPct%) • 🎬 $instaScrolls scrolls"
         binding.progressAnalyticsInstagram.progress = instaPct
 
-        binding.tvAnalyticsYouTube.text = "▶️ YouTube: ${formatDuration(ytMs)} ($ytPct%)"
+        binding.tvAnalyticsYouTube.text = "▶️ YouTube: ${formatDuration(ytMs)} ($ytPct%) • 🎬 $ytScrolls scrolls"
         binding.progressAnalyticsYouTube.progress = ytPct
 
-        binding.tvAnalyticsFacebook.text = "👥 Facebook: ${formatDuration(fbMs)} ($fbPct%)"
+        binding.tvAnalyticsFacebook.text = "👥 Facebook: ${formatDuration(fbMs)} ($fbPct%) • 🎬 $fbScrolls scrolls"
         binding.progressAnalyticsFacebook.progress = fbPct
 
-        binding.tvAnalyticsTikTok.text = "🎵 TikTok: ${formatDuration(ttMs)} ($ttPct%)"
+        binding.tvAnalyticsTikTok.text = "🎵 TikTok: ${formatDuration(ttMs)} ($ttPct%) • 🎬 $ttScrolls scrolls"
         binding.progressAnalyticsTikTok.progress = ttPct
 
         val now = android.os.SystemClock.elapsedRealtime()

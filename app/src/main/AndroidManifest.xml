@@ -28,6 +28,10 @@
         <package android:name="com.zhiliaoapp.musically" />
         <package android:name="com.ss.android.ugc.trill" />
         <package android:name="com.zhiliaoapp.musically.go" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
@@ -37,8 +41,8 @@
         android:hasFragileUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/ic_shield"
-        android:roundIcon="@drawable/ic_shield"
+        android:icon="@drawable/ic_focus_shield_logo"
+        android:roundIcon="@drawable/ic_focus_shield_logo"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.InstaGuard"

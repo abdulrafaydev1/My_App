@@ -17,10 +17,18 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.KeyEvent
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import com.instaguard.app.R
 import com.instaguard.app.data.GuardPreferences
@@ -53,6 +61,9 @@ class AppBlockerService : AccessibilityService() {
     private var isTickerRunning = false
     private var tickCounter = 0
     private var lastTamperBlockMs = 0L
+    private var lastScrollCountTimestampMs = 0L
+    private var floatingPillView: TextView? = null
+    private var isPillAttached = false
 
     /**
      * Monotonic 50ms Delta-Tick Stopwatch Ticker.
@@ -73,6 +84,7 @@ class AppBlockerService : AccessibilityService() {
             val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if (pm != null && !pm.isInteractive) {
                 currentForegroundAppKey = null
+                removeFloatingPill()
                 tickerHandler.postDelayed(this, 50L)
                 return
             }
@@ -102,6 +114,7 @@ class AppBlockerService : AccessibilityService() {
             if (activeKey != null) {
                 if (isAppLocked(activeKey, applicationContext)) {
                     currentForegroundAppKey = null
+                    removeFloatingPill()
                     stopAllMediaPlayback()
                     launchLockScreen(activeKey)
                 } else {
@@ -115,6 +128,10 @@ class AppBlockerService : AccessibilityService() {
 
                     val limitMs = prefs.getUsageLimitMs()
 
+                    // Feature 1: Live Top-Center Reel/Short Scroll Counter Overlay
+                    val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
+                    updateFloatingPill(activeKey, remainingAllowance)
+
                     // Feature 2: Smart Warning Notifications (5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
 
@@ -124,6 +141,7 @@ class AppBlockerService : AccessibilityService() {
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
                         currentForegroundAppKey = null
+                        removeFloatingPill()
 
                         // Reset warning flags on lock
                         warned5MinMap[activeKey] = false
@@ -134,6 +152,8 @@ class AppBlockerService : AccessibilityService() {
                         launchLockScreen(activeKey)
                     }
                 }
+            } else {
+                removeFloatingPill()
             }
 
             // 5. Periodic auto-checkpoint persistence every 40 ticks (~2000ms)
@@ -223,6 +243,38 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
+        // Feature 1: Live Reel / Short / Feed Scroll Detection (Smart Debounce)
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            val activeKey = currentForegroundAppKey ?: return
+            val now = System.currentTimeMillis()
+            if (now - lastScrollCountTimestampMs >= 750L) {
+                val className = event.className?.toString() ?: ""
+                val isVerticalScroll = event.scrollDeltaY > 30 ||
+                    event.fromIndex != event.toIndex ||
+                    className.contains("RecyclerView") ||
+                    className.contains("ViewPager") ||
+                    className.contains("ScrollView") ||
+                    className.contains("List") ||
+                    className.contains("Feed") ||
+                    event.itemCount > 0
+
+                if (isVerticalScroll) {
+                    lastScrollCountTimestampMs = now
+                    val todayCount = (scrollCountTodayMap[activeKey] ?: 0) + 1
+                    val totalCount = (scrollCountTotalMap[activeKey] ?: 0) + 1
+                    scrollCountTodayMap[activeKey] = todayCount
+                    scrollCountTotalMap[activeKey] = totalCount
+
+                    val todayDateStr = getTodayDateStr()
+                    prefs.setScrollToday(todayDateStr, activeKey, todayCount)
+                    prefs.setScrollTotal(activeKey, totalCount)
+
+                    pulseFloatingPill(activeKey)
+                }
+            }
+            return
+        }
+
         // CRITICAL: TYPE_WINDOW_CONTENT_CHANGED must NEVER update or reset currentForegroundAppKey!
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return
@@ -241,15 +293,17 @@ class AppBlockerService : AccessibilityService() {
         if (packageName == applicationContext.packageName) {
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
+            removeFloatingPill()
             return
         }
 
-        // 5. Check if foreground window matches one of our 4 tracked social apps
+        // 5. Check if foreground window matches one of our tracked apps
         val detectedKey = mapPackageToAppKey(packageName)
         if (detectedKey != null) {
             if (isAppLocked(detectedKey, applicationContext)) {
                 Log.w(TAG, "[$detectedKey] Opened during active cooldown lock. Enforcing LockScreen.")
                 currentForegroundAppKey = null
+                removeFloatingPill()
                 stopAllMediaPlayback()
                 launchLockScreen(detectedKey)
             } else {
@@ -263,6 +317,7 @@ class AppBlockerService : AccessibilityService() {
             // User switched to another real application or Home Launcher
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
+            removeFloatingPill()
         }
     }
 
@@ -338,16 +393,26 @@ class AppBlockerService : AccessibilityService() {
 
         if (lastDate.isNotEmpty() && lastDate != todayStr) {
             Log.i(TAG, "Midnight crossover detected! Transitioning from $lastDate to $todayStr.")
-            for (key in APP_KEYS) {
+            for (key in getAllTrackedKeys()) {
                 // If not currently in 5-hour cooldown lock, reset quota for fresh day
                 if (!isAppLocked(key, applicationContext)) {
                     accumulatedUsageMap[key] = 0L
                     prefs.setAccumulatedUsage(key, 0L)
                 }
             }
+            // Feature 1: Reset today's scroll count on midnight
+            scrollCountTodayMap.clear()
+
             // Reset warning notification flags
             warned5MinMap.clear()
             warned1MinMap.clear()
+
+            // Feature 3: Focus Streak tracking
+            val hadAnyLock = getAllTrackedKeys().any { prefs.getUnlockTimestamp(it) > 0L }
+            if (!hadAnyLock) {
+                prefs.focusStreakDays += 1
+            }
+            prefs.lastStreakDate = todayStr
         }
         prefs.lastActiveDate = todayStr
     }
@@ -359,6 +424,11 @@ class AppBlockerService : AccessibilityService() {
      * Explicitly allows Accessibility Settings and Usage Access permission screens.
      */
     private fun inspectAndBlockTamperAttempt(packageName: String): Boolean {
+        // Feature 4 D: Maintenance Mode (5-min PIN bypass window)
+        if (System.currentTimeMillis() < maintenanceUntilMs) {
+            return false
+        }
+
         val now = System.currentTimeMillis()
         if (now - lastTamperBlockMs < 600L) {
             return true
@@ -458,10 +528,20 @@ class AppBlockerService : AccessibilityService() {
     }
 
     private fun launchLockScreen(appKey: String) {
-        val app = TrackedApp.fromKey(appKey) ?: TrackedApp.INSTAGRAM
+        removeFloatingPill()
+        val tracked = TrackedApp.fromKey(appKey)
+        val appDisplayName = tracked?.displayName ?: run {
+            try {
+                val pm = packageManager
+                val info = pm.getApplicationInfo(appKey, 0)
+                pm.getApplicationLabel(info).toString()
+            } catch (e: Exception) {
+                appKey
+            }
+        }
 
         // If YOUTUBE, exit Shorts/fullscreen player and kill background process
-        if (app.key == "YOUTUBE") {
+        if (appKey == "YOUTUBE") {
             performGlobalAction(GLOBAL_ACTION_BACK)
             try {
                 val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
@@ -477,10 +557,10 @@ class AppBlockerService : AccessibilityService() {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
-            putExtra(LockScreenActivity.EXTRA_APP_KEY, app.key)
-            putExtra(LockScreenActivity.EXTRA_APP_NAME, app.displayName)
-            putExtra("EXTRA_APP_KEY", app.key)
-            putExtra("EXTRA_APP_NAME", app.displayName)
+            putExtra(LockScreenActivity.EXTRA_APP_KEY, appKey)
+            putExtra(LockScreenActivity.EXTRA_APP_NAME, appDisplayName)
+            putExtra("EXTRA_APP_KEY", appKey)
+            putExtra("EXTRA_APP_NAME", appDisplayName)
         }
         startActivity(lockIntent)
 
@@ -501,18 +581,119 @@ class AppBlockerService : AccessibilityService() {
         val unlock = unlockTimestampMap[appKey] ?: 0L
         val todayStr = getTodayDateStr()
         val daily = dailyTotalMap[appKey] ?: prefs.getDailyTotal(todayStr, appKey)
+        val scrollToday = scrollCountTodayMap[appKey] ?: prefs.getScrollToday(todayStr, appKey)
+        val scrollTotal = scrollCountTotalMap[appKey] ?: prefs.getScrollTotal(appKey)
 
         prefs.setAccumulatedUsage(appKey, usage)
         prefs.setUnlockTimestamp(appKey, unlock)
         prefs.setDailyTotal(todayStr, appKey, daily)
+        prefs.setScrollToday(todayStr, appKey, scrollToday)
+        prefs.setScrollTotal(appKey, scrollTotal)
     }
 
     private fun isAnyAppLocked(): Boolean {
-        return APP_KEYS.any { isAppLocked(it, applicationContext) }
+        return getAllTrackedKeys().any { isAppLocked(it, applicationContext) }
     }
 
     private fun hasAnyActiveSession(): Boolean {
-        return APP_KEYS.any { getLiveUsageMs(it, applicationContext) > 0L }
+        return getAllTrackedKeys().any { getLiveUsageMs(it, applicationContext) > 0L }
+    }
+
+    private fun createPillLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            y = 90
+        }
+    }
+
+    private fun updateFloatingPill(activeKey: String, remainingMs: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            removeFloatingPill()
+            return
+        }
+
+        if (floatingPillView == null) {
+            floatingPillView = TextView(this).apply {
+                textSize = 12f
+                typeface = Typeface.MONOSPACE
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Color.parseColor("#F8FAFC"))
+                setPadding(dpToPx(14f), dpToPx(6f), dpToPx(14f), dpToPx(6f))
+                gravity = Gravity.CENTER
+                val bg = GradientDrawable().apply {
+                    setColor(Color.parseColor("#E60F172A"))
+                    cornerRadius = dpToPx(20f).toFloat()
+                    setStroke(dpToPx(1.5f), Color.parseColor("#38BDF8"))
+                }
+                background = bg
+            }
+        }
+
+        val timeStr = formatPillTime(remainingMs)
+        val scrolls = scrollCountTodayMap[activeKey] ?: 0
+        floatingPillView?.text = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+
+        if (!isPillAttached) {
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                wm.addView(floatingPillView, createPillLayoutParams())
+                isPillAttached = true
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
+    private fun pulseFloatingPill(activeKey: String) {
+        val limitMs = prefs.getUsageLimitMs()
+        val usedMs = accumulatedUsageMap[activeKey] ?: 0L
+        val remainingMs = maxOf(0L, limitMs - usedMs)
+        val timeStr = formatPillTime(remainingMs)
+        val scrolls = scrollCountTodayMap[activeKey] ?: 0
+        floatingPillView?.text = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+
+        floatingPillView?.animate()
+            ?.scaleX(1.15f)?.scaleY(1.15f)
+            ?.setDuration(75)
+            ?.withEndAction {
+                floatingPillView?.animate()?.scaleX(1.0f)?.scaleY(1.0f)?.setDuration(75)?.start()
+            }
+            ?.start()
+    }
+
+    private fun removeFloatingPill() {
+        if (isPillAttached && floatingPillView != null) {
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                wm.removeView(floatingPillView)
+            } catch (e: Exception) {
+                // ignore
+            }
+            isPillAttached = false
+        }
+    }
+
+    private fun formatPillTime(ms: Long): String {
+        val totalSec = maxOf(0L, ms) / 1000L
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return String.format(Locale.US, "%02d:%02d", min, sec)
+    }
+
+    private fun dpToPx(dp: Float): Int {
+        val density = resources.displayMetrics.density
+        return (dp * density + 0.5f).toInt()
     }
 
     /**
@@ -594,12 +775,14 @@ class AppBlockerService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        removeFloatingPill()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        removeFloatingPill()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -646,6 +829,13 @@ class AppBlockerService : AccessibilityService() {
         val warned5MinMap = ConcurrentHashMap<String, Boolean>()
         val warned1MinMap = ConcurrentHashMap<String, Boolean>()
 
+        val customTrackedPackages = ConcurrentHashMap.newKeySet<String>()
+        val scrollCountTodayMap = ConcurrentHashMap<String, Int>()
+        val scrollCountTotalMap = ConcurrentHashMap<String, Int>()
+
+        @Volatile
+        var maintenanceUntilMs: Long = 0L
+
         @Volatile
         var currentForegroundAppKey: String? = null
 
@@ -659,8 +849,15 @@ class AppBlockerService : AccessibilityService() {
             return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         }
 
+        fun getAllTrackedKeys(): List<String> {
+            return APP_KEYS + customTrackedPackages.toList()
+        }
+
         fun mapPackageToAppKey(packageName: String): String? {
-            return TrackedApp.fromPackageName(packageName)?.key
+            val coreKey = TrackedApp.fromPackageName(packageName)?.key
+            if (coreKey != null) return coreKey
+            if (customTrackedPackages.contains(packageName)) return packageName
+            return null
         }
 
         fun syncFromPrefs(context: Context) {
@@ -670,10 +867,16 @@ class AppBlockerService : AccessibilityService() {
             val todayStr = getTodayDateStr()
             var allZero = true
 
-            for (key in APP_KEYS) {
+            customTrackedPackages.clear()
+            customTrackedPackages.addAll(prefs.getCustomTrackedPackages())
+            maintenanceUntilMs = prefs.maintenanceUntilMs
+
+            for (key in getAllTrackedKeys()) {
                 val usage = prefs.getAccumulatedUsage(key)
                 val unlock = prefs.getUnlockTimestamp(key)
                 val daily = prefs.getDailyTotal(todayStr, key)
+                val scrollToday = prefs.getScrollToday(todayStr, key)
+                val scrollTotal = prefs.getScrollTotal(key)
 
                 if (unlock > 0L && unlock <= now) {
                     accumulatedUsageMap[key] = 0L
@@ -687,12 +890,36 @@ class AppBlockerService : AccessibilityService() {
                     }
                 }
                 dailyTotalMap[key] = daily
+                scrollCountTodayMap[key] = scrollToday
+                scrollCountTotalMap[key] = scrollTotal
             }
 
             // Only reconstruct from OS system events if SharedPreferences is 100% empty
             if (allZero) {
                 syncAndReconstructFromSystemEvents(context)
             }
+        }
+
+        fun getScrollToday(appKey: String, context: Context? = null): Int {
+            val inMem = scrollCountTodayMap[appKey]
+            if (inMem != null) return inMem
+            val ctx = context ?: appContext
+            return ctx?.let { GuardPreferences(it).getScrollToday(getTodayDateStr(), appKey) } ?: 0
+        }
+
+        fun getScrollTotal(appKey: String, context: Context? = null): Int {
+            val inMem = scrollCountTotalMap[appKey]
+            if (inMem != null) return inMem
+            val ctx = context ?: appContext
+            return ctx?.let { GuardPreferences(it).getScrollTotal(appKey) } ?: 0
+        }
+
+        fun getTotalScrollsToday(context: Context? = null): Int {
+            var total = 0
+            for (key in getAllTrackedKeys()) {
+                total += getScrollToday(key, context)
+            }
+            return total
         }
 
         /**
