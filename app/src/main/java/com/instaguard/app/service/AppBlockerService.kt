@@ -31,6 +31,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.instaguard.app.R
 import com.instaguard.app.data.GuardPreferences
@@ -65,22 +66,72 @@ class AppBlockerService : AccessibilityService() {
     private var lastTamperBlockMs = 0L
     private var lastPillText = ""
 
-    // v6.2 Gesture-Burst Physics & Scroll State
-    private var gestureEventCount = 0
-    private var gestureStartElapsedMs = 0L
-    private var lastScrollEventElapsedMs = 0L
-    private var gestureStartFromIndex = -1
-    private var gestureStartToIndex = -1
-    private var lastCountedScrollElapsedMs = 0L
-    private var lastScreenSignature = ""
+    // v6.3 Post-Scroll Settled Verification State
+    private var lastScrollCountElapsedMs = 0L
+    private var lastCountedScreenSignature = ""
+    private var lastCountedFromIndex = -1
+    private var lastCountedToIndex = -1
+    private var pendingScrollFromIndex = -1
+    private var pendingScrollToIndex = -1
+    private var hadVideoVisibleBeforeScroll = false
 
-    // v6.2 YouTube Long Video 10-Second Watch State
+    // v6.3 YouTube Long Video 10-Second Watch State
     @Volatile
-    private var isLongVideoTimerActive = false
+    private var isYoutubeLongVideoTimerRunning = false
     @Volatile
-    private var longVideoStartElapsedMs = 0L
-    @Volatile
-    private var currentLongVideoCounted = false
+    private var youtubeLongVideoStartElapsedMs = 0L
+    private var wasInYoutubeWatchMode = false
+
+    private val verifyScrollRunnable = Runnable {
+        val activeKey = currentForegroundAppKey ?: return@Runnable
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastScrollCountElapsedMs < 900L) return@Runnable
+
+        val root = try { rootInActiveWindow } catch (e: Exception) { null }
+        val currentSig = getScreenContentSignature(root)
+        val indexChanged = (pendingScrollFromIndex >= 0 && pendingScrollFromIndex != lastCountedFromIndex) ||
+            (pendingScrollToIndex >= 0 && pendingScrollToIndex != lastCountedToIndex)
+        val signatureChanged = currentSig.isNotEmpty() && currentSig != lastCountedScreenSignature
+        val confirmRealFullScroll = indexChanged || signatureChanged ||
+            (currentSig.isEmpty() && pendingScrollFromIndex == -1 && activeKey == "TIKTOK")
+
+        if (!confirmRealFullScroll) return@Runnable
+
+        var shouldIncrement = false
+        when (activeKey) {
+            "TIKTOK" -> {
+                shouldIncrement = true
+            }
+            "INSTAGRAM", "FACEBOOK" -> {
+                val inReels = isReelsOrWatchTabActive(activeKey, root)
+                val hasVideoNow = hasVideoElementOnScreen(root)
+                if (inReels || hadVideoVisibleBeforeScroll || hasVideoNow) {
+                    shouldIncrement = true
+                }
+            }
+            "YOUTUBE" -> {
+                if (isYoutubeShortsMode(root)) {
+                    shouldIncrement = true
+                }
+            }
+            else -> {
+                shouldIncrement = true
+            }
+        }
+
+        if (shouldIncrement) {
+            lastScrollCountElapsedMs = now
+            if (currentSig.isNotEmpty()) {
+                lastCountedScreenSignature = currentSig
+            }
+            lastCountedFromIndex = pendingScrollFromIndex
+            lastCountedToIndex = pendingScrollToIndex
+            hadVideoVisibleBeforeScroll = false
+
+            incrementScrollCount(activeKey)
+            pulseFloatingPill(activeKey)
+        }
+    }
 
     /**
      * Monotonic 50ms Delta-Tick Stopwatch Ticker.
@@ -131,29 +182,41 @@ class AppBlockerService : AccessibilityService() {
             // 4. Increment usage counter and daily total for active tracked app
             val activeKey = currentForegroundAppKey
             if (activeKey != null) {
-                // Step 3: YouTube Long Video 10-Second Watch tracking
+                // Step 4: YouTube Long Video 10-Second Watch tracking
                 if (activeKey == "YOUTUBE") {
-                    val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                    val isLongVideo = isYoutubeLongVideoPlaying(root)
+                    // Trigger B: Check watch mode transition every 10 ticks (~500ms)
+                    if (tickCounter % 10 == 0) {
+                        val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                        val inWatchMode = isYoutubeLongVideoWatchMode(root)
+                        if (inWatchMode && !wasInYoutubeWatchMode && !isYoutubeLongVideoTimerRunning) {
+                            startYoutubeLongVideoCountdown()
+                        }
+                        wasInYoutubeWatchMode = inWatchMode
+                    }
 
-                    if (isLongVideo) {
-                        startYoutubeLongVideo10sTimer()
-                        if (isLongVideoTimerActive && !currentLongVideoCounted) {
-                            val elapsedSec = ((SystemClock.elapsedRealtime() - longVideoStartElapsedMs) / 1000L).toInt()
-                            if (elapsedSec >= 10) {
-                                isLongVideoTimerActive = false
-                                currentLongVideoCounted = true
-                                incrementScrollCount("YOUTUBE")
-                                pulseFloatingPill("YOUTUBE")
+                    // Handle running countdown
+                    if (isYoutubeLongVideoTimerRunning) {
+                        val elapsedMs = SystemClock.elapsedRealtime() - youtubeLongVideoStartElapsedMs
+                        if (elapsedMs >= 10_000L) {
+                            isYoutubeLongVideoTimerRunning = false
+                            incrementScrollCount("YOUTUBE")
+                            pulseFloatingPill("YOUTUBE")
+                            tickerHandler.post {
+                                try {
+                                    Toast.makeText(
+                                        applicationContext,
+                                        "✅ 10 Seconds Completed! YouTube Counter +1",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
                             }
                         }
-                    } else if (!isYoutubeShortsScreen(root)) {
-                        isLongVideoTimerActive = false
-                        currentLongVideoCounted = false
                     }
                 } else {
-                    isLongVideoTimerActive = false
-                    currentLongVideoCounted = false
+                    isYoutubeLongVideoTimerRunning = false
+                    wasInYoutubeWatchMode = false
                 }
 
                 if (isAppLocked(activeKey, applicationContext)) {
@@ -195,8 +258,8 @@ class AppBlockerService : AccessibilityService() {
                     }
                 }
             } else {
-                isLongVideoTimerActive = false
-                currentLongVideoCounted = false
+                isYoutubeLongVideoTimerRunning = false
+                wasInYoutubeWatchMode = false
                 if (isPillAttached) {
                     removeFloatingPill()
                 }
@@ -250,6 +313,16 @@ class AppBlockerService : AccessibilityService() {
             }
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
+
+            val ytChannel = NotificationChannel(
+                YT_LONG_CHANNEL_ID,
+                "YouTube Video Timer Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts when a long video watch timer starts"
+                enableVibration(true)
+            }
+            nm.createNotificationChannel(ytChannel)
         }
     }
 
@@ -289,117 +362,57 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        // v6.2 Feature: YouTube Video Item Click Detection (Instant 10s Timer Kickoff)
+        // v6.3 Trigger A: YouTube Video Item Click Detection (Instant 10s Timer Kickoff)
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             val activeKey = currentForegroundAppKey ?: return
             if (activeKey == "YOUTUBE") {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                if (!isYoutubeShortsScreen(root)) {
+                if (!isYoutubeShortsMode(root) && !isYoutubeLongVideoTimerRunning) {
+                    val screenHeight = resources.displayMetrics.heightPixels
                     val source = event.source
+                    val rect = Rect()
+                    source?.getBoundsInScreen(rect)
+
                     val clickedText = "${source?.text ?: ""} ${source?.contentDescription ?: ""}".trim()
                     val parentText = "${source?.parent?.text ?: ""} ${source?.parent?.contentDescription ?: ""}".trim()
                     val combined = "$clickedText $parentText".lowercase(Locale.ROOT)
-                    val isNavButton = combined.contains("home") || combined.contains("shorts") ||
-                        combined.contains("subscriptions") || combined.contains("you") || combined.contains("search")
-                    val looksLikeVideoItem = (clickedText.length > 8 || combined.contains(":") || combined.contains("views") ||
-                        combined.contains("ago") || combined.contains("watching") || combined.contains("video")) && !isNavButton
-                    if (looksLikeVideoItem) {
-                        currentLongVideoCounted = false
-                        startYoutubeLongVideo10sTimer()
+
+                    val isNavOrFilter = combined.contains("home") || combined.contains("shorts") ||
+                        combined.contains("subscriptions") || combined.contains("you") ||
+                        combined.contains("search") || combined.contains("all") ||
+                        combined.contains("notifications")
+
+                    val inMainFeedArea = source == null || (rect.centerY() > (screenHeight * 0.14).toInt() && rect.centerY() < (screenHeight * 0.88).toInt())
+
+                    if (inMainFeedArea && !isNavOrFilter) {
+                        startYoutubeLongVideoCountdown()
                     }
                 }
             }
             return
         }
 
-        // v6.2 Gesture-Burst Physics & Video Bounds Engine
+        // v6.3 Step 3: 300ms Post-Scroll Settled Verification Engine
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
             val activeKey = currentForegroundAppKey ?: return
             val now = SystemClock.elapsedRealtime()
 
-            // 1. Debounce rapid post-increment flurries (1000ms minimum between distinct counted gestures)
-            if (now - lastCountedScrollElapsedMs < 1000L) {
+            // 1. Debounce between counted gestures (900ms minimum between counts)
+            if (now - lastScrollCountElapsedMs < 900L) {
                 return
             }
 
-            // 2. Gesture burst grouping: group scrolled events occurring within 350ms of each other
-            if (now - lastScrollEventElapsedMs > 350L) {
-                gestureEventCount = 1
-                gestureStartElapsedMs = now
-                gestureStartFromIndex = event.fromIndex
-                gestureStartToIndex = event.toIndex
-            } else {
-                gestureEventCount++
+            pendingScrollFromIndex = event.fromIndex
+            pendingScrollToIndex = event.toIndex
+
+            val root = try { rootInActiveWindow } catch (e: Exception) { null }
+            if (hasVideoElementOnScreen(root)) {
+                hadVideoVisibleBeforeScroll = true
             }
-            lastScrollEventElapsedMs = now
 
-            // Condition A: Index change with momentum (ViewPager2 / RecyclerView 1-item per page)
-            val isConditionA = event.fromIndex >= 0 && gestureStartFromIndex >= 0 &&
-                event.fromIndex != gestureStartFromIndex && gestureEventCount >= 3
-
-            // Condition B: Physics burst (minimum 7 rapid events spanning at least 200ms)
-            val isConditionB = gestureEventCount >= 7 && (now - gestureStartElapsedMs) >= 200L
-
-            val isFullSwipe = isConditionA || isConditionB
-
-            // Per-App Logic
-            when (activeKey) {
-                "TIKTOK" -> {
-                    if (isFullSwipe) {
-                        incrementScrollCount("TIKTOK")
-                        lastCountedScrollElapsedMs = now
-                        gestureEventCount = 0
-                        pulseFloatingPill("TIKTOK")
-                    }
-                }
-                "YOUTUBE" -> {
-                    val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                    if (isYoutubeShortsScreen(root)) {
-                        if (isFullSwipe) {
-                            incrementScrollCount("YOUTUBE")
-                            lastCountedScrollElapsedMs = now
-                            gestureEventCount = 0
-                            pulseFloatingPill("YOUTUBE")
-                        }
-                    }
-                    // Home feed & search scrolls on YouTube NEVER increment scroll count!
-                }
-                "INSTAGRAM", "FACEBOOK" -> {
-                    val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                    if (isReelsOrWatchTabActive(activeKey, root)) {
-                        if (isFullSwipe) {
-                            incrementScrollCount(activeKey)
-                            lastCountedScrollElapsedMs = now
-                            gestureEventCount = 0
-                            pulseFloatingPill(activeKey)
-                        }
-                    } else {
-                        // Home Feed: only increment when a video/reel item on screen has been scrolled past
-                        val screenHeight = resources.displayMetrics.heightPixels
-                        val videoRect = Rect()
-                        val hasVideo = hasVideoOrReelOnScreen(root, screenHeight, videoRect)
-                        val screenSig = computeScreenSignature(root)
-                        val isMajorScroll = gestureEventCount >= 8 && (now - gestureStartElapsedMs) >= 240L
-
-                        if (isMajorScroll && (hasVideo && videoRect.top < (screenHeight * 0.20).toInt() || (screenSig != lastScreenSignature && hasVideo))) {
-                            incrementScrollCount(activeKey)
-                            lastCountedScrollElapsedMs = now
-                            gestureEventCount = 0
-                            pulseFloatingPill(activeKey)
-                        }
-                        lastScreenSignature = screenSig
-                    }
-                }
-                else -> {
-                    // Custom apps if added
-                    if (isFullSwipe) {
-                        incrementScrollCount(activeKey)
-                        lastCountedScrollElapsedMs = now
-                        gestureEventCount = 0
-                        pulseFloatingPill(activeKey)
-                    }
-                }
-            }
+            // Schedule (or reset) delayed 300ms verification after finger swipe settles
+            tickerHandler.removeCallbacks(verifyScrollRunnable)
+            tickerHandler.postDelayed(verifyScrollRunnable, 300L)
             return
         }
 
@@ -756,8 +769,8 @@ class AppBlockerService : AccessibilityService() {
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = if (activeKey == "YOUTUBE" && isLongVideoTimerActive && !currentLongVideoCounted) {
-            val elapsedSec = ((SystemClock.elapsedRealtime() - longVideoStartElapsedMs) / 1000L).toInt()
+        val targetText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
+            val elapsedSec = ((SystemClock.elapsedRealtime() - youtubeLongVideoStartElapsedMs) / 1000L).toInt()
             val remainingSec = maxOf(0, 10 - elapsedSec)
             "🎬 Scrolls: $scrolls  |  ⏳ Video: ${remainingSec}s  |  ⏱ $timeStr left"
         } else {
@@ -834,8 +847,8 @@ class AppBlockerService : AccessibilityService() {
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = if (activeKey == "YOUTUBE" && isLongVideoTimerActive && !currentLongVideoCounted) {
-            val elapsedSec = ((SystemClock.elapsedRealtime() - longVideoStartElapsedMs) / 1000L).toInt()
+        val targetText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
+            val elapsedSec = ((SystemClock.elapsedRealtime() - youtubeLongVideoStartElapsedMs) / 1000L).toInt()
             val remainingSec = maxOf(0, 10 - elapsedSec)
             "🎬 Scrolls: $scrolls  |  ⏳ Video: ${remainingSec}s  |  ⏱ $timeStr left"
         } else {
@@ -915,48 +928,70 @@ class AppBlockerService : AccessibilityService() {
         prefs.setScrollTotal(appKey, totalCount)
     }
 
-    private fun startYoutubeLongVideo10sTimer() {
-        if (!isLongVideoTimerActive && !currentLongVideoCounted) {
-            isLongVideoTimerActive = true
-            longVideoStartElapsedMs = SystemClock.elapsedRealtime()
-            sendYoutubeLongVideoNotification()
-        }
-    }
+    private fun startYoutubeLongVideoCountdown() {
+        if (isYoutubeLongVideoTimerRunning) return
+        isYoutubeLongVideoTimerRunning = true
+        youtubeLongVideoStartElapsedMs = SystemClock.elapsedRealtime()
 
-    private fun sendYoutubeLongVideoNotification() {
+        // 1. Fire High-Priority English Notification
         try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    YT_LONG_CHANNEL_ID,
+                    "YouTube Video Timer Alerts",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Alerts when a long video watch timer starts"
+                    enableVibration(true)
+                }
+                nm.createNotificationChannel(channel)
+            }
+
             val intent = Intent(applicationContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
             val pendingIntent = PendingIntent.getActivity(
                 applicationContext,
-                NOTIF_ID_YOUTUBE_LONG,
+                2026,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
             val message = "You have opened a long video. The counter will increase after 10 seconds."
-            val builder = NotificationCompat.Builder(applicationContext, ALERTS_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_shield)
+            val builder = NotificationCompat.Builder(applicationContext, YT_LONG_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_media_play)
                 .setContentTitle("▶️ Long Video Opened")
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
 
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(NOTIF_ID_YOUTUBE_LONG, builder.build())
+            nm.notify(2026, builder.build())
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        // 2. Immediate Toast on mainHandler
+        tickerHandler.post {
+            try {
+                Toast.makeText(
+                    applicationContext,
+                    "▶️ You opened a long video! Counter will increase after 10 seconds.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     private fun scanNodes(
         node: AccessibilityNodeInfo?,
         currentDepth: Int = 0,
-        maxDepth: Int = 10,
+        maxDepth: Int = 12,
         block: (AccessibilityNodeInfo) -> Unit
     ) {
         if (node == null || currentDepth > maxDepth) return
@@ -974,55 +1009,137 @@ class AppBlockerService : AccessibilityService() {
         }
     }
 
-    private fun isYoutubeShortsScreen(root: AccessibilityNodeInfo?): Boolean {
-        if (root == null) return false
-        var hasShorts = false
-        var hasLongVideo = false
+    private fun getScreenContentSignature(root: AccessibilityNodeInfo?): String {
+        if (root == null) return ""
+        val sb = StringBuilder()
+        var nodeCount = 0
         scanNodes(root, maxDepth = 10) { node ->
-            val text = node.text?.toString() ?: ""
-            val desc = node.contentDescription?.toString() ?: ""
-            val id = node.viewIdResourceName ?: ""
-            val combined = "$text $desc $id".lowercase(Locale.ROOT)
-            if (combined.contains("shorts") || combined.contains("reel") || combined.contains("remix") || id.contains("shorts")) {
-                hasShorts = true
-            }
-            if (combined.contains("subscribe") ||
-                combined.contains("download") ||
-                combined.contains("save to playlist") ||
-                id.contains("watch_player") ||
-                id.contains("player_view")
-            ) {
-                hasLongVideo = true
+            if (nodeCount < 40) {
+                val text = node.text?.toString()?.trim()
+                val desc = node.contentDescription?.toString()?.trim()
+                val str = when {
+                    !text.isNullOrEmpty() -> text
+                    !desc.isNullOrEmpty() -> desc
+                    else -> null
+                }
+                if (!str.isNullOrBlank()) {
+                    val lower = str.lowercase(Locale.ROOT)
+                    if (!lower.contains("scrolls:") && !lower.contains("% left") && !lower.contains("video:") && !lower.contains("left")) {
+                        sb.append(str.take(25)).append('|')
+                        nodeCount++
+                    }
+                }
             }
         }
-        return hasShorts && !hasLongVideo
+        return sb.toString()
     }
 
-    private fun isYoutubeLongVideoPlaying(root: AccessibilityNodeInfo?): Boolean {
+    private fun hasVideoElementOnScreen(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
-        if (isYoutubeShortsScreen(root)) return false
-
-        var hasWatchElement = false
-        scanNodes(root, maxDepth = 10) { node ->
-            val text = node.text?.toString() ?: ""
-            val desc = node.contentDescription?.toString() ?: ""
-            val id = node.viewIdResourceName ?: ""
-            val combined = "$text $desc $id".lowercase(Locale.ROOT)
-
-            if (combined.contains("subscribe") ||
-                combined.contains("save to playlist") ||
-                combined.contains("download") ||
-                combined.contains("share") ||
-                combined.contains("comments") ||
-                id.contains("watch_player") ||
-                id.contains("player_view") ||
-                id.contains("time_bar") ||
-                (text.contains(":") && (text.contains("/") || text.length in 4..9))
-            ) {
-                hasWatchElement = true
+        var hasVideo = false
+        scanNodes(root, maxDepth = 12) { node ->
+            if (!hasVideo) {
+                val cls = node.className?.toString() ?: ""
+                if (cls.contains("SurfaceView") || cls.contains("TextureView") ||
+                    cls.contains("VideoView") || cls.contains("ViewPager") ||
+                    cls.contains("RecyclerView")
+                ) {
+                    hasVideo = true
+                    return@scanNodes
+                }
+                val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+                val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+                val combined = "$id $text $desc"
+                if (combined.contains("reel") || combined.contains("video") ||
+                    combined.contains("clips") || combined.contains("shorts") ||
+                    combined.contains("player") || combined.contains("mute") ||
+                    combined.contains("unmute") || combined.contains("sound") ||
+                    combined.contains("audio") || combined.contains("remix") ||
+                    combined.contains("watch") || combined.contains("0:")
+                ) {
+                    hasVideo = true
+                }
             }
         }
-        return hasWatchElement
+        return hasVideo
+    }
+
+    private fun isYoutubeShortsMode(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var hasReelId = false
+        var hasRemix = false
+        var hasSubscriptions = false
+        var hasWatchCommentsPanel = false
+
+        scanNodes(root, maxDepth = 10) { node ->
+            val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+            if (id.contains("reel_")) {
+                hasReelId = true
+            }
+            val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val combined = "$text $desc $id"
+
+            if (combined.contains("remix")) {
+                hasRemix = true
+            }
+            if (combined.contains("subscriptions") || combined.contains("subscribe")) {
+                hasSubscriptions = true
+            }
+            if (id.contains("watch_player") || id.contains("player_view") ||
+                id.contains("comment") || combined.contains("comments") ||
+                combined.contains("save to playlist") || combined.contains("download")
+            ) {
+                hasWatchCommentsPanel = true
+            }
+        }
+
+        if (hasReelId) return true
+        if (hasRemix && hasSubscriptions && !hasWatchCommentsPanel) return true
+        return false
+    }
+
+    private fun isYoutubeLongVideoWatchMode(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        if (isYoutubeShortsMode(root)) return false
+
+        var hasWatchIndicator = false
+        val screenHeight = resources.displayMetrics.heightPixels
+        val tempRect = Rect()
+
+        scanNodes(root, maxDepth = 12) { node ->
+            if (!hasWatchIndicator) {
+                val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+                if (id.contains("watch_player") || id.contains("player_view") ||
+                    id.contains("player_control") || id.contains("time_bar") ||
+                    id.contains("watch_while") || id.contains("collapse") ||
+                    id.contains("minimize") || id.contains("subscribe") ||
+                    id.contains("channel_bar") || id.contains("comment")
+                ) {
+                    hasWatchIndicator = true
+                    return@scanNodes
+                }
+
+                val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+                val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+                val combined = "$text $desc"
+
+                val isWatchKeyword = combined.contains("minimize") || combined.contains("collapse") ||
+                    combined.contains("subtitles") || combined.contains("autoplay") ||
+                    combined.contains("save to playlist") || combined.contains("download") ||
+                    combined.contains("comments") || combined.contains("subscribe") ||
+                    (combined.contains(":") && (combined.contains("/") || combined.length in 4..9))
+
+                if (isWatchKeyword) {
+                    node.getBoundsInScreen(tempRect)
+                    if (tempRect.centerY() < screenHeight * 0.70) {
+                        hasWatchIndicator = true
+                    }
+                }
+            }
+        }
+        return hasWatchIndicator
     }
 
     private fun isReelsOrWatchTabActive(appKey: String, root: AccessibilityNodeInfo?): Boolean {
@@ -1053,52 +1170,6 @@ class AppBlockerService : AccessibilityService() {
             }
         }
         return hasReels && !hasStoriesOrHome
-    }
-
-    private fun hasVideoOrReelOnScreen(root: AccessibilityNodeInfo?, screenHeight: Int, outVideoRect: Rect? = null): Boolean {
-        if (root == null) return false
-        var found = false
-        val tempRect = Rect()
-        scanNodes(root, maxDepth = 10) { node ->
-            if (!found) {
-                val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
-                val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
-                val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
-                val cls = node.className?.toString()?.lowercase(Locale.ROOT) ?: ""
-
-                val isVideoKeyword = desc.contains("video") || desc.contains("player") ||
-                    desc.contains("mute") || desc.contains("unmute") ||
-                    desc.contains("sound") || desc.contains("0:") || desc.contains("reel") ||
-                    text.contains("video") || text.contains("0:") ||
-                    cls.contains("video") || cls.contains("player") || cls.contains("surface") ||
-                    cls.contains("textureview") || id.contains("video") || id.contains("player")
-
-                if (isVideoKeyword) {
-                    node.getBoundsInScreen(tempRect)
-                    if (tempRect.height() >= (screenHeight * 0.20).toInt() && tempRect.bottom > 0 && tempRect.top < screenHeight) {
-                        found = true
-                        outVideoRect?.set(tempRect)
-                    }
-                }
-            }
-        }
-        return found
-    }
-
-    private fun computeScreenSignature(root: AccessibilityNodeInfo?): String {
-        if (root == null) return ""
-        val sb = StringBuilder()
-        var count = 0
-        scanNodes(root, maxDepth = 6) { node ->
-            if (count < 10) {
-                val text = node.text?.toString()
-                if (!text.isNullOrBlank()) {
-                    sb.append(text.take(15)).append('|')
-                    count++
-                }
-            }
-        }
-        return sb.toString()
     }
 
     /**
@@ -1199,6 +1270,7 @@ class AppBlockerService : AccessibilityService() {
             "Tamper Protection: Cannot Uninstall or Reset InstaGuard while Focus Timer is active!"
 
         const val ALERTS_CHANNEL_ID = "instaguard_alerts_channel"
+        const val YT_LONG_CHANNEL_ID = "instaguard_yt_longvideo_channel_v63"
         const val NOTIF_ID_5MIN = 1000
         const val NOTIF_ID_1MIN = 2000
         const val NOTIF_ID_YOUTUBE_LONG = 3000
