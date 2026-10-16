@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppBlockerService.isOurAppScreenOpen = true
         AppBlockerService.syncFromPrefs(this)
 
         updatePermissionsUI()
@@ -91,6 +92,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        AppBlockerService.isOurAppScreenOpen = false
         uiHandler.removeCallbacks(liveTickerRunnable)
     }
 

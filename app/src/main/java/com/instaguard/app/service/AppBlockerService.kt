@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
@@ -62,8 +63,28 @@ class AppBlockerService : AccessibilityService() {
     private var isTickerRunning = false
     private var tickCounter = 0
     private var lastTamperBlockMs = 0L
-    private var lastScrollCountTimestampMs = 0L
     private var lastPillText = ""
+
+    // State for Full Reel/Short swipe detection (Step 2)
+    private val lastSettledPagerIndexMap = ConcurrentHashMap<String, Int>()
+    private val accumulatedReelScrollDyMap = ConcurrentHashMap<String, Int>()
+    private val lastReelScrollTimestampMap = ConcurrentHashMap<String, Long>()
+    private val lastReelDyTimestampMap = ConcurrentHashMap<String, Long>()
+
+    // State for YouTube Long Video 10-Second Rule (Step 3)
+    @Volatile
+    private var isLongVideoTimerRunning = false
+    @Volatile
+    private var longVideoStartElapsedMs = 0L
+    @Volatile
+    private var currentLongVideoCounted = false
+
+    // State for Facebook & Instagram Feed Video Exit Rule (Step 4)
+    private var isFeedVideoOnScreen = false
+    private var lastKnownVideoTop = -1
+    private var lastKnownVideoBottom = -1
+    private var feedVideoUpwardScrollPx = 0
+    private var lastFeedVideoCountTimestamp = 0L
 
     /**
      * Monotonic 50ms Delta-Tick Stopwatch Ticker.
@@ -105,13 +126,43 @@ class AppBlockerService : AccessibilityService() {
                 if (mapped != null) {
                     currentForegroundAppKey = mapped
                 } else if (rootPkg == applicationContext.packageName) {
-                    currentForegroundAppKey = null
+                    if (isOurAppScreenOpen) {
+                        currentForegroundAppKey = null
+                    }
                 }
             }
 
             // 4. Increment usage counter and daily total for active tracked app
             val activeKey = currentForegroundAppKey
             if (activeKey != null) {
+                // Step 3: YouTube Long Video 10-Second Watch tracking
+                if (activeKey == "YOUTUBE") {
+                    val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                    val isLongVideo = isYoutubeLongVideoPlaying(root)
+
+                    if (isLongVideo) {
+                        if (!isLongVideoTimerRunning && !currentLongVideoCounted) {
+                            isLongVideoTimerRunning = true
+                            longVideoStartElapsedMs = SystemClock.elapsedRealtime()
+                            sendYoutubeLongVideoNotification()
+                        } else if (isLongVideoTimerRunning && !currentLongVideoCounted) {
+                            val watchedMs = SystemClock.elapsedRealtime() - longVideoStartElapsedMs
+                            if (watchedMs >= 10_000L) {
+                                incrementScrollCount("YOUTUBE")
+                                currentLongVideoCounted = true
+                                isLongVideoTimerRunning = false
+                                pulseFloatingPill("YOUTUBE")
+                            }
+                        }
+                    } else {
+                        isLongVideoTimerRunning = false
+                        currentLongVideoCounted = false
+                    }
+                } else {
+                    isLongVideoTimerRunning = false
+                    currentLongVideoCounted = false
+                }
+
                 if (isAppLocked(activeKey, applicationContext)) {
                     currentForegroundAppKey = null
                     removeFloatingPill()
@@ -151,6 +202,8 @@ class AppBlockerService : AccessibilityService() {
                     }
                 }
             } else {
+                isLongVideoTimerRunning = false
+                currentLongVideoCounted = false
                 if (isPillAttached) {
                     removeFloatingPill()
                 }
@@ -243,35 +296,137 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        // Feature 1: Live Reel / Short / Feed Scroll Detection (Smart Debounce)
+        // Smart Scroll Engine (Reel Swipe, YouTube Rules, FB/IG Feed Video Exit)
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
             val activeKey = currentForegroundAppKey ?: return
+            val root = try { rootInActiveWindow } catch (e: Exception) { null }
+            val screenHeight = resources.displayMetrics.heightPixels
             val now = System.currentTimeMillis()
-            if (now - lastScrollCountTimestampMs >= 750L) {
-                val className = event.className?.toString() ?: ""
-                val isVerticalScroll = event.scrollDeltaY > 30 ||
-                    event.fromIndex != event.toIndex ||
-                    className.contains("RecyclerView") ||
-                    className.contains("ViewPager") ||
-                    className.contains("ScrollView") ||
-                    className.contains("List") ||
-                    className.contains("Feed") ||
-                    event.itemCount > 0
 
-                if (isVerticalScroll) {
-                    lastScrollCountTimestampMs = now
-                    val todayCount = (scrollCountTodayMap[activeKey] ?: 0) + 1
-                    val totalCount = (scrollCountTotalMap[activeKey] ?: 0) + 1
-                    scrollCountTodayMap[activeKey] = todayCount
-                    scrollCountTotalMap[activeKey] = totalCount
-
-                    val todayDateStr = getTodayDateStr()
-                    prefs.setScrollToday(todayDateStr, activeKey, todayCount)
-                    prefs.setScrollTotal(activeKey, totalCount)
-
-                    pulseFloatingPill(activeKey)
+            // 1. YouTube Home Page & Search Feed: NEVER increase on scroll!
+            if (activeKey == "YOUTUBE") {
+                if (!isYoutubeShortsActive(root)) {
+                    // User is on YouTube Home feed, Search, or Long Video page.
+                    // Home feed scrolls do NOT increase the counter.
+                    return
                 }
             }
+
+            // 2. Full-Screen Vertical Video Mode (TikTok, IG Reels, YT Shorts, FB Reels)
+            if (isFullScreenVerticalVideoMode(activeKey, root)) {
+                // Case A: Pager Index Change (ViewPager2 / RecyclerView 1-item per page)
+                if (event.fromIndex >= 0 && event.toIndex >= 0 && event.itemCount > 1) {
+                    val lastIndex = lastSettledPagerIndexMap[activeKey] ?: -1
+                    if (lastIndex != -1 && event.fromIndex != lastIndex) {
+                        val lastScrollTime = lastReelScrollTimestampMap[activeKey] ?: 0L
+                        if (now - lastScrollTime >= 1200L) {
+                            lastSettledPagerIndexMap[activeKey] = event.fromIndex
+                            lastReelScrollTimestampMap[activeKey] = now
+                            accumulatedReelScrollDyMap[activeKey] = 0
+                            incrementScrollCount(activeKey)
+                            pulseFloatingPill(activeKey)
+                        } else {
+                            lastSettledPagerIndexMap[activeKey] = event.fromIndex
+                        }
+                        return
+                    } else if (lastIndex == -1) {
+                        lastSettledPagerIndexMap[activeKey] = event.fromIndex
+                    }
+                }
+
+                // Case B: Delta Y Fallback (Strict threshold: 75% screen height)
+                val dy = event.scrollDeltaY
+                if (dy != 0) {
+                    val lastDyTime = lastReelDyTimestampMap[activeKey] ?: 0L
+                    if (now - lastDyTime > 1500L) {
+                        val prevAccum = accumulatedReelScrollDyMap[activeKey] ?: 0
+                        val threshold = (screenHeight * 0.75).toInt()
+                        if (prevAccum < threshold) {
+                            accumulatedReelScrollDyMap[activeKey] = 0
+                        }
+                    }
+                    lastReelDyTimestampMap[activeKey] = now
+                    val currentAccum = (accumulatedReelScrollDyMap[activeKey] ?: 0) + Math.abs(dy)
+                    accumulatedReelScrollDyMap[activeKey] = currentAccum
+                    val threshold = (screenHeight * 0.75).toInt()
+                    val lastScrollTime = lastReelScrollTimestampMap[activeKey] ?: 0L
+                    if (currentAccum >= threshold && (now - lastScrollTime >= 1200L)) {
+                        accumulatedReelScrollDyMap[activeKey] = 0
+                        lastReelScrollTimestampMap[activeKey] = now
+                        incrementScrollCount(activeKey)
+                        pulseFloatingPill(activeKey)
+                    }
+                }
+                return
+            }
+
+            // 3. Facebook & Instagram Home Page Feed Video Exit Tracking
+            if (activeKey == "INSTAGRAM" || activeKey == "FACEBOOK") {
+                val dy = Math.abs(event.scrollDeltaY)
+                feedVideoUpwardScrollPx += dy
+
+                var foundVideoOnScreen = false
+                val rect = Rect()
+
+                scanNodes(root, maxDepth = 6) { node ->
+                    if (!foundVideoOnScreen) {
+                        val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+                        val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+                        val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+                        val cls = node.className?.toString()?.lowercase(Locale.ROOT) ?: ""
+
+                        val isVideoKeyword = desc.contains("video") || desc.contains("player") ||
+                            desc.contains("mute") || desc.contains("unmute") ||
+                            desc.contains("sound") || desc.contains("0:") || desc.contains("reel") ||
+                            text.contains("video") || text.contains("0:") ||
+                            cls.contains("video") || cls.contains("player") || id.contains("video")
+
+                        if (isVideoKeyword) {
+                            node.getBoundsInScreen(rect)
+                            if (rect.height() >= (screenHeight * 0.22).toInt()) {
+                                foundVideoOnScreen = true
+                                if (rect.top >= 180 && rect.bottom <= screenHeight) {
+                                    isFeedVideoOnScreen = true
+                                    lastKnownVideoTop = rect.top
+                                    lastKnownVideoBottom = rect.bottom
+                                } else if (isFeedVideoOnScreen) {
+                                    lastKnownVideoTop = rect.top
+                                    lastKnownVideoBottom = rect.bottom
+                                    if (rect.bottom <= 220) {
+                                        // Video has completely exited off top of screen!
+                                        if (now - lastFeedVideoCountTimestamp >= 1500L) {
+                                            lastFeedVideoCountTimestamp = now
+                                            incrementScrollCount(activeKey)
+                                            pulseFloatingPill(activeKey)
+                                        }
+                                        isFeedVideoOnScreen = false
+                                        feedVideoUpwardScrollPx = 0
+                                        lastKnownVideoTop = -1
+                                        lastKnownVideoBottom = -1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // If video was on screen and is now off top edge after significant upward scroll
+                if (!foundVideoOnScreen && isFeedVideoOnScreen) {
+                    val threshold = (screenHeight * 0.70).toInt()
+                    if (feedVideoUpwardScrollPx >= threshold && lastKnownVideoTop in 0..350) {
+                        if (now - lastFeedVideoCountTimestamp >= 1500L) {
+                            lastFeedVideoCountTimestamp = now
+                            incrementScrollCount(activeKey)
+                            pulseFloatingPill(activeKey)
+                        }
+                        isFeedVideoOnScreen = false
+                        feedVideoUpwardScrollPx = 0
+                        lastKnownVideoTop = -1
+                        lastKnownVideoBottom = -1
+                    }
+                }
+            }
+
             return
         }
 
@@ -291,9 +446,11 @@ class AppBlockerService : AccessibilityService() {
 
         // 4. Handle InstaGuard's own Activities (MainActivity / LockScreenActivity)
         if (packageName == applicationContext.packageName) {
-            currentForegroundAppKey?.let { saveStateToPrefs(it) }
-            currentForegroundAppKey = null
-            removeFloatingPill()
+            if (isOurAppScreenOpen) {
+                currentForegroundAppKey?.let { saveStateToPrefs(it) }
+                currentForegroundAppKey = null
+                removeFloatingPill()
+            }
             return
         }
 
@@ -609,7 +766,7 @@ class AppBlockerService : AccessibilityService() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -620,17 +777,24 @@ class AppBlockerService : AccessibilityService() {
 
     private fun showFloatingScrollCounterPill(activeKey: String, remainingMs: Long) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            removeFloatingPill()
+            hideFloatingPill()
             return
         }
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+        val targetText = if (activeKey == "YOUTUBE" && isLongVideoTimerRunning && !currentLongVideoCounted) {
+            val watchedMs = SystemClock.elapsedRealtime() - longVideoStartElapsedMs
+            val remainingSec = maxOf(0L, 10L - (watchedMs / 1000L))
+            "🎬 Scrolls: $scrolls (⏳ Video: ${remainingSec}s)  |  ⏱ $timeStr left"
+        } else {
+            "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+        }
 
         // 1. Single Persistent Instance: Never re-add or re-create if already attached
         val currentView = floatingPillView
         if (currentView != null && isPillAttached) {
+            currentView.visibility = View.VISIBLE
             val tv = pillTextView
             if (tv != null && tv.text != targetText) {
                 tv.text = targetText
@@ -655,6 +819,7 @@ class AppBlockerService : AccessibilityService() {
             background = bg
             text = targetText
             elevation = dpToPx(4f).toFloat()
+            visibility = View.VISIBLE
         }
 
         pillTextView = tv
@@ -682,7 +847,7 @@ class AppBlockerService : AccessibilityService() {
 
     private fun updateFloatingPill(activeKey: String, remainingMs: Long) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            removeFloatingPill()
+            hideFloatingPill()
             return
         }
 
@@ -692,9 +857,17 @@ class AppBlockerService : AccessibilityService() {
             return
         }
 
+        currentView.visibility = View.VISIBLE
+
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+        val targetText = if (activeKey == "YOUTUBE" && isLongVideoTimerRunning && !currentLongVideoCounted) {
+            val watchedMs = SystemClock.elapsedRealtime() - longVideoStartElapsedMs
+            val remainingSec = maxOf(0L, 10L - (watchedMs / 1000L))
+            "🎬 Scrolls: $scrolls (⏳ Video: ${remainingSec}s)  |  ⏱ $timeStr left"
+        } else {
+            "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+        }
 
         // Zero-Flicker View Mutator Pattern: Only update TextView text if content changed!
         val tv = pillTextView
@@ -722,7 +895,15 @@ class AppBlockerService : AccessibilityService() {
             .start()
     }
 
+    private fun hideFloatingPill() {
+        floatingPillView?.visibility = View.GONE
+    }
+
     private fun removeFloatingPill() {
+        hideFloatingPill()
+    }
+
+    private fun removeFloatingPillCompletely() {
         val view = floatingPillView
         if (isPillAttached && view != null) {
             try {
@@ -748,6 +929,177 @@ class AppBlockerService : AccessibilityService() {
     private fun dpToPx(dp: Float): Int {
         val density = resources.displayMetrics.density
         return (dp * density + 0.5f).toInt()
+    }
+
+    private fun incrementScrollCount(appKey: String) {
+        val todayCount = (scrollCountTodayMap[appKey] ?: 0) + 1
+        val totalCount = (scrollCountTotalMap[appKey] ?: 0) + 1
+        scrollCountTodayMap[appKey] = todayCount
+        scrollCountTotalMap[appKey] = totalCount
+
+        val todayDateStr = getTodayDateStr()
+        prefs.setScrollToday(todayDateStr, appKey, todayCount)
+        prefs.setScrollTotal(appKey, totalCount)
+    }
+
+    private fun sendYoutubeLongVideoNotification() {
+        try {
+            val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                applicationContext,
+                NOTIF_ID_YOUTUBE_LONG,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val message = "You have opened a long video. The counter will increase after 10 seconds."
+            val builder = NotificationCompat.Builder(applicationContext, ALERTS_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_focus_shield_logo)
+                .setContentTitle("▶️ YouTube Long Video Opened")
+                .setContentText(message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NOTIF_ID_YOUTUBE_LONG, builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun scanNodes(
+        node: AccessibilityNodeInfo?,
+        currentDepth: Int = 0,
+        maxDepth: Int = 6,
+        block: (AccessibilityNodeInfo) -> Unit
+    ) {
+        if (node == null || currentDepth > maxDepth) return
+        try {
+            block(node)
+            val childCount = node.childCount
+            for (i in 0 until childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    scanNodes(child, currentDepth + 1, maxDepth, block)
+                }
+            }
+        } catch (e: Exception) {
+            // Safe against invalid or changing nodes
+        }
+    }
+
+    private fun isYoutubeShortsActive(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var hasShortsKeyword = false
+        var hasLongVideoIndicators = false
+
+        scanNodes(root, maxDepth = 6) { node ->
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            val id = node.viewIdResourceName ?: ""
+            val combined = "$text $desc $id".lowercase(Locale.ROOT)
+
+            if (combined.contains("reel") || combined.contains("shorts") || combined.contains("remix")) {
+                hasShortsKeyword = true
+            }
+            if (combined.contains("subscribe") ||
+                combined.contains("download") ||
+                combined.contains("collapse") ||
+                combined.contains("minimize") ||
+                combined.contains("save to playlist") ||
+                id.contains("watch_player") ||
+                id.contains("player_view")
+            ) {
+                hasLongVideoIndicators = true
+            }
+        }
+        return hasShortsKeyword && !hasLongVideoIndicators
+    }
+
+    private fun isYoutubeLongVideoPlaying(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        if (isYoutubeShortsActive(root)) return false
+
+        var hasWatchElement = false
+        scanNodes(root, maxDepth = 6) { node ->
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            val id = node.viewIdResourceName ?: ""
+            val combined = "$text $desc $id".lowercase(Locale.ROOT)
+
+            if (combined.contains("subscribe") ||
+                combined.contains("minimize") ||
+                combined.contains("collapse") ||
+                combined.contains("download") ||
+                combined.contains("share") ||
+                combined.contains("save to playlist") ||
+                combined.contains("comments") ||
+                id.contains("watch_player") ||
+                id.contains("player_view") ||
+                id.contains("time_bar") ||
+                (text.contains(":") && text.contains("/"))
+            ) {
+                hasWatchElement = true
+            }
+        }
+        return hasWatchElement
+    }
+
+    private fun isInstagramReelsActive(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var hasReelIndicator = false
+        var hasHomeStoriesTray = false
+
+        scanNodes(root, maxDepth = 6) { node ->
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            val id = node.viewIdResourceName ?: ""
+            val combined = "$text $desc $id".lowercase(Locale.ROOT)
+
+            if (combined.contains("story") || combined.contains("stories") || combined.contains("your story")) {
+                hasHomeStoriesTray = true
+            }
+            if (combined.contains("reel") || combined.contains("clips") || combined.contains("remix") || id.contains("reel")) {
+                hasReelIndicator = true
+            }
+        }
+        return hasReelIndicator && !hasHomeStoriesTray
+    }
+
+    private fun isFacebookReelsActive(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var hasReelIndicator = false
+        var hasHomeNavigation = false
+
+        scanNodes(root, maxDepth = 6) { node ->
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            val id = node.viewIdResourceName ?: ""
+            val combined = "$text $desc $id".lowercase(Locale.ROOT)
+
+            if (combined.contains("marketplace") || combined.contains("friends") || combined.contains("menu") || combined.contains("news feed")) {
+                hasHomeNavigation = true
+            }
+            if (combined.contains("reel") || combined.contains("short video") || combined.contains("remix") || id.contains("reel")) {
+                hasReelIndicator = true
+            }
+        }
+        return hasReelIndicator && !hasHomeNavigation
+    }
+
+    private fun isFullScreenVerticalVideoMode(appKey: String, root: AccessibilityNodeInfo?): Boolean {
+        return when (appKey) {
+            "TIKTOK" -> true
+            "INSTAGRAM" -> isInstagramReelsActive(root)
+            "YOUTUBE" -> isYoutubeShortsActive(root)
+            "FACEBOOK" -> isFacebookReelsActive(root)
+            else -> false
+        }
     }
 
     /**
@@ -836,7 +1188,7 @@ class AppBlockerService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        removeFloatingPill()
+        removeFloatingPillCompletely()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -850,6 +1202,10 @@ class AppBlockerService : AccessibilityService() {
         const val ALERTS_CHANNEL_ID = "instaguard_alerts_channel"
         const val NOTIF_ID_5MIN = 1000
         const val NOTIF_ID_1MIN = 2000
+        const val NOTIF_ID_YOUTUBE_LONG = 3000
+
+        @Volatile
+        var isOurAppScreenOpen: Boolean = false
 
         val APP_KEYS = listOf("INSTAGRAM", "YOUTUBE", "FACEBOOK", "TIKTOK")
 

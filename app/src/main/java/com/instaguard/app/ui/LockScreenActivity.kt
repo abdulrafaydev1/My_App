@@ -147,6 +147,7 @@ class LockScreenActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppBlockerService.isOurAppScreenOpen = true
         // Force-pause media playback and seize audio focus whenever lock screen is active
         stopAllMediaPlayback()
 
@@ -171,6 +172,7 @@ class LockScreenActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        AppBlockerService.isOurAppScreenOpen = false
         timerHandler.removeCallbacks(countdownRunnable)
     }
 
