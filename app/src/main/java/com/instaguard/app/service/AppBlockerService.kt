@@ -11,6 +11,8 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -24,81 +26,99 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * High-performance AccessibilityService that monitors Instagram, YouTube, Facebook,
  * and TikTok independently in real-time with millisecond precision.
- * v4.2 Features:
+ * v4.3 Features:
+ * - Monotonic 50ms Delta Stopwatch Engine (SystemClock.elapsedRealtime) with zero timer freeze/drift.
  * - Strict 1-hour usage limit and hardened 5-hour cooldown lock per app.
- * - Layer 1: OS-level UsageEvents reconstruction (survives Uninstall/Reinstall & Clear Data).
+ * - Layer 1: OS-level UsageEvents reconstruction when data is empty.
  * - Layer 2: Anti-Uninstall, Anti-Force-Stop, and Anti-Clear-Data Tamper Shield.
  * - 3-Layer YouTube/Shorts Picture-in-Picture (PiP) Killer Logic.
  */
 class AppBlockerService : AccessibilityService() {
 
     private lateinit var prefs: GuardPreferences
-    private val enforcementHandler = Handler(Looper.getMainLooper())
-    private var isLoopRunning = false
-    private var checkpointTickCounter = 0
+    private val tickerHandler = Handler(Looper.getMainLooper())
+    private var isTickerRunning = false
+    private var tickCounter = 0
     private var lastTamperBlockMs = 0L
 
-    private val enforcementRunnable = object : Runnable {
+    /**
+     * Monotonic 50ms Delta-Tick Stopwatch Ticker.
+     * Continuously computes elapsed time delta using SystemClock.elapsedRealtime()
+     * and adds delta directly to active app's accumulated usage.
+     */
+    private val tickerRunnable = object : Runnable {
         override fun run() {
-            val anyLocked = isAnyAppLocked()
-            if (anyLocked) {
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val deltaMs = if (lastTickElapsedRealtime > 0L) {
+                (nowElapsed - lastTickElapsedRealtime).coerceIn(0L, 500L)
+            } else {
+                0L
+            }
+            lastTickElapsedRealtime = nowElapsed
+
+            // 1. Verify screen is interactive (ON)
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (pm != null && !pm.isInteractive) {
+                currentForegroundAppKey = null
+                tickerHandler.postDelayed(this, 50L)
+                return
+            }
+
+            // 2. Active PiP Hunter whenever any app is in 5-hour cooldown lock
+            if (isAnyAppLocked()) {
                 killPipWindowsIfAny()
             }
 
+            // 3. Fallback active window inspection from rootInActiveWindow
+            val rootPkg = try {
+                rootInActiveWindow?.packageName?.toString()
+            } catch (e: Exception) {
+                null
+            }
+            if (rootPkg != null && !IGNORED_SYSTEM_PACKAGES.contains(rootPkg)) {
+                val mapped = mapPackageToAppKey(rootPkg)
+                if (mapped != null) {
+                    currentForegroundAppKey = mapped
+                } else if (rootPkg == applicationContext.packageName) {
+                    currentForegroundAppKey = null
+                }
+            }
+
+            // 4. Increment usage counter for active tracked app
             val activeKey = currentForegroundAppKey
             if (activeKey != null) {
-                val now = System.currentTimeMillis()
-                val usedMs = getLiveUsageMs(activeKey, applicationContext)
-                val limitMs = prefs.getUsageLimitMs()
-
-                if (usedMs >= limitMs) {
-                    Log.w(TAG, "[$activeKey] Limit reached ($usedMs ms >= $limitMs ms). Triggering 5-hour cooldown lock.")
-                    val cooldownMs = prefs.getCooldownDurationMs()
-                    val unlockTime = now + cooldownMs
-
-                    // Lock ONLY activeKey!
-                    unlockTimestampMap[activeKey] = unlockTime
-                    accumulatedUsageMap[activeKey] = 0L
-                    prefs.setUnlockTimestamp(activeKey, unlockTime)
-                    prefs.setAccumulatedUsage(activeKey, 0L)
-
+                if (isAppLocked(activeKey, applicationContext)) {
                     currentForegroundAppKey = null
-                    foregroundStartMs = 0L
-                    checkpointTickCounter = 0
+                    stopAllMediaPlayback()
+                    launchLockScreen(activeKey)
+                } else {
+                    val updatedUsage = (accumulatedUsageMap[activeKey] ?: 0L) + deltaMs
+                    accumulatedUsageMap[activeKey] = updatedUsage
 
-                    val app = TrackedApp.fromKey(activeKey) ?: TrackedApp.INSTAGRAM
-                    blockApp(app)
-
-                    // Keep loop running while any app is locked to actively hunt PiP windows
-                    enforcementHandler.postDelayed(this, 100L)
-                    return
-                }
-
-                // Auto-checkpoint persistence: Flush live usage to SharedPreferences every 30 ticks (~3 seconds)
-                checkpointTickCounter++
-                if (checkpointTickCounter >= 30) {
-                    checkpointTickCounter = 0
-                    val start = foregroundStartMs
-                    if (start > 0L) {
-                        val delta = now - start
-                        if (delta > 0L) {
-                            val current = accumulatedUsageMap[activeKey] ?: prefs.getAccumulatedUsage(activeKey)
-                            val updated = current + delta
-                            accumulatedUsageMap[activeKey] = updated
-                            prefs.setAccumulatedUsage(activeKey, updated)
-                            foregroundStartMs = now
-                            Log.d(TAG, "[$activeKey] Periodic auto-checkpoint saved: $updated ms")
-                        }
+                    val limitMs = prefs.getUsageLimitMs()
+                    if (updatedUsage >= limitMs) {
+                        Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
+                        val cooldownMs = prefs.getCooldownDurationMs()
+                        unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
+                        accumulatedUsageMap[activeKey] = 0L
+                        currentForegroundAppKey = null
+                        saveStateToPrefs(activeKey)
+                        stopAllMediaPlayback()
+                        launchLockScreen(activeKey)
                     }
                 }
-
-                enforcementHandler.postDelayed(this, 100L)
-            } else if (anyLocked) {
-                // Keep 100ms enforcement loop alive while any app is locked to hunt & kill PiP windows
-                enforcementHandler.postDelayed(this, 100L)
-            } else {
-                stopEnforcementLoop()
             }
+
+            // 5. Periodic auto-checkpoint persistence every 40 ticks (~2000ms)
+            tickCounter++
+            if (tickCounter >= 40) {
+                tickCounter = 0
+                if (activeKey != null) {
+                    saveStateToPrefs(activeKey)
+                }
+            }
+
+            tickerHandler.postDelayed(this, 50L)
         }
     }
 
@@ -107,11 +127,8 @@ class AppBlockerService : AccessibilityService() {
         appContext = applicationContext
         prefs = GuardPreferences(applicationContext)
         syncFromPrefs(applicationContext)
-        syncAndReconstructFromSystemEvents(applicationContext)
-        if (isAnyAppLocked()) {
-            startEnforcementLoop()
-        }
-        Log.i(TAG, "AppBlockerService created; per-app state loaded & reconstructed.")
+        startStopwatchTicker()
+        Log.i(TAG, "AppBlockerService created; Monotonic 50ms Stopwatch Engine started.")
     }
 
     override fun onServiceConnected() {
@@ -119,28 +136,39 @@ class AppBlockerService : AccessibilityService() {
         appContext = applicationContext
         prefs = GuardPreferences(applicationContext)
         syncFromPrefs(applicationContext)
-        syncAndReconstructFromSystemEvents(applicationContext)
-        if (isAnyAppLocked()) {
-            startEnforcementLoop()
+        startStopwatchTicker()
+        Log.i(TAG, "AppBlockerService connected; Monotonic 50ms Stopwatch Engine running.")
+    }
+
+    private fun startStopwatchTicker() {
+        if (!isTickerRunning) {
+            isTickerRunning = true
+            lastTickElapsedRealtime = SystemClock.elapsedRealtime()
+            tickerHandler.removeCallbacks(tickerRunnable)
+            tickerHandler.post(tickerRunnable)
         }
-        Log.i(TAG, "AppBlockerService connected; per-app state verified & reconstructed.")
+    }
+
+    private fun stopStopwatchTicker() {
+        isTickerRunning = false
+        tickerHandler.removeCallbacks(tickerRunnable)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // Immediately inspect and kill PiP windows on any window change while an app is locked
+        // 1. Interactive window changes -> PiP hunt
         if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
             if (isAnyAppLocked()) {
                 killPipWindowsIfAny()
-                startEnforcementLoop()
             }
             return
         }
 
         val packageName = event.packageName?.toString() ?: ""
 
-        // LAYER 2: Anti-Uninstall, Anti-Force-Stop & Anti-Clear-Data Shield
+        // 2. LAYER 2: Anti-Uninstall / Anti-Force-Stop / Anti-Clear-Data Shield
+        // Runs on both TYPE_WINDOW_STATE_CHANGED and TYPE_WINDOW_CONTENT_CHANGED inside Settings/Installer
         if (packageName in SYSTEM_TAMPER_PACKAGES) {
             if (isAnyAppLocked() || hasAnyActiveSession()) {
                 if (inspectAndBlockTamperAttempt(packageName)) {
@@ -149,48 +177,46 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        // Only process foreground app transitions on TYPE_WINDOW_STATE_CHANGED
+        // CRITICAL: TYPE_WINDOW_CONTENT_CHANGED must NEVER update or reset currentForegroundAppKey!
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             return
         }
 
-        if (isAnyAppLocked()) {
-            killPipWindowsIfAny()
-        }
-
-        // Ignore transient system overlays (volume bar, notifications, power menu, systemui)
-        if (packageName == "android" || packageName == "com.android.systemui") {
-            return
-        }
-
-        // Ignore virtual keyboard packages
-        if (packageName.startsWith("com.google.android.inputmethod") ||
+        // 3. Strict Package Filtering: Ignore status bar, notifications, and soft keyboards
+        if (IGNORED_SYSTEM_PACKAGES.contains(packageName) ||
+            packageName.startsWith("com.google.android.inputmethod") ||
             packageName.contains("keyboard") ||
             packageName.contains("ime")
         ) {
             return
         }
 
-        // Ignore our own package so launching LockScreenActivity or opening MainActivity
-        // doesn't corrupt another app's lock state, EXCEPT to commit elapsed foreground time
-        // of the previously open tracked app.
+        // 4. Handle InstaGuard's own Activities (MainActivity / LockScreenActivity)
         if (packageName == applicationContext.packageName) {
-            commitPreviousForegroundApp(System.currentTimeMillis())
-            if (isAnyAppLocked()) {
-                startEnforcementLoop()
-            } else {
-                stopEnforcementLoop()
-            }
+            currentForegroundAppKey?.let { saveStateToPrefs(it) }
+            currentForegroundAppKey = null
             return
         }
 
-        val trackedApp = TrackedApp.fromPackageName(packageName)
-        val detectedAppKey = trackedApp?.key
-
-        if (detectedAppKey != null) {
-            handleTrackedAppWindow(detectedAppKey, trackedApp)
+        // 5. Check if foreground window matches one of our 4 tracked social apps
+        val detectedKey = mapPackageToAppKey(packageName)
+        if (detectedKey != null) {
+            if (isAppLocked(detectedKey, applicationContext)) {
+                Log.w(TAG, "[$detectedKey] Opened during active cooldown lock. Enforcing LockScreen.")
+                currentForegroundAppKey = null
+                stopAllMediaPlayback()
+                launchLockScreen(detectedKey)
+            } else {
+                if (currentForegroundAppKey != null && currentForegroundAppKey != detectedKey) {
+                    saveStateToPrefs(currentForegroundAppKey!!)
+                }
+                currentForegroundAppKey = detectedKey
+                Log.d(TAG, "[$detectedKey] Foreground active via TYPE_WINDOW_STATE_CHANGED")
+            }
         } else {
-            handleNonTrackedAppWindow()
+            // User switched to another real application or Home Launcher
+            currentForegroundAppKey?.let { saveStateToPrefs(it) }
+            currentForegroundAppKey = null
         }
     }
 
@@ -223,8 +249,7 @@ class AppBlockerService : AccessibilityService() {
 
         val isPackageInstaller = packageName.contains("packageinstaller")
 
-        // IMPORTANT EXCEPTION: Do NOT block when the user is on Accessibility Settings,
-        // Usage Access, or Display Over Other Apps screens enabling permissions!
+        // IMPORTANT EXCEPTION: Do NOT block when user is granting permissions!
         val isPermissionScreen = fullText.contains("accessibility") ||
             fullText.contains("usage access") ||
             fullText.contains("usage data") ||
@@ -250,13 +275,14 @@ class AppBlockerService : AccessibilityService() {
         if (hasTamperKeyword) {
             lastTamperBlockMs = now
             Log.w(TAG, "Tamper attempt detected in $packageName! Blocking immediately.")
-            commitPreviousForegroundApp(now)
+            currentForegroundAppKey?.let { saveStateToPrefs(it) }
+            currentForegroundAppKey = null
 
-            // 1. Immediately navigate Back and Home out of Settings / PackageInstaller
+            // 1. Immediately navigate Back and Home
             performGlobalAction(GLOBAL_ACTION_BACK)
             performGlobalAction(GLOBAL_ACTION_HOME)
 
-            // 2. Find primary locked or active app to show on LockScreenActivity with Tamper Warning
+            // 2. Launch LockScreen with Tamper Warning
             val targetKey = APP_KEYS.firstOrNull { isAppLocked(it, applicationContext) }
                 ?: APP_KEYS.firstOrNull { getLiveUsageMs(it, applicationContext) > 0L }
                 ?: "INSTAGRAM"
@@ -299,111 +325,10 @@ class AppBlockerService : AccessibilityService() {
         }
     }
 
-    private fun handleTrackedAppWindow(detectedAppKey: String, app: TrackedApp) {
-        val now = System.currentTimeMillis()
+    private fun launchLockScreen(appKey: String) {
+        val app = TrackedApp.fromKey(appKey) ?: TrackedApp.INSTAGRAM
 
-        // Ensure state is reconstructed if preferences were cleared
-        if (isStateEmptyInMemory()) {
-            syncAndReconstructFromSystemEvents(applicationContext)
-        }
-
-        // 1. Check if ONLY the detected app is locked
-        if (isAppLocked(detectedAppKey, applicationContext)) {
-            Log.w(TAG, "[${app.displayName}] Opened during active 5h cooldown. Blocking immediately.")
-            commitPreviousForegroundApp(now)
-            blockApp(app)
-            startEnforcementLoop()
-            return
-        }
-
-        // 2. If transitioning from another tracked app, commit its usage first
-        if (currentForegroundAppKey != null && currentForegroundAppKey != detectedAppKey) {
-            commitPreviousForegroundApp(now)
-        }
-
-        // 3. Begin tracking this app if it's newly foregrounded
-        if (currentForegroundAppKey != detectedAppKey) {
-            currentForegroundAppKey = detectedAppKey
-            foregroundStartMs = now
-            checkpointTickCounter = 0
-            startEnforcementLoop()
-            Log.d(TAG, "[${app.displayName}] Foreground tracking started at $now")
-        }
-    }
-
-    private fun handleNonTrackedAppWindow() {
-        if (currentForegroundAppKey != null) {
-            val now = System.currentTimeMillis()
-            commitPreviousForegroundApp(now)
-        }
-        if (isAnyAppLocked()) {
-            startEnforcementLoop()
-        } else {
-            stopEnforcementLoop()
-        }
-    }
-
-    private fun commitPreviousForegroundApp(now: Long) {
-        val prevKey = currentForegroundAppKey ?: return
-        val start = foregroundStartMs
-        if (start > 0L) {
-            val delta = now - start
-            if (delta > 0L) {
-                val current = accumulatedUsageMap[prevKey] ?: prefs.getAccumulatedUsage(prevKey)
-                val updated = current + delta
-                accumulatedUsageMap[prevKey] = updated
-                prefs.setAccumulatedUsage(prevKey, updated)
-                Log.d(TAG, "[$prevKey] Committed $delta ms. Total accumulated: $updated ms")
-            }
-        }
-        currentForegroundAppKey = null
-        foregroundStartMs = 0L
-        checkpointTickCounter = 0
-    }
-
-    private fun isAnyAppLocked(): Boolean {
-        return APP_KEYS.any { isAppLocked(it, applicationContext) }
-    }
-
-    private fun hasAnyActiveSession(): Boolean {
-        return APP_KEYS.any { getLiveUsageMs(it, applicationContext) > 0L }
-    }
-
-    private fun isStateEmptyInMemory(): Boolean {
-        return APP_KEYS.all { (accumulatedUsageMap[it] ?: 0L) == 0L && (unlockTimestampMap[it] ?: 0L) == 0L }
-    }
-
-    private fun startEnforcementLoop() {
-        if (!isLoopRunning) {
-            isLoopRunning = true
-            checkpointTickCounter = 0
-            enforcementHandler.removeCallbacks(enforcementRunnable)
-            enforcementHandler.post(enforcementRunnable)
-        }
-    }
-
-    private fun stopEnforcementLoop() {
-        isLoopRunning = false
-        checkpointTickCounter = 0
-        enforcementHandler.removeCallbacks(enforcementRunnable)
-    }
-
-    private fun enforceLockScreen(app: TrackedApp) {
-        blockApp(app)
-    }
-
-    /**
-     * 3-Layer PiP Killer & App Blocker:
-     * a) Immediately stops media playback and seizes both transient exclusive & permanent audio focus.
-     * b) If blocking YOUTUBE, sends GLOBAL_ACTION_BACK to exit Shorts/fullscreen player and kills background processes.
-     * c) Immediately launches LockScreenActivity with NEW_TASK | CLEAR_TOP | SINGLE_TOP.
-     * d) Schedules delayed follow-up sweeps at 200ms and 500ms to re-run stopAllMediaPlayback() and killPipWindowsIfAny().
-     */
-    private fun blockApp(app: TrackedApp) {
-        // a) Pause all media playback and seize audio focus immediately
-        stopAllMediaPlayback()
-
-        // b & c) If YOUTUBE, exit Shorts/fullscreen player and kill background process
+        // If YOUTUBE, exit Shorts/fullscreen player and kill background process
         if (app.key == "YOUTUBE") {
             performGlobalAction(GLOBAL_ACTION_BACK)
             try {
@@ -414,7 +339,6 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        // d) Immediately launch LockScreenActivity
         val lockIntent = Intent(applicationContext, LockScreenActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -428,7 +352,7 @@ class AppBlockerService : AccessibilityService() {
         }
         startActivity(lockIntent)
 
-        // Follow-up sweeps at 200ms and 500ms to crush any delayed PiP transition
+        // Delayed sweeps to crush PiP transition
         Handler(Looper.getMainLooper()).postDelayed({
             stopAllMediaPlayback()
             killPipWindowsIfAny()
@@ -438,6 +362,21 @@ class AppBlockerService : AccessibilityService() {
             stopAllMediaPlayback()
             killPipWindowsIfAny()
         }, 500L)
+    }
+
+    private fun saveStateToPrefs(appKey: String) {
+        val usage = accumulatedUsageMap[appKey] ?: 0L
+        val unlock = unlockTimestampMap[appKey] ?: 0L
+        prefs.setAccumulatedUsage(appKey, usage)
+        prefs.setUnlockTimestamp(appKey, unlock)
+    }
+
+    private fun isAnyAppLocked(): Boolean {
+        return APP_KEYS.any { isAppLocked(it, applicationContext) }
+    }
+
+    private fun hasAnyActiveSession(): Boolean {
+        return APP_KEYS.any { getLiveUsageMs(it, applicationContext) > 0L }
     }
 
     /**
@@ -464,7 +403,7 @@ class AppBlockerService : AccessibilityService() {
                 .setAudioAttributes(playbackAttributes)
                 .setOnAudioFocusChangeListener { }
                 .build()
-            audioManager.requestAudioFocus(transientExclusiveFocusRequest(transientFocusRequest))
+            audioManager.requestAudioFocus(transientFocusRequest)
 
             val permanentFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(playbackAttributes)
@@ -476,8 +415,6 @@ class AppBlockerService : AccessibilityService() {
         }
     }
 
-    private fun transientExclusiveFocusRequest(req: AudioFocusRequest): AudioFocusRequest = req
-
     /**
      * Active PiP Window Hunter:
      * Inspects all interactive windows for Picture-in-Picture mode, pauses media,
@@ -486,26 +423,21 @@ class AppBlockerService : AccessibilityService() {
      */
     private fun killPipWindowsIfAny() {
         try {
-            // 1. Check all interactive windows for Picture-in-Picture mode
             val windowList = windows
             if (windowList != null) {
                 for (window in windowList) {
                     if (window.isInPictureInPictureMode) {
-                        // Pause media immediately
                         stopAllMediaPlayback()
-                        // Try clicking Close/Dismiss inside PiP window if exposed
                         val root = window.root
                         if (root != null) {
                             dismissPipNodeRecursively(root)
                         }
-                        // Send global back to collapse PiP
                         performGlobalAction(GLOBAL_ACTION_BACK)
                     }
                 }
             }
-            // 2. If YOUTUBE is currently locked, continuously kill its background process
-            if (isAppLocked("YOUTUBE")) {
-                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            if (isAppLocked("YOUTUBE", applicationContext)) {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                 am.killBackgroundProcesses("com.google.android.youtube")
             }
         } catch (e: Exception) {
@@ -526,14 +458,15 @@ class AppBlockerService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        stopEnforcementLoop()
-        handleNonTrackedAppWindow()
+        currentForegroundAppKey?.let { saveStateToPrefs(it) }
+        currentForegroundAppKey = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        stopEnforcementLoop()
-        handleNonTrackedAppWindow()
+        stopStopwatchTicker()
+        currentForegroundAppKey?.let { saveStateToPrefs(it) }
+        currentForegroundAppKey = null
     }
 
     companion object {
@@ -542,6 +475,16 @@ class AppBlockerService : AccessibilityService() {
             "Tamper Protection: Cannot Uninstall or Reset InstaGuard while Focus Timer is active!"
 
         val APP_KEYS = listOf("INSTAGRAM", "YOUTUBE", "FACEBOOK", "TIKTOK")
+
+        val IGNORED_SYSTEM_PACKAGES = setOf(
+            "com.android.systemui",
+            "android",
+            "com.google.android.inputmethod.latin",
+            "com.touchtype.swiftkey",
+            "com.samsung.android.honeyboard",
+            "com.google.android.permissioncontroller",
+            "com.android.permissioncontroller"
+        )
 
         private val SYSTEM_TAMPER_PACKAGES = setOf(
             "com.android.settings",
@@ -563,16 +506,21 @@ class AppBlockerService : AccessibilityService() {
         var currentForegroundAppKey: String? = null
 
         @Volatile
-        var foregroundStartMs: Long = 0L
+        var lastTickElapsedRealtime: Long = 0L
 
         @Volatile
         var appContext: Context? = null
+
+        fun mapPackageToAppKey(packageName: String): String? {
+            return TrackedApp.fromPackageName(packageName)?.key
+        }
 
         fun syncFromPrefs(context: Context) {
             appContext = context.applicationContext
             val prefs = GuardPreferences(context)
             val now = System.currentTimeMillis()
             var allZero = true
+
             for (key in APP_KEYS) {
                 val usage = prefs.getAccumulatedUsage(key)
                 val unlock = prefs.getUnlockTimestamp(key)
@@ -588,6 +536,8 @@ class AppBlockerService : AccessibilityService() {
                     }
                 }
             }
+
+            // Only reconstruct from OS system events if SharedPreferences is 100% empty
             if (allZero) {
                 syncAndReconstructFromSystemEvents(context)
             }
@@ -595,8 +545,8 @@ class AppBlockerService : AccessibilityService() {
 
         /**
          * LAYER 1: OS-Level Usage & Cooldown Reconstruction via UsageStatsManager.queryEvents.
-         * Reconstructs exact foreground usage and 5-hour cooldown lock timestamps across the
-         * past 6 hours (1h allowance + 5h cooldown) even after app uninstall/reinstall or Clear Data.
+         * Runs ONLY when SharedPreferences is completely empty (e.g. after reinstall or clear data).
+         * Will NEVER overwrite existing in-memory data with lower values.
          */
         fun syncAndReconstructFromSystemEvents(context: Context) {
             try {
@@ -612,8 +562,8 @@ class AppBlockerService : AccessibilityService() {
                 val now = System.currentTimeMillis()
                 val windowStart = now - 6 * 3_600_000L // Last 6 hours (1h limit + 5h cooldown)
 
-                val limitMs = prefs.getUsageLimitMs() // 3_600_000L in Normal Mode
-                val cooldownMs = prefs.getCooldownDurationMs() // 18_000_000L in Normal Mode
+                val limitMs = prefs.getUsageLimitMs()
+                val cooldownMs = prefs.getCooldownDurationMs()
 
                 val reconstructedUsage = HashMap<String, Long>()
                 val reconstructedUnlockAt = HashMap<String, Long>()
@@ -635,7 +585,6 @@ class AppBlockerService : AccessibilityService() {
                     val appKey = trackedApp.key
                     val eventTime = event.timeStamp
 
-                    // Check if a previously triggered cooldown expired before or at this event
                     val activeUnlock = reconstructedUnlockAt[appKey] ?: 0L
                     if (activeUnlock in 1..eventTime) {
                         reconstructedUnlockAt[appKey] = 0L
@@ -643,7 +592,6 @@ class AppBlockerService : AccessibilityService() {
                         lastResumeMap[appKey] = 0L
                     }
 
-                    // Ignore any brief opens while the app is inside its cooldown window
                     if ((reconstructedUnlockAt[appKey] ?: 0L) > eventTime) {
                         lastResumeMap[appKey] = 0L
                         continue
@@ -665,7 +613,6 @@ class AppBlockerService : AccessibilityService() {
                                         reconstructedUsage[appKey] = 0L
                                         lastResumeMap[appKey] = 0L
                                     } else {
-                                        // Cooldown already expired before eventTime
                                         reconstructedUnlockAt[appKey] = 0L
                                         reconstructedUsage[appKey] = 0L
                                         lastResumeMap[appKey] = eventTime
@@ -699,7 +646,7 @@ class AppBlockerService : AccessibilityService() {
                     }
                 }
 
-                // Account for any app still in foreground at `now` and finalize state
+                // Finalize remaining in-progress foreground time up to `now`
                 for (appKey in APP_KEYS) {
                     val activeUnlock = reconstructedUnlockAt[appKey] ?: 0L
                     if (activeUnlock in 1..now) {
@@ -738,11 +685,11 @@ class AppBlockerService : AccessibilityService() {
                         accumulatedUsageMap[appKey] = 0L
                         prefs.setUnlockTimestamp(appKey, recUnlock)
                         prefs.setAccumulatedUsage(appKey, 0L)
-                        Log.w(TAG, "[$appKey] Reconstructed active 5h cooldown from OS UsageEvents: unlocks at $recUnlock")
+                        Log.w(TAG, "[$appKey] Restored 5h cooldown from OS UsageEvents: unlocks at $recUnlock")
                     } else if (currentUnlock <= now && recUsage > currentUsage) {
-                        accumulatedUsageMap[appKey] = recUsage
-                        prefs.setAccumulatedUsage(appKey, recUsage)
-                        Log.i(TAG, "[$appKey] Reconstructed usage from OS UsageEvents: $recUsage ms")
+                        accumulatedUsageMap[appKey] = maxOf(currentUsage, recUsage)
+                        prefs.setAccumulatedUsage(appKey, accumulatedUsageMap[appKey] ?: 0L)
+                        Log.i(TAG, "[$appKey] Restored usage from OS UsageEvents: $recUsage ms")
                     }
                 }
             } catch (e: Exception) {
@@ -751,24 +698,14 @@ class AppBlockerService : AccessibilityService() {
         }
 
         fun getLiveUsageMs(appKey: String, context: Context? = null): Long {
-            val now = System.currentTimeMillis()
             val unlockAt = unlockTimestampMap[appKey] ?: 0L
-
-            // If cooldown expired in the past, reset ONLY for this appKey
-            if (unlockAt > 0L && unlockAt <= now) {
+            if (unlockAt > 0L && System.currentTimeMillis() >= unlockAt) {
                 unlockTimestampMap[appKey] = 0L
                 accumulatedUsageMap[appKey] = 0L
                 val ctx = context ?: appContext
                 ctx?.let { GuardPreferences(it).resetApp(appKey) }
             }
-
-            val base = accumulatedUsageMap[appKey] ?: 0L
-            val activeDelta = if (currentForegroundAppKey == appKey && foregroundStartMs > 0L) {
-                now - foregroundStartMs
-            } else {
-                0L
-            }
-            return base + activeDelta
+            return maxOf(0L, accumulatedUsageMap[appKey] ?: 0L)
         }
 
         fun getRemainingLockMs(appKey: String, context: Context? = null): Long {
@@ -777,7 +714,6 @@ class AppBlockerService : AccessibilityService() {
             val remaining = unlockAt - now
 
             if (unlockAt > 0L && remaining <= 0L) {
-                // Cooldown expired: reset ONLY for this appKey
                 unlockTimestampMap[appKey] = 0L
                 accumulatedUsageMap[appKey] = 0L
                 val ctx = context ?: appContext

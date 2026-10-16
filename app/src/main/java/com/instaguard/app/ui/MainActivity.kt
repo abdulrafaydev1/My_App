@@ -63,7 +63,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         AppBlockerService.syncFromPrefs(this)
-        AppBlockerService.syncAndReconstructFromSystemEvents(this)
 
         updatePermissionsUI()
         updateAllAppCards()
@@ -201,7 +200,6 @@ class MainActivity : AppCompatActivity() {
         // Refresh Button
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
-            AppBlockerService.syncAndReconstructFromSystemEvents(this)
             updatePermissionsUI()
             updateAllAppCards()
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()

@@ -78,7 +78,7 @@ class LockScreenActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         guardManager = GuardManager(applicationContext)
-        AppBlockerService.syncAndReconstructFromSystemEvents(applicationContext)
+        AppBlockerService.syncFromPrefs(applicationContext)
 
         updateLockedAppFromIntent()
         applyMonospaceTypeface()
