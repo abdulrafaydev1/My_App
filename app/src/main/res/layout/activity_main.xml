@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v4.0"
+                        android:text="InstaGuard Pro v4.1"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="22sp"
                         android:textStyle="bold"

@@ -5,7 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/lock_bg"
-    android:padding="24dp">
+    android:paddingHorizontal="18dp"
+    android:paddingVertical="24dp">
 
     <!-- Top Badge -->
     <LinearLayout
@@ -63,7 +64,7 @@
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:paddingVertical="32dp"
-            android:paddingHorizontal="24dp">
+            android:paddingHorizontal="18dp">
 
             <!-- Pulsing Lock Icon Container -->
             <FrameLayout
@@ -125,7 +126,7 @@
                     android:gravity="center"
                     android:orientation="vertical"
                     android:paddingVertical="20dp"
-                    android:paddingHorizontal="16dp">
+                    android:paddingHorizontal="10dp">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -136,17 +137,25 @@
                         android:textStyle="bold"
                         android:letterSpacing="0.08" />
 
-                    <!-- Countdown Display in Coral Red -->
+                    <!-- Countdown Display in Coral Red (Single-line auto-sizing so 12-char timer never wraps) -->
                     <TextView
                         android:id="@+id/tvCountdownTimer"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:fontFamily="monospace"
+                        android:gravity="center"
+                        android:maxLines="1"
+                        android:singleLine="true"
+                        android:ellipsize="none"
                         android:text="04:59:59.980"
                         android:textColor="#F87171"
-                        android:textSize="38sp"
-                        android:textStyle="bold" />
+                        android:textSize="28sp"
+                        android:textStyle="bold"
+                        app:autoSizeTextType="uniform"
+                        app:autoSizeMinTextSize="16sp"
+                        app:autoSizeMaxTextSize="28sp"
+                        app:autoSizeStepGranularity="1sp" />
 
                     <TextView
                         android:id="@+id/tvUnlockTimeEstimate"

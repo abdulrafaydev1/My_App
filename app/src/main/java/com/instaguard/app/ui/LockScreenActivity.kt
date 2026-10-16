@@ -39,6 +39,7 @@ class LockScreenActivity : AppCompatActivity() {
 
     private var lockedAppKey: String = "INSTAGRAM"
     private var appName: String = "Instagram"
+    private var mediaSuppressTick: Int = 0
 
     private val countdownRunnable = object : Runnable {
         override fun run() {
@@ -53,6 +54,11 @@ class LockScreenActivity : AppCompatActivity() {
                 finish()
             } else {
                 binding.tvCountdownTimer.text = guardManager.formatWithMillis(remainingMs)
+                mediaSuppressTick++
+                if (mediaSuppressTick >= 10) {
+                    mediaSuppressTick = 0
+                    stopAllMediaPlayback()
+                }
                 timerHandler.postDelayed(this, 33L)
             }
         }
@@ -199,8 +205,8 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     /**
-     * Dispatches hardware media pause/stop keys and seizes exclusive audio focus,
-     * preventing YouTube/TikTok videos from playing in PiP or in the background.
+     * Dispatches hardware media pause/stop keys, seizes both transient exclusive and permanent
+     * audio focus, and kills YouTube background processes to prevent PiP playback.
      */
     private fun stopAllMediaPlayback() {
         try {
@@ -212,18 +218,28 @@ class LockScreenActivity : AppCompatActivity() {
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_STOP))
             audioManager.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_STOP))
 
-            // 2. Seize Exclusive Audio Focus so Android OS forces YouTube to pause playback immediately
+            // 2. Seize Exclusive Transient AND Permanent Audio Focus so Android OS forces YouTube to pause playback
             val playbackAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
                 .build()
 
-            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            val transientFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
                 .setAudioAttributes(playbackAttributes)
                 .setOnAudioFocusChangeListener { }
                 .build()
+            audioManager.requestAudioFocus(transientFocusRequest)
 
-            audioManager.requestAudioFocus(focusRequest)
+            val permanentFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(playbackAttributes)
+                .setOnAudioFocusChangeListener { }
+                .build()
+            audioManager.requestAudioFocus(permanentFocusRequest)
+
+            if (lockedAppKey == "YOUTUBE" || AppBlockerService.isAppLocked("YOUTUBE", this)) {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                am.killBackgroundProcesses("com.google.android.youtube")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
