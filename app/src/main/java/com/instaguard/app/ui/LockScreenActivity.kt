@@ -160,12 +160,22 @@ class LockScreenActivity : AppCompatActivity() {
 
         val unlockTime = AppBlockerService.unlockTimestampMap[lockedAppKey]
             ?: guardManager.prefs.getUnlockTimestamp(lockedAppKey)
-        if (unlockTime > 0L) {
-            binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
-        } else if (!tamperWarningMessage.isNullOrEmpty()) {
-            binding.tvUnlockTimeEstimate.text = "Active Session Protected — Uninstall/Reset Blocked"
+        when {
+            unlockTime > System.currentTimeMillis() -> {
+                binding.tvUnlockTimeEstimate.text = "Unlocks at ${guardManager.formatTimeOfDay(unlockTime)}"
+            }
+            AppBlockerService.getDeepWorkRemainingMs(this) > 0L -> {
+                binding.tvUnlockTimeEstimate.text = "Deep Work Unlocks at ${guardManager.formatTimeOfDay(AppBlockerService.deepWorkUnlockAtMs)}"
+            }
+            AppBlockerService.isNightSleepWindowActive(this) -> {
+                binding.tvUnlockTimeEstimate.text = "Night Sleep Guard Unlocks at 06:00 AM"
+            }
+            !tamperWarningMessage.isNullOrEmpty() -> {
+                binding.tvUnlockTimeEstimate.text = "Active Session Protected — Uninstall/Reset Blocked"
+            }
         }
 
+        applyDynamicTexts()
         timerHandler.removeCallbacks(countdownRunnable)
         timerHandler.post(countdownRunnable)
     }
@@ -182,6 +192,14 @@ class LockScreenActivity : AppCompatActivity() {
             binding.tvLockBadgeTitle.text = "ANTI-TAMPER PROTECTION SHIELD"
             binding.tvLockTitle.text = "Tamper Blocked!"
             binding.tvLockSubtitle.text = warning
+        } else if (AppBlockerService.isNightSleepWindowActive(this)) {
+            binding.tvLockBadgeTitle.text = "🌙 NIGHT SLEEP GUARD"
+            binding.tvLockTitle.text = "$appName is Locked!"
+            binding.tvLockSubtitle.text = "🌙 Night Sleep Guard Active (Unlocks at 6:00 AM)"
+        } else if (AppBlockerService.getDeepWorkRemainingMs(this) > 0L) {
+            binding.tvLockBadgeTitle.text = "⚡ DEEP WORK / STUDY MODE"
+            binding.tvLockTitle.text = "$appName is Locked!"
+            binding.tvLockSubtitle.text = "⚡ Deep Work / Study Mode Active — Stay Focused!"
         } else {
             binding.tvLockBadgeTitle.text = "${appName.uppercase()} FOCUS SHIELD"
             binding.tvLockTitle.text = "$appName is Locked!"

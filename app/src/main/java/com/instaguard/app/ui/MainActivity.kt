@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
 import com.instaguard.app.databinding.ActivityMainBinding
 import com.instaguard.app.service.AppBlockerService
@@ -37,10 +38,11 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Main Dashboard Activity for InstaGuard Pro v6.0.
+ * Main Dashboard Activity for InstaGuard Pro v7.0.
  * Features a Cyber-Dark UI, live Top-Center Reel/Short counter, Focus Streak,
  * Discipline Score gamification, Any-App picker, 5-min Maintenance mode,
- * strictly isolated per-app 1h limit and 5h cooldown monitoring, and analytics.
+ * AI Voice Warnings, Only Reels & Shorts Blocker, Night Sleep Guard,
+ * Instant Deep Work / Study Mode, Home Screen Widget, and analytics.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -74,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         applyMonospaceTypefaces()
         setupListeners()
         setupTestModeSwitch()
+        setupV70FeatureControls()
         startStatusPulseAnimation()
         playStaggeredEntranceAnimation()
     }
@@ -85,6 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         updatePermissionsUI()
         updateAllAppCards()
+        InstaGuardWidgetProvider.updateAllWidgets(this)
 
         uiHandler.removeCallbacks(liveTickerRunnable)
         uiHandler.post(liveTickerRunnable)
@@ -103,7 +107,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun applyMonospaceTypefaces() {
         val monospaceViews = listOf(
-            binding.tvFocusStreak, binding.tvDisciplineScore,
+            binding.tvFocusStreak, binding.tvDisciplineScore, binding.tvDeepWorkStatus,
             binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus, binding.tvInstagramScrolls,
             binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus, binding.tvYouTubeScrolls,
             binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus, binding.tvFacebookScrolls,
@@ -139,6 +143,9 @@ class MainActivity : AppCompatActivity() {
             binding.cardFocusStreak,
             binding.cardOverallStatus,
             binding.cardTestMode,
+            binding.cardOnlyReelsShorts,
+            binding.cardNightSleepGuard,
+            binding.cardDeepWorkMode,
             binding.btnMasterPinSettings,
             binding.btnAddCustomApp,
             binding.btnMaintenanceMode,
@@ -205,6 +212,170 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * v7.0 Feature Controls:
+     * - Feature 2: Only Reels & Shorts Blocker Toggle
+     * - Feature 3: Night Sleep Guard (11:30 PM – 6:00 AM) with 3-Stage Math + Master PIN Anti-Cheat
+     * - Feature 4: Instant Deep Work / Study Mode (1-Hour & 2-Hour Study Locks)
+     */
+    private fun setupV70FeatureControls() {
+        // 1. Only Reels & Shorts Blocker
+        binding.switchOnlyReelsShorts.setOnCheckedChangeListener(null)
+        binding.switchOnlyReelsShorts.isChecked = guardManager.prefs.isOnlyReelsShortsMode
+        binding.switchOnlyReelsShorts.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isOnlyReelsShortsMode = isChecked
+            val msg = if (isChecked) {
+                "🎯 Only Reels & Shorts Blocker Active (IG DMs & YT Long Videos Allowed)"
+            } else {
+                "Standard Full-App Allowance Mode Active"
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        // 2. Night Sleep Guard (11:30 PM - 6:00 AM)
+        bindNightSleepSwitchListener()
+
+        // 3. Instant Deep Work / Study Mode Buttons
+        binding.btnDeepWork1Hour.setOnClickListener {
+            AppBlockerService.activateDeepWorkMode(this, 3_600_000L)
+            updateAllAppCards()
+            Toast.makeText(
+                this,
+                "🚀 1-Hour Deep Work Study Lock Activated! All social apps locked.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        binding.btnDeepWork2Hour.setOnClickListener {
+            AppBlockerService.activateDeepWorkMode(this, 7_200_000L)
+            updateAllAppCards()
+            Toast.makeText(
+                this,
+                "🔥 2-Hour Deep Work Study Lock Activated! All social apps locked.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun bindNightSleepSwitchListener() {
+        binding.switchNightSleepGuard.setOnCheckedChangeListener(null)
+        binding.switchNightSleepGuard.isChecked = guardManager.prefs.isNightSleepGuardEnabled
+        binding.switchNightSleepGuard.setOnCheckedChangeListener { buttonView, isChecked ->
+            if (!isChecked && AppBlockerService.isNightSleepTimeWindowNow()) {
+                // Anti-Cheat Rule: Cannot turn OFF during 11:30 PM – 6:00 AM without 3-Stage Math + Master PIN
+                buttonView.setOnCheckedChangeListener(null)
+                buttonView.isChecked = true
+                bindNightSleepSwitchListener()
+                Toast.makeText(
+                    this,
+                    "🌙 Night Sleep Window is active! Solve 3-Stage Math Challenge + Master PIN to disable.",
+                    Toast.LENGTH_LONG
+                ).show()
+                startNightSleepDisableMathChallenge(step = 1)
+                return@setOnCheckedChangeListener
+            }
+
+            guardManager.prefs.isNightSleepGuardEnabled = isChecked
+            updateAllAppCards()
+            InstaGuardWidgetProvider.updateAllWidgets(this)
+            val msg = if (isChecked) {
+                "🌙 Night Sleep Guard (11:30 PM – 6:00 AM) Enabled"
+            } else {
+                "🌙 Night Sleep Guard Disabled"
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun startNightSleepDisableMathChallenge(step: Int) {
+        if (step > 3) {
+            showNightSleepDisablePinDialog()
+            return
+        }
+
+        val num1 = (14..28).random()
+        val num2 = (5..9).random()
+        val num3 = (20..85).random()
+        val isAddition = (0..1).random() == 1
+
+        val problemStr = if (isAddition) "($num1 × $num2) + $num3" else "($num1 × $num2) - $num3"
+        val expectedAnswer = if (isAddition) (num1 * num2) + num3 else (num1 * num2) - num3
+
+        val container = FrameLayout(this).apply {
+            setPadding(56, 24, 56, 12)
+        }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED
+            gravity = Gravity.CENTER
+            textSize = 22f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.WHITE)
+            hint = "Answer"
+            setHintTextColor(Color.parseColor("#64748B"))
+        }
+        container.addView(input)
+
+        AlertDialog.Builder(this)
+            .setTitle("🌙 Night Sleep Guard Challenge (Step $step of 3)")
+            .setMessage("It is currently past 11:30 PM. Solve this challenge to disable Night Sleep Guard:\n\n$problemStr = ?")
+            .setView(container)
+            .setCancelable(false)
+            .setPositiveButton(if (step < 3) "Next Step ➔" else "Proceed to PIN ➔") { dialog, _ ->
+                val enteredAnswer = input.text.toString().trim().toIntOrNull()
+                if (enteredAnswer != null && enteredAnswer == expectedAnswer) {
+                    dialog.dismiss()
+                    Toast.makeText(this, "✅ Step $step solved!", Toast.LENGTH_SHORT).show()
+                    startNightSleepDisableMathChallenge(step + 1)
+                } else {
+                    dialog.dismiss()
+                    Toast.makeText(this, "❌ Incorrect answer! Challenge reset to Step 1.", Toast.LENGTH_LONG).show()
+                    startNightSleepDisableMathChallenge(step = 1)
+                }
+            }
+            .setNegativeButton("Keep Sleep Guard ON") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun showNightSleepDisablePinDialog() {
+        val container = FrameLayout(this).apply {
+            setPadding(56, 24, 56, 12)
+        }
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            gravity = Gravity.CENTER
+            textSize = 22f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Color.WHITE)
+            hint = "••••"
+            setHintTextColor(Color.parseColor("#64748B"))
+            filters = arrayOf(InputFilter.LengthFilter(4))
+        }
+        container.addView(input)
+
+        AlertDialog.Builder(this)
+            .setTitle("🔐 Final Step: Master PIN")
+            .setMessage("Enter your 4-digit Master PIN to disable Night Sleep Guard during sleep hours.")
+            .setView(container)
+            .setCancelable(false)
+            .setPositiveButton("Authorize") { dialog, _ ->
+                val entered = input.text.toString().trim()
+                if (entered == guardManager.prefs.masterPin) {
+                    guardManager.prefs.isNightSleepGuardEnabled = false
+                    bindNightSleepSwitchListener()
+                    updateAllAppCards()
+                    InstaGuardWidgetProvider.updateAllWidgets(this)
+                    Toast.makeText(this, "🌙 Night Sleep Guard Disabled.", Toast.LENGTH_LONG).show()
+                    dialog.dismiss()
+                } else {
+                    Toast.makeText(this, "❌ Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     private fun setupListeners() {
         // Permission 1: Usage Access Settings
         binding.btnGrantUsage.setOnClickListener {
@@ -242,6 +413,7 @@ class MainActivity : AppCompatActivity() {
             AppBlockerService.syncFromPrefs(this)
             updatePermissionsUI()
             updateAllAppCards()
+            InstaGuardWidgetProvider.updateAllWidgets(this)
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
         }
 
@@ -268,6 +440,16 @@ class MainActivity : AppCompatActivity() {
         val prefs = guardManager.prefs
         val limitMs = prefs.getUsageLimitMs()
         val cooldownMs = prefs.getCooldownDurationMs()
+
+        // v7.0 Feature 4: Live Deep Work / Study Mode Status Countdown
+        val deepWorkRem = AppBlockerService.getDeepWorkRemainingMs(this)
+        if (deepWorkRem > 0L) {
+            binding.tvDeepWorkStatus.text = "🔥 ACTIVE STUDY LOCK: ${guardManager.formatWithMillis(deepWorkRem)} remaining"
+            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#EF4444"))
+        } else {
+            binding.tvDeepWorkStatus.text = "Status: Ready for Deep Work Session"
+            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#F59E0B"))
+        }
 
         // Feature 3: Focus Streak & Discipline Score Gamification
         updateFocusStreakAndDisciplineScore()

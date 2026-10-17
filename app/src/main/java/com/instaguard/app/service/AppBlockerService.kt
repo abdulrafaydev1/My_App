@@ -23,6 +23,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -35,6 +36,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
 import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.model.TrackedApp
@@ -42,6 +44,7 @@ import com.instaguard.app.ui.LockScreenActivity
 import com.instaguard.app.ui.MainActivity
 import com.instaguard.app.util.UsageStatsHelper
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -49,26 +52,34 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * High-performance AccessibilityService that monitors Instagram, YouTube, Facebook,
  * and TikTok independently in real-time with millisecond precision.
- * v5.0 Master Edition Features:
+ * v7.0 Master Edition Features:
  * - Monotonic 50ms Delta Stopwatch Engine (SystemClock.elapsedRealtime) with zero timer drift.
- * - Strict 1-hour usage limit and hardened 5-hour cooldown lock per app.
- * - Feature 1: Midnight Auto-Reset (12:00 AM) & Daily History Archiving.
- * - Feature 2: Smart Warning Notifications at 5 Minutes & 1 Minute remaining.
- * - Feature 3: Emergency 5-Minute Master PIN Bypass support.
+ * - Strict 30-minute usage limit and hardened 5-hour cooldown lock per app.
+ * - AI Voice Warnings (TextToSpeech) paired with High-Priority Notifications (Notification-First).
+ * - Only Reels & Shorts Blocker Mode, Night Sleep Guard (11:30 PM - 6:00 AM), and Deep Work Mode.
+ * - Midnight Auto-Reset (12:00 AM) & Daily History Archiving.
+ * - Emergency 5-Minute Master PIN Bypass support.
  * - Layer 1: OS-level UsageEvents reconstruction when data is empty.
  * - Layer 2: Anti-Uninstall, Anti-Force-Stop, and Anti-Clear-Data Tamper Shield.
  * - 3-Layer YouTube/Shorts Picture-in-Picture (PiP) Killer Logic.
  */
-class AppBlockerService : AccessibilityService() {
+class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     private lateinit var prefs: GuardPreferences
     private val tickerHandler = Handler(Looper.getMainLooper())
     private var isTickerRunning = false
     private var tickCounter = 0
+    private var widgetTickCounter = 0
     private var lastTamperBlockMs = 0L
     private var lastPillText = ""
     private var lastScrollsText = ""
     private var lastTimerText = ""
+
+    // v7.0 TextToSpeech & Debounce State
+    private var tts: TextToSpeech? = null
+    private var isTtsReady = false
+    private var lastBlockedVoiceAlertElapsedMs = 0L
+    private var lastReelsBlockAlertElapsedMs = 0L
 
     // v6.3 Post-Scroll Settled Verification State
     private var lastScrollCountElapsedMs = 0L
@@ -259,6 +270,42 @@ class AppBlockerService : AccessibilityService() {
                     stopAllMediaPlayback()
                     launchLockScreen(activeKey)
                 } else {
+                    // v7.0 Feature 2: Only Reels & Shorts Blocker Mode
+                    if (prefs.isOnlyReelsShortsMode) {
+                        if (activeKey == "TIKTOK") {
+                            performGlobalAction(GLOBAL_ACTION_BACK)
+                            performGlobalAction(GLOBAL_ACTION_HOME)
+                            if (nowElapsed - lastReelsBlockAlertElapsedMs >= 4000L) {
+                                lastReelsBlockAlertElapsedMs = nowElapsed
+                                fireNotificationThenVoice(
+                                    3088,
+                                    "🚫 Reels & Shorts Blocked!",
+                                    "Only Reels & Shorts Blocker Mode is active.",
+                                    "Reels and Shorts are blocked! Stick to messages or study videos."
+                                )
+                            }
+                        } else if ((activeKey == "INSTAGRAM" || activeKey == "YOUTUBE" || activeKey == "FACEBOOK") && tickCounter % 6 == 0) {
+                            val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                            val isReelsOrShorts = if (activeKey == "YOUTUBE") {
+                                isYoutubeShortsMode(root)
+                            } else {
+                                isReelsOrWatchTabActive(activeKey, root)
+                            }
+                            if (isReelsOrShorts) {
+                                performGlobalAction(GLOBAL_ACTION_BACK)
+                                if (nowElapsed - lastReelsBlockAlertElapsedMs >= 4000L) {
+                                    lastReelsBlockAlertElapsedMs = nowElapsed
+                                    fireNotificationThenVoice(
+                                        3088,
+                                        "🚫 Reels & Shorts Blocked!",
+                                        "Only Reels & Shorts Blocker Mode is active.",
+                                        "Reels and Shorts are blocked! Stick to messages or study videos."
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     val updatedUsage = (accumulatedUsageMap[activeKey] ?: 0L) + deltaMs
                     accumulatedUsageMap[activeKey] = updatedUsage
 
@@ -271,7 +318,7 @@ class AppBlockerService : AccessibilityService() {
                     val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
                     updateFloatingPill(activeKey, remainingAllowance)
 
-                    // Smart Warning Notifications (5-Min & 1-Min)
+                    // Smart Warning Notifications + Voice Alerts (10-Min, 5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
 
                     if (updatedUsage >= limitMs) {
@@ -283,6 +330,7 @@ class AppBlockerService : AccessibilityService() {
                         currentForegroundAppKey = null
 
                         // Reset warning flags on lock
+                        warned10MinMap[activeKey] = false
                         warned5MinMap[activeKey] = false
                         warned1MinMap[activeKey] = false
 
@@ -312,6 +360,13 @@ class AppBlockerService : AccessibilityService() {
                 }
             }
 
+            // 6. Periodic Home Screen Widget refresh every 1200 ticks (~60 seconds)
+            widgetTickCounter++
+            if (widgetTickCounter >= 1200) {
+                widgetTickCounter = 0
+                InstaGuardWidgetProvider.updateAllWidgets(applicationContext)
+            }
+
             tickerHandler.postDelayed(this, 50L)
         }
     }
@@ -319,8 +374,10 @@ class AppBlockerService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         appContext = applicationContext
+        activeServiceInstance = this
         prefs = GuardPreferences(applicationContext)
         initNotificationChannel()
+        initTextToSpeech()
         syncFromPrefs(applicationContext)
         checkMidnightCrossover()
         startStopwatchTicker()
@@ -330,16 +387,49 @@ class AppBlockerService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         appContext = applicationContext
+        activeServiceInstance = this
         prefs = GuardPreferences(applicationContext)
         initNotificationChannel()
+        initTextToSpeech()
         syncFromPrefs(applicationContext)
         checkMidnightCrossover()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService connected; Monotonic 50ms Stopwatch Engine running.")
     }
 
+    private fun initTextToSpeech() {
+        if (tts == null) {
+            try {
+                tts = TextToSpeech(applicationContext, this)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            try {
+                tts?.language = Locale.US
+                tts?.setSpeechRate(0.95f)
+                tts?.setPitch(1.0f)
+                val audioAttrs = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+                tts?.setAudioAttributes(audioAttrs)
+                isTtsReady = true
+                Log.i(TAG, "TextToSpeech initialized successfully.")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun initNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
             val channel = NotificationChannel(
                 ALERTS_CHANNEL_ID,
                 "Focus Limit Warnings",
@@ -348,7 +438,6 @@ class AppBlockerService : AccessibilityService() {
                 description = "Alerts when your daily focus quota is almost up"
                 enableVibration(true)
             }
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(channel)
 
             val ytChannel = NotificationChannel(
@@ -360,6 +449,16 @@ class AppBlockerService : AccessibilityService() {
                 enableVibration(true)
             }
             nm.createNotificationChannel(ytChannel)
+
+            val voiceChannel = NotificationChannel(
+                VOICE_ALERTS_CHANNEL_ID,
+                "InstaGuard Voice & Focus Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "High-priority focus warnings paired with AI voice alerts"
+                enableVibration(true)
+            }
+            nm.createNotificationChannel(voiceChannel)
         }
     }
 
@@ -515,41 +614,29 @@ class AppBlockerService : AccessibilityService() {
     }
 
     /**
-     * Feature 2: Fires high-importance heads-up notifications when 5 minutes
-     * or 1 minute of active allowance remains.
+     * v7.0 Feature 1: Fires High-Importance Notification FIRST, followed 350ms later by TextToSpeech voice alert.
      */
-    private fun checkAndTriggerWarningNotifications(appKey: String, usedMs: Long, limitMs: Long) {
-        val remainingMs = limitMs - usedMs
-        val isTestMode = prefs.isTestMode
-        val threshold5Min = if (isTestMode) 15_000L else 300_000L // 5 min or 15 sec
-        val threshold1Min = if (isTestMode) 5_000L else 60_000L   // 1 min or 5 sec
-
-        val trackedApp = TrackedApp.fromKey(appKey)
-        val appDisplayName = trackedApp?.displayName ?: appKey
-
-        // 5-Minute Warning Alert
-        if (remainingMs in 1..threshold5Min && warned5MinMap[appKey] != true) {
-            warned5MinMap[appKey] = true
-            sendWarningNotification(
-                notificationId = NOTIF_ID_5MIN + appKey.hashCode(),
-                title = "⚠️ 5 Minutes Left on $appDisplayName!",
-                message = "Your 30-minute limit is almost up. Wrap up now before the 5-hour lock starts."
-            )
-        }
-
-        // 1-Minute Warning Alert
-        if (remainingMs in 1..threshold1Min && warned1MinMap[appKey] != true) {
-            warned1MinMap[appKey] = true
-            sendWarningNotification(
-                notificationId = NOTIF_ID_1MIN + appKey.hashCode(),
-                title = "🚨 Final 60 Seconds on $appDisplayName!",
-                message = "Locking $appDisplayName for 5 hours in less than 1 minute!"
-            )
-        }
-    }
-
-    private fun sendWarningNotification(notificationId: Int, title: String, message: String) {
+    private fun fireNotificationThenVoice(
+        notificationId: Int,
+        title: String,
+        message: String,
+        voiceText: String
+    ) {
+        // STEP 1 (Fire Notification FIRST)
         try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    VOICE_ALERTS_CHANNEL_ID,
+                    "InstaGuard Voice & Focus Alerts",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "High-priority focus warnings paired with AI voice alerts"
+                    enableVibration(true)
+                }
+                nm.createNotificationChannel(channel)
+            }
+
             val intent = Intent(applicationContext, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
@@ -560,20 +647,82 @@ class AppBlockerService : AccessibilityService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val builder = NotificationCompat.Builder(applicationContext, ALERTS_CHANNEL_ID)
+            val builder = NotificationCompat.Builder(applicationContext, VOICE_ALERTS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_shield)
                 .setContentTitle(title)
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
 
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(notificationId, builder.build())
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        // STEP 2 (Play Voice Alert SECOND after 350ms so notification arrives first & media focus settles)
+        tickerHandler.postDelayed({
+            try {
+                if (tts == null) {
+                    initTextToSpeech()
+                }
+                tts?.speak(voiceText, TextToSpeech.QUEUE_FLUSH, null, "tts_alert_$notificationId")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }, 350L)
+    }
+
+    /**
+     * v7.0 Feature 1: Fires Notification + AI Voice Warning at 10 Minutes, 5 Minutes, and 1 Minute remaining.
+     */
+    private fun checkAndTriggerWarningNotifications(appKey: String, usedMs: Long, limitMs: Long) {
+        val remainingMs = limitMs - usedMs
+        val isTestMode = prefs.isTestMode
+        val threshold10Min = if (isTestMode) 30_000L else 600_000L // 10 min or 30 sec
+        val threshold5Min = if (isTestMode) 15_000L else 300_000L  // 5 min or 15 sec
+        val threshold1Min = if (isTestMode) 5_000L else 60_000L    // 1 min or 5 sec
+
+        val trackedApp = TrackedApp.fromKey(appKey)
+        val appName = trackedApp?.displayName ?: appKey
+
+        // 1. 10-Minute Warning Alert
+        if (remainingMs in (threshold5Min + 1)..threshold10Min && warned10MinMap[appKey] != true) {
+            warned10MinMap[appKey] = true
+            fireNotificationThenVoice(
+                notificationId = 3010,
+                title = "⏳ 10 Minutes Left on $appName!",
+                message = "Only 10 minutes remaining before your 5-hour focus lock.",
+                voiceText = "Attention! You have 10 minutes left on $appName before it locks for 5 hours."
+            )
+        }
+
+        // 2. 5-Minute Warning Alert
+        if (remainingMs in (threshold1Min + 1)..threshold5Min && warned5MinMap[appKey] != true) {
+            warned10MinMap[appKey] = true
+            warned5MinMap[appKey] = true
+            fireNotificationThenVoice(
+                notificationId = 3005,
+                title = "⚠️ 5 Minutes Left on $appName!",
+                message = "Your 30-minute limit is almost up. Wrap up now!",
+                voiceText = "Warning! Only 5 minutes remaining on $appName. Please wrap up now."
+            )
+        }
+
+        // 3. 1-Minute Warning Alert
+        if (remainingMs in 1..threshold1Min && warned1MinMap[appKey] != true) {
+            warned10MinMap[appKey] = true
+            warned5MinMap[appKey] = true
+            warned1MinMap[appKey] = true
+            fireNotificationThenVoice(
+                notificationId = 3001,
+                title = "🚨 Final 1 Minute on $appName!",
+                message = "Locking $appName for 5 hours in 60 seconds!",
+                voiceText = "Final warning! Only 1 minute left on $appName. Locking in 60 seconds."
+            )
         }
     }
 
@@ -597,6 +746,7 @@ class AppBlockerService : AccessibilityService() {
             scrollCountTodayMap.clear()
 
             // Reset warning notification flags
+            warned10MinMap.clear()
             warned5MinMap.clear()
             warned1MinMap.clear()
 
@@ -757,16 +907,30 @@ class AppBlockerService : AccessibilityService() {
         }
         startActivity(lockIntent)
 
-        // Delayed sweeps to crush PiP transition
+        // Delayed sweeps to crush PiP transition (before 350ms TTS voice alert starts)
         Handler(Looper.getMainLooper()).postDelayed({
             stopAllMediaPlayback()
             killPipWindowsIfAny()
-        }, 200L)
+        }, 120L)
 
         Handler(Looper.getMainLooper()).postDelayed({
             stopAllMediaPlayback()
             killPipWindowsIfAny()
-        }, 500L)
+        }, 240L)
+
+        // v7.0 Feature 1D.4: Notification-First + AI Voice Warning on Blocked App Open / Lock Trigger
+        val nowElapsed = SystemClock.elapsedRealtime()
+        if (nowElapsed - lastBlockedVoiceAlertElapsedMs >= 4000L) {
+            lastBlockedVoiceAlertElapsedMs = nowElapsed
+            fireNotificationThenVoice(
+                notificationId = 3099,
+                title = "🔒 $appDisplayName is Blocked!",
+                message = "$appDisplayName is locked for focus. Stay disciplined!",
+                voiceText = "Access denied! $appDisplayName is currently locked for focus. Get back to your goals!"
+            )
+        }
+
+        InstaGuardWidgetProvider.updateAllWidgets(applicationContext)
     }
 
     private fun saveStateToPrefs(appKey: String) {
@@ -1050,6 +1214,7 @@ class AppBlockerService : AccessibilityService() {
         val todayDateStr = getTodayDateStr()
         prefs.setScrollToday(todayDateStr, appKey, todayCount)
         prefs.setScrollTotal(appKey, totalCount)
+        InstaGuardWidgetProvider.updateAllWidgets(applicationContext)
     }
 
     private fun startYoutubeLongVideoCountdown() {
@@ -1466,6 +1631,15 @@ class AppBlockerService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        activeServiceInstance = null
+        try {
+            tts?.stop()
+            tts?.shutdown()
+            tts = null
+            isTtsReady = false
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         removeFloatingPillCompletely()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
@@ -1479,9 +1653,13 @@ class AppBlockerService : AccessibilityService() {
 
         const val ALERTS_CHANNEL_ID = "instaguard_alerts_channel"
         const val YT_LONG_CHANNEL_ID = "instaguard_yt_longvideo_channel_v63"
+        const val VOICE_ALERTS_CHANNEL_ID = "instaguard_voice_alerts_v70"
         const val NOTIF_ID_5MIN = 1000
         const val NOTIF_ID_1MIN = 2000
         const val NOTIF_ID_YOUTUBE_LONG = 3000
+
+        @Volatile
+        var activeServiceInstance: AppBlockerService? = null
 
         @Volatile
         var isOurAppScreenOpen: Boolean = false
@@ -1515,6 +1693,7 @@ class AppBlockerService : AccessibilityService() {
         val unlockTimestampMap = ConcurrentHashMap<String, Long>()
         val dailyTotalMap = ConcurrentHashMap<String, Long>()
 
+        val warned10MinMap = ConcurrentHashMap<String, Boolean>()
         val warned5MinMap = ConcurrentHashMap<String, Boolean>()
         val warned1MinMap = ConcurrentHashMap<String, Boolean>()
 
@@ -1524,6 +1703,12 @@ class AppBlockerService : AccessibilityService() {
 
         @Volatile
         var maintenanceUntilMs: Long = 0L
+
+        @Volatile
+        var deepWorkUnlockAtMs: Long = 0L
+
+        @Volatile
+        var emergencyBypassUntilMs: Long = 0L
 
         @Volatile
         var currentForegroundAppKey: String? = null
@@ -1574,6 +1759,11 @@ class AppBlockerService : AccessibilityService() {
             customTrackedPackages.clear()
             customTrackedPackages.addAll(prefs.getCustomTrackedPackages())
             maintenanceUntilMs = prefs.maintenanceUntilMs
+            deepWorkUnlockAtMs = prefs.deepWorkUnlockMs
+            if (deepWorkUnlockAtMs > 0L && deepWorkUnlockAtMs <= now) {
+                deepWorkUnlockAtMs = 0L
+                prefs.deepWorkUnlockMs = 0L
+            }
 
             for (key in getAllTrackedKeys()) {
                 val usage = prefs.getAccumulatedUsage(key)
@@ -1636,6 +1826,7 @@ class AppBlockerService : AccessibilityService() {
             val emergencyAllowance = if (prefs.isTestMode) 20_000L else 300_000L // 5 min or 20 sec
 
             unlockTimestampMap[appKey] = 0L
+            emergencyBypassUntilMs = System.currentTimeMillis() + emergencyAllowance
             val restoredUsage = maxOf(0L, limitMs - emergencyAllowance)
             accumulatedUsageMap[appKey] = restoredUsage
 
@@ -1643,7 +1834,8 @@ class AppBlockerService : AccessibilityService() {
             prefs.setAccumulatedUsage(appKey, restoredUsage)
             prefs.setEmergencyUsedDate(appKey, getTodayDateStr())
 
-            // Mark 5-min warning as given so only final 1-min alert triggers
+            // Mark 10-min and 5-min warnings as given so only final 1-min alert triggers
+            warned10MinMap[appKey] = true
             warned5MinMap[appKey] = true
             warned1MinMap[appKey] = false
             Log.i(TAG, "[$appKey] 5-Minute Emergency Bypass granted! Usage set to $restoredUsage ms")
@@ -1825,20 +2017,110 @@ class AppBlockerService : AccessibilityService() {
             return maxOf(0L, accumulatedUsageMap[appKey] ?: 0L)
         }
 
+        fun isNightSleepTimeWindowNow(): Boolean {
+            val cal = Calendar.getInstance()
+            val mins = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+            return mins >= (23 * 60 + 30) || mins < (6 * 60)
+        }
+
+        fun isNightSleepWindowActive(context: Context? = null): Boolean {
+            if (System.currentTimeMillis() < emergencyBypassUntilMs) return false
+            val ctx = context ?: appContext ?: return false
+            val enabled = GuardPreferences(ctx).isNightSleepGuardEnabled
+            return enabled && isNightSleepTimeWindowNow()
+        }
+
+        fun getNightSleepRemainingMs(context: Context? = null): Long {
+            if (!isNightSleepWindowActive(context)) return 0L
+            val nowCal = Calendar.getInstance()
+            val targetCal = Calendar.getInstance().apply {
+                if (nowCal.get(Calendar.HOUR_OF_DAY) >= 23) {
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }
+                set(Calendar.HOUR_OF_DAY, 6)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            return maxOf(0L, targetCal.timeInMillis - nowCal.timeInMillis)
+        }
+
+        fun getDeepWorkRemainingMs(context: Context? = null): Long {
+            if (System.currentTimeMillis() < emergencyBypassUntilMs) return 0L
+            val ctx = context ?: appContext
+            if (deepWorkUnlockAtMs == 0L && ctx != null) {
+                deepWorkUnlockAtMs = GuardPreferences(ctx).deepWorkUnlockMs
+            }
+            val now = System.currentTimeMillis()
+            val rem = deepWorkUnlockAtMs - now
+            if (deepWorkUnlockAtMs > 0L && rem <= 0L) {
+                deepWorkUnlockAtMs = 0L
+                ctx?.let { GuardPreferences(it).deepWorkUnlockMs = 0L }
+                return 0L
+            }
+            return maxOf(0L, rem)
+        }
+
+        fun activateDeepWorkMode(context: Context, durationMs: Long) {
+            val appCtx = context.applicationContext
+            appContext = appCtx
+            val unlockAt = System.currentTimeMillis() + durationMs
+            deepWorkUnlockAtMs = unlockAt
+            emergencyBypassUntilMs = 0L
+            GuardPreferences(appCtx).deepWorkUnlockMs = unlockAt
+
+            val service = activeServiceInstance
+            if (service != null) {
+                service.fireNotificationThenVoice(
+                    notificationId = 3077,
+                    title = "⚡ Deep Work Mode Activated!",
+                    message = "All social media apps are now locked for deep focus.",
+                    voiceText = "Deep work mode activated! All social media apps are now locked. Good luck with your study session!"
+                )
+            } else {
+                try {
+                    val nm = appCtx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val channel = NotificationChannel(
+                            VOICE_ALERTS_CHANNEL_ID,
+                            "InstaGuard Voice & Focus Alerts",
+                            NotificationManager.IMPORTANCE_HIGH
+                        )
+                        nm.createNotificationChannel(channel)
+                    }
+                    val builder = NotificationCompat.Builder(appCtx, VOICE_ALERTS_CHANNEL_ID)
+                        .setSmallIcon(R.drawable.ic_shield)
+                        .setContentTitle("⚡ Deep Work Mode Activated!")
+                        .setContentText("All social media apps are now locked for deep focus.")
+                        .setPriority(NotificationCompat.PRIORITY_MAX)
+                        .setDefaults(NotificationCompat.DEFAULT_ALL)
+                        .setAutoCancel(true)
+                    nm.notify(3077, builder.build())
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            InstaGuardWidgetProvider.updateAllWidgets(appCtx)
+        }
+
         fun getRemainingLockMs(appKey: String, context: Context? = null): Long {
             val unlockAt = unlockTimestampMap[appKey] ?: 0L
             val now = System.currentTimeMillis()
-            val remaining = unlockAt - now
+            var perAppCooldownRemaining = unlockAt - now
 
-            if (unlockAt > 0L && remaining <= 0L) {
+            if (unlockAt > 0L && perAppCooldownRemaining <= 0L) {
                 unlockTimestampMap[appKey] = 0L
                 accumulatedUsageMap[appKey] = 0L
                 val ctx = context ?: appContext
                 ctx?.let { GuardPreferences(it).resetApp(appKey) }
-                return 0L
+                perAppCooldownRemaining = 0L
             }
 
-            return maxOf(0L, remaining)
+            val safePerApp = maxOf(0L, perAppCooldownRemaining)
+            val sleepGuardRemaining = getNightSleepRemainingMs(context)
+            val deepWorkRemaining = getDeepWorkRemainingMs(context)
+
+            return maxOf(safePerApp, maxOf(sleepGuardRemaining, deepWorkRemaining))
         }
 
         fun isAppLocked(appKey: String, context: Context? = null): Boolean {

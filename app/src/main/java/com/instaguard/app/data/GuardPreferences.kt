@@ -36,6 +36,9 @@ class GuardPreferences(context: Context) {
         const val KEY_LAST_STREAK_DATE = "last_streak_date"
         const val KEY_CUSTOM_TRACKED_PACKAGES = "custom_tracked_packages"
         const val KEY_MAINTENANCE_UNTIL_MS = "maintenance_until_ms"
+        const val KEY_ONLY_REELS_SHORTS_MODE = "only_reels_shorts_mode"
+        const val KEY_NIGHT_SLEEP_GUARD_ENABLED = "night_sleep_guard_enabled"
+        const val KEY_DEEP_WORK_UNLOCK_MS = "deep_work_unlock_ms"
 
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
@@ -192,4 +195,16 @@ class GuardPreferences(context: Context) {
     fun setScrollTotal(appKey: String, count: Int) {
         prefs.edit().putInt(scrollTotalKey(appKey), count).apply()
     }
+
+    var isOnlyReelsShortsMode: Boolean
+        get() = prefs.getBoolean(KEY_ONLY_REELS_SHORTS_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_ONLY_REELS_SHORTS_MODE, value).apply()
+
+    var isNightSleepGuardEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NIGHT_SLEEP_GUARD_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_NIGHT_SLEEP_GUARD_ENABLED, value).apply()
+
+    var deepWorkUnlockMs: Long
+        get() = prefs.getLong(KEY_DEEP_WORK_UNLOCK_MS, 0L)
+        set(value) = prefs.edit().putLong(KEY_DEEP_WORK_UNLOCK_MS, maxOf(0L, value)).apply()
 }
