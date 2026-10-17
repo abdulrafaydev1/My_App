@@ -351,7 +351,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="1h Limit • 5h Lock"
+                    android:text="30m Limit • 5h Lock"
                     android:textColor="@color/cyber_text_secondary"
                     android:textSize="11sp"
                     android:fontFamily="monospace" />
@@ -427,7 +427,7 @@
                             android:layout_marginStart="6dp"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="/ 01:00:00.000"
+                            android:text="/ 00:30:00.000"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
@@ -442,7 +442,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="01:00:00.000 left"
+                            android:text="00:30:00.000 left"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
@@ -541,7 +541,7 @@
                             android:layout_marginStart="6dp"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="/ 01:00:00.000"
+                            android:text="/ 00:30:00.000"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
@@ -556,7 +556,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="01:00:00.000 left"
+                            android:text="00:30:00.000 left"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
@@ -655,7 +655,7 @@
                             android:layout_marginStart="6dp"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="/ 01:00:00.000"
+                            android:text="/ 00:30:00.000"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
@@ -670,7 +670,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="01:00:00.000 left"
+                            android:text="00:30:00.000 left"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />
@@ -769,7 +769,7 @@
                             android:layout_marginStart="6dp"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="/ 01:00:00.000"
+                            android:text="/ 00:30:00.000"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="12sp" />
 
@@ -784,7 +784,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginBottom="2dp"
                             android:fontFamily="monospace"
-                            android:text="01:00:00.000 left"
+                            android:text="00:30:00.000 left"
                             android:textColor="@color/cyber_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold" />

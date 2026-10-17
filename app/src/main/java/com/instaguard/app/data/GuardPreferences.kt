@@ -24,8 +24,8 @@ class GuardPreferences(context: Context) {
         const val KEY_MASTER_PIN = "master_pin"
         const val DEFAULT_MASTER_PIN = "1234"
 
-        // Normal Mode: 1 Hour Limit (3,600,000 ms), 5 Hours Cooldown (18,000,000 ms)
-        const val USAGE_LIMIT_MS = 60 * 60 * 1000L // 3,600,000 ms (1 hour)
+        // Normal Mode: 30 Minutes Limit (1,800,000 ms), 5 Hours Cooldown (18,000,000 ms)
+        const val USAGE_LIMIT_MS = 1_800_000L // 30 * 60 * 1000L = 1,800,000 ms (30 minutes)
         const val COOLDOWN_DURATION_MS = 5 * 60 * 60 * 1000L // 18,000,000 ms (5 hours)
 
         // Test Mode: 1 Minute Limit (60,000 ms), 2 Minutes Cooldown (120,000 ms)

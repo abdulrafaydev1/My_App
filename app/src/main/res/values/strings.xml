@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">InstaGuard Pro</string>
-    <string name="app_tagline">Strict 1h Limit • 5h Cooldown Multi-App Guardian</string>
-    <string name="accessibility_service_description">InstaGuard monitors social media foreground time to enforce a 1-hour active usage limit and 5-hour cooldown lock period for your digital wellbeing.</string>
+    <string name="app_tagline">Strict 30m Limit • 5h Cooldown Multi-App Guardian</string>
+    <string name="accessibility_service_description">InstaGuard monitors social media foreground time to enforce a 30-minute active usage limit and 5-hour cooldown lock period for your digital wellbeing.</string>
 
     <!-- Dashboard Status -->
     <string name="service_active">PROTECTION ACTIVE</string>
@@ -39,7 +39,7 @@
 
     <!-- Lock Screen -->
     <string name="lock_screen_title">App is Locked!</string>
-    <string name="lock_screen_subtitle">1-Hour limit reached. Take a 5-Hour focus break.</string>
+    <string name="lock_screen_subtitle">30-Minute limit reached. Take a 5-Hour focus break.</string>
     <string name="lock_screen_cooldown_label">TIME REMAINING UNTIL UNLOCK</string>
     <string name="btn_go_home">Go Back to Home</string>
     <string name="lock_cooldown_finished">Cooldown completed. You may now return.</string>

@@ -104,7 +104,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:paddingHorizontal="12dp"
-                    android:text="1-Hour limit reached. Take a 5-Hour focus break."
+                    android:text="30-Minute limit reached. Take a 5-Hour focus break."
                     android:textAlignment="center"
                     android:textColor="@color/lock_text_secondary"
                     android:textSize="13sp"

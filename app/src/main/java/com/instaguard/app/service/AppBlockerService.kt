@@ -533,7 +533,7 @@ class AppBlockerService : AccessibilityService() {
             sendWarningNotification(
                 notificationId = NOTIF_ID_5MIN + appKey.hashCode(),
                 title = "⚠️ 5 Minutes Left on $appDisplayName!",
-                message = "Your 1-hour limit is almost up. Wrap up now before the 5-hour lock starts."
+                message = "Your 30-minute limit is almost up. Wrap up now before the 5-hour lock starts."
             )
         }
 
@@ -1677,7 +1677,7 @@ class AppBlockerService : AccessibilityService() {
 
                 val prefs = GuardPreferences(context)
                 val now = System.currentTimeMillis()
-                val windowStart = now - 6 * 3_600_000L // Last 6 hours (1h limit + 5h cooldown)
+                val windowStart = now - (1_800_000L + 18_000_000L) // Last 5.5 hours (30m limit + 5h cooldown)
 
                 val limitMs = prefs.getUsageLimitMs()
                 val cooldownMs = prefs.getCooldownDurationMs()

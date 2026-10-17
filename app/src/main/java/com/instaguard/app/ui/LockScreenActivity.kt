@@ -185,7 +185,7 @@ class LockScreenActivity : AppCompatActivity() {
         } else {
             binding.tvLockBadgeTitle.text = "${appName.uppercase()} FOCUS SHIELD"
             binding.tvLockTitle.text = "$appName is Locked!"
-            binding.tvLockSubtitle.text = "1-Hour limit reached. Take a 5-Hour focus break."
+            binding.tvLockSubtitle.text = "30-Minute limit reached. Take a 5-Hour focus break."
         }
     }
 

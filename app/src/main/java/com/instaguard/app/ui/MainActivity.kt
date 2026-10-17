@@ -199,7 +199,7 @@ class MainActivity : AppCompatActivity() {
             val msg = if (isChecked) {
                 "Test Mode (1m Limit / 2m Lock) Enabled"
             } else {
-                "Normal Mode (1h Limit / 5h Lock) Enabled"
+                "Normal Mode (30m Limit / 5h Lock) Enabled"
             }
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
@@ -443,7 +443,7 @@ class MainActivity : AppCompatActivity() {
             binding.imgOverallStatus.setColorFilter(Color.parseColor("#10B981"))
             binding.tvOverallStatusTitle.text = "PROTECTION ACTIVE"
             binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#10B981"))
-            binding.tvOverallStatusDesc.text = "Strict 1h limit and 5h cooldown actively enforced for all 4 apps."
+            binding.tvOverallStatusDesc.text = "Strict 30m limit and 5h cooldown actively enforced for all 4 apps."
         } else {
             binding.cardOverallStatus.strokeColor = Color.parseColor("#F59E0B")
             binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
