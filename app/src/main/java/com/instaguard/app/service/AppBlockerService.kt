@@ -79,12 +79,16 @@ class AppBlockerService : AccessibilityService() {
     private var pendingScrollToIndex = -1
     private var hadVideoVisibleBeforeScroll = false
 
-    // v6.3 YouTube Long Video 10-Second Watch State
+    // v6.5 YouTube Long Video 10-Second Watch & Feed State Machine
     @Volatile
     private var isYoutubeLongVideoTimerRunning = false
     @Volatile
     private var youtubeLongVideoStartElapsedMs = 0L
-    private var wasInYoutubeWatchMode = false
+    private var isYoutubeOnHomeFeed = true
+    private var isYoutubeWatchPlayerOpen = false
+    private var hasNotifiedForCurrentWatchSession = false
+    private var lastYoutubeHomeClickElapsedMs = 0L
+    private var lastYoutubeNotificationElapsedMs = 0L
 
     private val verifyScrollRunnable = Runnable {
         val activeKey = currentForegroundAppKey ?: return@Runnable
@@ -188,14 +192,37 @@ class AppBlockerService : AccessibilityService() {
             if (activeKey != null) {
                 // Step 4: YouTube Long Video 10-Second Watch tracking
                 if (activeKey == "YOUTUBE") {
-                    // Trigger B: Check watch mode transition every 10 ticks (~500ms)
+                    // Check watch player state every 10 ticks (~500ms)
                     if (tickCounter % 10 == 0) {
                         val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                        val inWatchMode = isYoutubeLongVideoWatchMode(root)
-                        if (inWatchMode && !wasInYoutubeWatchMode && !isYoutubeLongVideoTimerRunning) {
-                            startYoutubeLongVideoCountdown()
+                        val isHome = isYoutubeHomePageActive(root)
+                        val isShorts = isYoutubeShortsMode(root)
+                        val isPlayerExpanded = isYoutubeLongVideoPlayerExpanded(root)
+
+                        if (isHome || isShorts) {
+                            // User returned to Home feed or opened Shorts
+                            isYoutubeOnHomeFeed = isHome
+                            isYoutubeWatchPlayerOpen = false
+                            hasNotifiedForCurrentWatchSession = false
+                            lastYoutubeHomeClickElapsedMs = 0L
+                            if (isYoutubeLongVideoTimerRunning) {
+                                // Exited video before 10 seconds finished
+                                isYoutubeLongVideoTimerRunning = false
+                            }
+                        } else if (isPlayerExpanded) {
+                            isYoutubeWatchPlayerOpen = true
+                            isYoutubeOnHomeFeed = false
+                            val now = SystemClock.elapsedRealtime()
+                            // Trigger if user opened long video via Home click in the last 4 seconds
+                            if (!hasNotifiedForCurrentWatchSession && !isYoutubeLongVideoTimerRunning &&
+                                (now - lastYoutubeNotificationElapsedMs >= 4000L) &&
+                                (lastYoutubeHomeClickElapsedMs > 0L && now - lastYoutubeHomeClickElapsedMs < 4000L)
+                            ) {
+                                hasNotifiedForCurrentWatchSession = true
+                                lastYoutubeNotificationElapsedMs = now
+                                startYoutubeLongVideoCountdown()
+                            }
                         }
-                        wasInYoutubeWatchMode = inWatchMode
                     }
 
                     // Handle running countdown
@@ -220,7 +247,10 @@ class AppBlockerService : AccessibilityService() {
                     }
                 } else {
                     isYoutubeLongVideoTimerRunning = false
-                    wasInYoutubeWatchMode = false
+                    isYoutubeWatchPlayerOpen = false
+                    hasNotifiedForCurrentWatchSession = false
+                    isYoutubeOnHomeFeed = true
+                    lastYoutubeHomeClickElapsedMs = 0L
                 }
 
                 if (isAppLocked(activeKey, applicationContext)) {
@@ -263,7 +293,10 @@ class AppBlockerService : AccessibilityService() {
                 }
             } else {
                 isYoutubeLongVideoTimerRunning = false
-                wasInYoutubeWatchMode = false
+                isYoutubeWatchPlayerOpen = false
+                hasNotifiedForCurrentWatchSession = false
+                isYoutubeOnHomeFeed = true
+                lastYoutubeHomeClickElapsedMs = 0L
                 if (isPillAttached) {
                     removeFloatingPill()
                 }
@@ -366,12 +399,12 @@ class AppBlockerService : AccessibilityService() {
             }
         }
 
-        // v6.3 Trigger A: YouTube Video Item Click Detection (Instant 10s Timer Kickoff)
+        // v6.5 Trigger A: YouTube Video Item Click Detection (Delayed Watch Verification)
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             val activeKey = currentForegroundAppKey ?: return
             if (activeKey == "YOUTUBE") {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                if (!isYoutubeShortsMode(root) && !isYoutubeLongVideoTimerRunning) {
+                if (!isYoutubeShortsMode(root)) {
                     val screenHeight = resources.displayMetrics.heightPixels
                     val source = event.source
                     val rect = Rect()
@@ -383,13 +416,22 @@ class AppBlockerService : AccessibilityService() {
 
                     val isNavOrFilter = combined.contains("home") || combined.contains("shorts") ||
                         combined.contains("subscriptions") || combined.contains("you") ||
-                        combined.contains("search") || combined.contains("all") ||
-                        combined.contains("notifications")
+                        combined.contains("library") || combined.contains("search") ||
+                        combined.contains("notifications") || combined.contains("cast")
 
-                    val inMainFeedArea = source == null || (rect.centerY() > (screenHeight * 0.14).toInt() && rect.centerY() < (screenHeight * 0.88).toInt())
+                    val inMainFeedArea = source == null || (rect.centerY() > (screenHeight * 0.12).toInt() && rect.centerY() < (screenHeight * 0.90).toInt())
 
-                    if (inMainFeedArea && !isNavOrFilter) {
-                        startYoutubeLongVideoCountdown()
+                    // Only track click if we are currently on Home feed and watch player is NOT already open
+                    if (inMainFeedArea && !isNavOrFilter && !isYoutubeWatchPlayerOpen) {
+                        lastYoutubeHomeClickElapsedMs = SystemClock.elapsedRealtime()
+
+                        // Post verification checks at 500ms and 1000ms after the click to verify if watch player opened
+                        tickerHandler.postDelayed({
+                            verifyAndTriggerYoutubeLongVideo()
+                        }, 500L)
+                        tickerHandler.postDelayed({
+                            verifyAndTriggerYoutubeLongVideo()
+                        }, 1000L)
                     }
                 }
             }
@@ -1182,46 +1224,130 @@ class AppBlockerService : AccessibilityService() {
         return false
     }
 
-    private fun isYoutubeLongVideoWatchMode(root: AccessibilityNodeInfo?): Boolean {
+    private fun verifyAndTriggerYoutubeLongVideo() {
+        if (currentForegroundAppKey != "YOUTUBE") return
+        val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
+        if (isYoutubeShortsMode(root)) return
+
+        val isPlayerExpanded = isYoutubeLongVideoPlayerExpanded(root)
+        val now = SystemClock.elapsedRealtime()
+
+        if (isPlayerExpanded) {
+            isYoutubeWatchPlayerOpen = true
+            isYoutubeOnHomeFeed = false
+
+            if (!hasNotifiedForCurrentWatchSession && !isYoutubeLongVideoTimerRunning &&
+                (now - lastYoutubeNotificationElapsedMs >= 4000L) &&
+                (lastYoutubeHomeClickElapsedMs > 0L && now - lastYoutubeHomeClickElapsedMs < 4000L)
+            ) {
+                hasNotifiedForCurrentWatchSession = true
+                lastYoutubeNotificationElapsedMs = now
+                startYoutubeLongVideoCountdown()
+            }
+        }
+    }
+
+    private fun isYoutubeHomePageActive(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
         if (isYoutubeShortsMode(root)) return false
 
-        var hasWatchIndicator = false
+        var hasHomeTab = false
+        var hasHomeChips = false
+        var hasWatchCollapse = false
+
         val screenHeight = resources.displayMetrics.heightPixels
         val tempRect = Rect()
 
         scanNodes(root, maxDepth = 12) { node ->
-            if (!hasWatchIndicator) {
-                val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
-                if (id.contains("watch_player") || id.contains("player_view") ||
-                    id.contains("player_control") || id.contains("time_bar") ||
-                    id.contains("watch_while") || id.contains("collapse") ||
-                    id.contains("minimize") || id.contains("subscribe") ||
-                    id.contains("channel_bar") || id.contains("comment")
-                ) {
-                    hasWatchIndicator = true
-                    return@scanNodes
+            val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+            val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val combined = "$text $desc $id"
+
+            if (id.contains("collapse") || id.contains("minimize") ||
+                desc == "collapse" || desc == "collapse player" || desc == "minimize"
+            ) {
+                hasWatchCollapse = true
+            }
+
+            if (text == "all" || desc == "all" || combined.contains("chip_cloud") ||
+                combined.contains("feed_filter") || text == "new to you" || desc == "new to you"
+            ) {
+                node.getBoundsInScreen(tempRect)
+                if (tempRect.centerY() < screenHeight * 0.25) {
+                    hasHomeChips = true
                 }
+            }
 
-                val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
-                val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
-                val combined = "$text $desc"
+            if ((text == "home" || desc == "home") && (node.isSelected || node.isClickable)) {
+                hasHomeTab = true
+            }
+        }
 
-                val isWatchKeyword = combined.contains("minimize") || combined.contains("collapse") ||
-                    combined.contains("subtitles") || combined.contains("autoplay") ||
-                    combined.contains("save to playlist") || combined.contains("download") ||
-                    combined.contains("comments") || combined.contains("subscribe") ||
-                    (combined.contains(":") && (combined.contains("/") || combined.length in 4..9))
+        if (hasWatchCollapse) return false
+        return hasHomeChips || hasHomeTab
+    }
 
-                if (isWatchKeyword) {
-                    node.getBoundsInScreen(tempRect)
-                    if (tempRect.centerY() < screenHeight * 0.70) {
-                        hasWatchIndicator = true
-                    }
+    private fun isYoutubeLongVideoPlayerExpanded(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        if (isYoutubeShortsMode(root)) return false
+
+        var hasCollapseOrMinimize = false
+        var hasPlayerElement = false
+        var hasWatchDetails = false
+        var hasHomeChips = false
+
+        val screenHeight = resources.displayMetrics.heightPixels
+        val tempRect = Rect()
+
+        scanNodes(root, maxDepth = 14) { node ->
+            val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+            val text = node.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+            val combined = "$text $desc $id"
+
+            // 1. Collapse / Minimize button (top-left of watch player)
+            if (id.contains("collapse") || id.contains("minimize") ||
+                desc == "collapse" || desc == "collapse player" || desc == "minimize" ||
+                desc.contains("collapse")
+            ) {
+                hasCollapseOrMinimize = true
+            }
+
+            // 2. Video Player controls / time bar
+            if (id.contains("watch_player") || id.contains("player_view") ||
+                id.contains("player_control") || id.contains("time_bar") ||
+                desc.contains("enter fullscreen") || desc.contains("seek slider") ||
+                desc.contains("fast forward") || desc.contains("rewind 10")
+            ) {
+                hasPlayerElement = true
+            }
+
+            // 3. Watch page engagement elements below player
+            if (desc.contains("like this video") || desc.contains("dislike this video") ||
+                desc.contains("save to playlist") || combined.contains("save to playlist") ||
+                (desc.contains("subscribe") && desc.contains("channel")) ||
+                (id.contains("comment") && !combined.contains("post"))
+            ) {
+                hasWatchDetails = true
+            }
+
+            // 4. Home page top category chips (never present on expanded watch player)
+            if (text == "all" || desc == "all" || combined.contains("chip_cloud") ||
+                combined.contains("feed_filter") || text == "new to you" || desc == "new to you"
+            ) {
+                node.getBoundsInScreen(tempRect)
+                if (tempRect.centerY() < screenHeight * 0.25) {
+                    hasHomeChips = true
                 }
             }
         }
-        return hasWatchIndicator
+
+        if (hasHomeChips && !hasCollapseOrMinimize) {
+            return false
+        }
+
+        return hasCollapseOrMinimize || (hasPlayerElement && hasWatchDetails) || (hasPlayerElement && !hasHomeChips)
     }
 
     private fun isReelsOrWatchTabActive(appKey: String, root: AccessibilityNodeInfo?): Boolean {
