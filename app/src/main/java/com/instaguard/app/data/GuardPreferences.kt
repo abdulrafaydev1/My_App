@@ -40,12 +40,26 @@ class GuardPreferences(context: Context) {
         const val KEY_NIGHT_SLEEP_GUARD_ENABLED = "night_sleep_guard_enabled"
         const val KEY_DEEP_WORK_UNLOCK_MS = "deep_work_unlock_ms"
 
+        // v8.0 Keys & Defaults
+        const val KEY_CUSTOM_VOICE_BLOCKED_MSG = "custom_voice_blocked_msg"
+        const val DEFAULT_CUSTOM_VOICE_BLOCKED_MSG =
+            "Access denied! This app is locked for focus. Stop wasting time and get back to your goals!"
+
+        const val KEY_CUSTOM_VOICE_WARNING_MSG = "custom_voice_warning_msg"
+        const val DEFAULT_CUSTOM_VOICE_WARNING_MSG =
+            "Please wrap up now and focus on your goals!"
+
+        const val KEY_DOPAMINE_DIMMER_ENABLED = "dopamine_dimmer_enabled"
+
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
         fun dailyTotalKey(dateStr: String, appKey: String): String = "daily_total_ms_${dateStr}_${appKey.uppercase()}"
         fun emergencyKey(appKey: String): String = "emergency_used_date_${appKey.uppercase()}"
         fun scrollTodayKey(dateStr: String, appKey: String): String = "scroll_today_${dateStr}_${appKey.uppercase()}"
         fun scrollTotalKey(appKey: String): String = "scroll_total_${appKey.uppercase()}"
+        fun blockedAttemptsTodayKey(dateStr: String, appKey: String): String = "blocked_attempts_today_${dateStr}_${appKey.uppercase()}"
+        fun blockedAttemptsTotalKey(appKey: String): String = "blocked_attempts_total_${appKey.uppercase()}"
+        fun blockedAttemptsLogKey(dateStr: String): String = "blocked_attempts_log_${dateStr}"
     }
 
     /**
@@ -207,4 +221,42 @@ class GuardPreferences(context: Context) {
     var deepWorkUnlockMs: Long
         get() = prefs.getLong(KEY_DEEP_WORK_UNLOCK_MS, 0L)
         set(value) = prefs.edit().putLong(KEY_DEEP_WORK_UNLOCK_MS, maxOf(0L, value)).apply()
+
+    var customVoiceBlockedMsg: String
+        get() = prefs.getString(KEY_CUSTOM_VOICE_BLOCKED_MSG, DEFAULT_CUSTOM_VOICE_BLOCKED_MSG)
+            ?: DEFAULT_CUSTOM_VOICE_BLOCKED_MSG
+        set(value) = prefs.edit().putString(KEY_CUSTOM_VOICE_BLOCKED_MSG, value).apply()
+
+    var customVoiceWarningMsg: String
+        get() = prefs.getString(KEY_CUSTOM_VOICE_WARNING_MSG, DEFAULT_CUSTOM_VOICE_WARNING_MSG)
+            ?: DEFAULT_CUSTOM_VOICE_WARNING_MSG
+        set(value) = prefs.edit().putString(KEY_CUSTOM_VOICE_WARNING_MSG, value).apply()
+
+    var isDopamineDimmerEnabled: Boolean
+        get() = prefs.getBoolean(KEY_DOPAMINE_DIMMER_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_DOPAMINE_DIMMER_ENABLED, value).apply()
+
+    fun getBlockedAttemptsToday(dateStr: String, appKey: String): Int {
+        return prefs.getInt(blockedAttemptsTodayKey(dateStr, appKey), 0)
+    }
+
+    fun setBlockedAttemptsToday(dateStr: String, appKey: String, count: Int) {
+        prefs.edit().putInt(blockedAttemptsTodayKey(dateStr, appKey), maxOf(0, count)).apply()
+    }
+
+    fun getBlockedAttemptsTotal(appKey: String): Int {
+        return prefs.getInt(blockedAttemptsTotalKey(appKey), 0)
+    }
+
+    fun setBlockedAttemptsTotal(appKey: String, count: Int) {
+        prefs.edit().putInt(blockedAttemptsTotalKey(appKey), maxOf(0, count)).apply()
+    }
+
+    fun getBlockedAttemptsLog(dateStr: String): String {
+        return prefs.getString(blockedAttemptsLogKey(dateStr), "") ?: ""
+    }
+
+    fun setBlockedAttemptsLog(dateStr: String, log: String) {
+        prefs.edit().putString(blockedAttemptsLogKey(dateStr), log).apply()
+    }
 }

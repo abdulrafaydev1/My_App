@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import android.text.InputFilter
 import android.text.InputType
 import android.view.Gravity
@@ -29,6 +30,7 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
+import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.databinding.ActivityMainBinding
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
@@ -38,11 +40,12 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Main Dashboard Activity for InstaGuard Pro v7.0.
+ * Main Dashboard Activity for InstaGuard Pro v8.0.
  * Features a Cyber-Dark UI, live Top-Center Reel/Short counter, Focus Streak,
  * Discipline Score gamification, Any-App picker, 5-min Maintenance mode,
- * AI Voice Warnings, Only Reels & Shorts Blocker, Night Sleep Guard,
- * Instant Deep Work / Study Mode, Home Screen Widget, and analytics.
+ * Custom AI Voice Warnings, Only Reels & Shorts Blocker, Night Sleep Guard,
+ * Instant Deep Work / Study Mode with Cancel support, Last 5-Min Dopamine Tint,
+ * Weakness & Blocked Attempts Log, Home Screen Widget, and analytics.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -52,6 +55,8 @@ class MainActivity : AppCompatActivity() {
     private var statusPulseAnimator: ObjectAnimator? = null
     private var hasAnimatedEntrance = false
     private var last7DayReportRenderMs: Long = 0L
+    private var previewTts: TextToSpeech? = null
+    private var isPreviewTtsReady = false
 
     private val liveTickerRunnable = object : Runnable {
         override fun run() {
@@ -73,12 +78,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        initPreviewTts()
         applyMonospaceTypefaces()
         setupListeners()
         setupTestModeSwitch()
         setupV70FeatureControls()
+        setupV80FeatureControls()
         startStatusPulseAnimation()
         playStaggeredEntranceAnimation()
+    }
+
+    private fun initPreviewTts() {
+        try {
+            previewTts = TextToSpeech(applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    previewTts?.language = Locale.US
+                    previewTts?.setSpeechRate(0.95f)
+                    isPreviewTtsReady = true
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onResume() {
@@ -86,6 +107,7 @@ class MainActivity : AppCompatActivity() {
         AppBlockerService.isOurAppScreenOpen = true
         AppBlockerService.syncFromPrefs(this)
 
+        refreshCustomVoiceDisplay()
         updatePermissionsUI()
         updateAllAppCards()
         InstaGuardWidgetProvider.updateAllWidgets(this)
@@ -103,11 +125,20 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         statusPulseAnimator?.cancel()
+        try {
+            previewTts?.stop()
+            previewTts?.shutdown()
+            previewTts = null
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun applyMonospaceTypefaces() {
         val monospaceViews = listOf(
             binding.tvFocusStreak, binding.tvDisciplineScore, binding.tvDeepWorkStatus,
+            binding.tvCurrentCustomVoice,
+            binding.tvWeaknessTotalToday, binding.tvWeaknessAppBreakdown, binding.tvWeaknessImpulseLog,
             binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus, binding.tvInstagramScrolls,
             binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus, binding.tvYouTubeScrolls,
             binding.tvFacebookTimer, binding.tvFacebookLimit, binding.tvFacebookStatus, binding.tvFacebookScrolls,
@@ -146,6 +177,8 @@ class MainActivity : AppCompatActivity() {
             binding.cardOnlyReelsShorts,
             binding.cardNightSleepGuard,
             binding.cardDeepWorkMode,
+            binding.cardDopamineDimmer,
+            binding.cardCustomVoiceAlert,
             binding.btnMasterPinSettings,
             binding.btnAddCustomApp,
             binding.btnMaintenanceMode,
@@ -155,6 +188,7 @@ class MainActivity : AppCompatActivity() {
             binding.cardFacebook,
             binding.cardTikTok,
             binding.cardCustomApps,
+            binding.cardWeaknessLog,
             binding.cardAnalyticsReport
         )
 
@@ -255,6 +289,143 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    /**
+     * v8.0 Feature Controls:
+     * - Feature 1: Cancel / Stop Study Mode Button (btnCancelStudyMode)
+     * - Feature 2: Custom Voice Alert Message (Edit & Live Preview)
+     * - Feature 3: Last 5-Min Dopamine Dimmer Tint Toggle (switchDopamineDimmer)
+     */
+    private fun setupV80FeatureControls() {
+        // 1. Cancel / Stop Study Mode Button
+        binding.btnCancelStudyMode.setOnClickListener {
+            if (!AppBlockerService.isDeepWorkModeActive(this)) {
+                Toast.makeText(this, "ℹ️ Study Mode is not currently active.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            AlertDialog.Builder(this)
+                .setTitle("Stop Study Mode?")
+                .setMessage("Are you sure you want to cancel your active Deep Work / Study Mode lock?")
+                .setPositiveButton("Yes, Cancel Now") { dialog, _ ->
+                    AppBlockerService.cancelDeepWorkMode(this)
+                    updateAllAppCards()
+                    Toast.makeText(this, "✅ Deep Work / Study Mode Cancelled!", Toast.LENGTH_SHORT).show()
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Keep Focusing") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .show()
+        }
+
+        // 2. Last 5-Min Dopamine Dimmer Tint Toggle
+        binding.switchDopamineDimmer.setOnCheckedChangeListener(null)
+        binding.switchDopamineDimmer.isChecked = guardManager.prefs.isDopamineDimmerEnabled
+        binding.switchDopamineDimmer.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isDopamineDimmerEnabled = isChecked
+            val msg = if (isChecked) {
+                "🌑 Last 5-Min Dopamine Dimmer Tint Enabled"
+            } else {
+                "🌑 Last 5-Min Dopamine Dimmer Tint Disabled"
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        // 3. Custom Voice Alert Message Card
+        refreshCustomVoiceDisplay()
+        binding.btnEditCustomVoice.setOnClickListener {
+            showEditCustomVoiceDialog()
+        }
+        binding.btnTestCustomVoice.setOnClickListener {
+            testCustomVoiceMessageNow()
+        }
+    }
+
+    private fun refreshCustomVoiceDisplay() {
+        val currentMsg = guardManager.prefs.customVoiceBlockedMsg.trim()
+            .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_BLOCKED_MSG }
+        binding.tvCurrentCustomVoice.text = "“$currentMsg”"
+    }
+
+    private fun showEditCustomVoiceDialog() {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(22f), dpToPx(14f), dpToPx(22f), dpToPx(8f))
+        }
+
+        val tvBlockedLabel = TextView(this).apply {
+            text = "Voice Message When App Is Blocked / Locked:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 12.5f
+        }
+        val etBlockedVoice = EditText(this).apply {
+            setText(guardManager.prefs.customVoiceBlockedMsg)
+            hint = "Voice message when app is blocked..."
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#64748B"))
+            textSize = 14f
+        }
+
+        val tvWarningLabel = TextView(this).apply {
+            text = "Extra Message on 10m / 5m / 1m Warning:"
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 12.5f
+            setPadding(0, dpToPx(12f), 0, 0)
+        }
+        val etWarningVoice = EditText(this).apply {
+            setText(guardManager.prefs.customVoiceWarningMsg)
+            hint = "Extra message on 10m/5m/1m warning..."
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#64748B"))
+            textSize = 14f
+        }
+
+        container.addView(tvBlockedLabel)
+        container.addView(etBlockedVoice)
+        container.addView(tvWarningLabel)
+        container.addView(etWarningVoice)
+
+        AlertDialog.Builder(this)
+            .setTitle("🗣️ Edit Custom Voice Alert")
+            .setView(container)
+            .setPositiveButton("💾 Save Voice") { dialog, _ ->
+                val newBlocked = etBlockedVoice.text.toString().trim()
+                    .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_BLOCKED_MSG }
+                val newWarning = etWarningVoice.text.toString().trim()
+                    .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_WARNING_MSG }
+
+                guardManager.prefs.customVoiceBlockedMsg = newBlocked
+                guardManager.prefs.customVoiceWarningMsg = newWarning
+                refreshCustomVoiceDisplay()
+                Toast.makeText(this, "✅ Custom Voice Message Saved!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNeutralButton("🔄 Reset Default") { dialog, _ ->
+                guardManager.prefs.customVoiceBlockedMsg = GuardPreferences.DEFAULT_CUSTOM_VOICE_BLOCKED_MSG
+                guardManager.prefs.customVoiceWarningMsg = GuardPreferences.DEFAULT_CUSTOM_VOICE_WARNING_MSG
+                refreshCustomVoiceDisplay()
+                Toast.makeText(this, "🔄 Default Voice Messages Restored!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun testCustomVoiceMessageNow() {
+        val blockedMsg = guardManager.prefs.customVoiceBlockedMsg.trim()
+            .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_BLOCKED_MSG }
+            .replace("{app}", "Instagram", ignoreCase = true)
+
+        val spokenByService = AppBlockerService.previewCustomVoice(blockedMsg)
+        if (!spokenByService) {
+            if (previewTts == null || !isPreviewTtsReady) {
+                initPreviewTts()
+            }
+            previewTts?.speak(blockedMsg, TextToSpeech.QUEUE_FLUSH, null, "preview_voice_now")
+        }
+        Toast.makeText(this, "🔊 Speaking Custom Voice Alert...", Toast.LENGTH_SHORT).show()
     }
 
     private fun bindNightSleepSwitchListener() {
@@ -411,6 +582,7 @@ class MainActivity : AppCompatActivity() {
         // Refresh Button
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
+            refreshCustomVoiceDisplay()
             updatePermissionsUI()
             updateAllAppCards()
             InstaGuardWidgetProvider.updateAllWidgets(this)
@@ -441,14 +613,19 @@ class MainActivity : AppCompatActivity() {
         val limitMs = prefs.getUsageLimitMs()
         val cooldownMs = prefs.getCooldownDurationMs()
 
-        // v7.0 Feature 4: Live Deep Work / Study Mode Status Countdown
-        val deepWorkRem = AppBlockerService.getDeepWorkRemainingMs(this)
-        if (deepWorkRem > 0L) {
+        // v7.0 / v8.0 Feature 1: Live Deep Work / Study Mode Status Countdown & Cancel Button
+        if (AppBlockerService.isDeepWorkModeActive(this)) {
+            val deepWorkRem = AppBlockerService.getDeepWorkRemainingMs(this)
             binding.tvDeepWorkStatus.text = "🔥 ACTIVE STUDY LOCK: ${guardManager.formatWithMillis(deepWorkRem)} remaining"
             binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#EF4444"))
+            binding.btnCancelStudyMode.visibility = View.VISIBLE
+            binding.btnCancelStudyMode.isEnabled = true
+            binding.btnCancelStudyMode.alpha = 1.0f
         } else {
-            binding.tvDeepWorkStatus.text = "Status: Ready for Deep Work Session"
+            binding.tvDeepWorkStatus.text = "No active Study Mode session"
             binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#F59E0B"))
+            binding.btnCancelStudyMode.visibility = View.VISIBLE
+            binding.btnCancelStudyMode.alpha = 0.5f
         }
 
         // Feature 3: Focus Streak & Discipline Score Gamification
@@ -513,8 +690,32 @@ class MainActivity : AppCompatActivity() {
         // Feature 4 C: Custom Apps Card
         updateCustomAppsCard()
 
+        // v8.0 Feature 4: Weakness & Blocked Attempts Log Card
+        updateWeaknessImpulseCard()
+
         // 5. Usage Analytics Dashboard (Feature 5)
         updateAnalyticsDashboard()
+    }
+
+    private fun updateWeaknessImpulseCard() {
+        val totalBlockedToday = AppBlockerService.getTotalBlockedAttemptsToday(this)
+        binding.tvWeaknessTotalToday.text = "🚫 Total Blocked Attempts Today: $totalBlockedToday"
+
+        val igBlocked = AppBlockerService.getBlockedAttemptsToday("INSTAGRAM", this)
+        val ytBlocked = AppBlockerService.getBlockedAttemptsToday("YOUTUBE", this)
+        val fbBlocked = AppBlockerService.getBlockedAttemptsToday("FACEBOOK", this)
+        val ttBlocked = AppBlockerService.getBlockedAttemptsToday("TIKTOK", this)
+
+        binding.tvWeaknessAppBreakdown.text = "IG: $igBlocked  •  YT: $ytBlocked  •  FB: $fbBlocked  •  TT: $ttBlocked"
+
+        val logText = AppBlockerService.getBlockedAttemptsLogToday(this)
+        if (logText.isBlank() || totalBlockedToday == 0) {
+            binding.tvWeaknessImpulseLog.text = "✅ 0 Blocked Attempts Today — 100% Pure Discipline!"
+            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#10B981"))
+        } else {
+            binding.tvWeaknessImpulseLog.text = logText
+            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#FCA5A5"))
+        }
     }
 
     private fun renderAppCard(
@@ -535,7 +736,8 @@ class MainActivity : AppCompatActivity() {
 
         val todayScrolls = AppBlockerService.getScrollToday(appKey, this)
         val totalScrolls = AppBlockerService.getScrollTotal(appKey, this)
-        tvScrolls.text = "🎬 Today's Scrolls: $todayScrolls  •  All-Time: $totalScrolls"
+        val blockedToday = AppBlockerService.getBlockedAttemptsToday(appKey, this)
+        tvScrolls.text = "🎬 Today's Scrolls: $todayScrolls  •  🚫 Blocked Opens: $blockedToday  •  All-Time: $totalScrolls"
 
         if (lockRemaining > 0L) {
             // LOCKED STATE (Crimson Red Glowing Border)

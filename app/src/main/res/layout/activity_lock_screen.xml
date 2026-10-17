@@ -169,6 +169,20 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <!-- v8.0 Feature 4: Blocked Attempts Today Badge -->
+                <TextView
+                    android:id="@+id/tvBlockedAttemptsBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:fontFamily="monospace"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:text="🚫 Blocked Attempts Today for App: 0"
+                    android:textColor="#FCA5A5"
+                    android:textSize="11.5sp"
+                    android:textStyle="bold" />
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

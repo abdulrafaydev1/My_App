@@ -187,6 +187,9 @@ class LockScreenActivity : AppCompatActivity() {
     }
 
     private fun applyDynamicTexts() {
+        val blockedToday = AppBlockerService.getBlockedAttemptsToday(lockedAppKey, this)
+        binding.tvBlockedAttemptsBadge.text = "🚫 Blocked Attempts Today for $appName: $blockedToday"
+
         val warning = tamperWarningMessage
         if (!warning.isNullOrEmpty()) {
             binding.tvLockBadgeTitle.text = "ANTI-TAMPER PROTECTION SHIELD"
@@ -209,6 +212,7 @@ class LockScreenActivity : AppCompatActivity() {
 
     private fun applyMonospaceTypeface() {
         binding.tvCountdownTimer.typeface = Typeface.MONOSPACE
+        binding.tvBlockedAttemptsBadge.typeface = Typeface.MONOSPACE
     }
 
     /**

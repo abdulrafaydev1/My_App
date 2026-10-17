@@ -52,11 +52,13 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * High-performance AccessibilityService that monitors Instagram, YouTube, Facebook,
  * and TikTok independently in real-time with millisecond precision.
- * v7.0 Master Edition Features:
+ * v8.0 Master Edition Features:
  * - Monotonic 50ms Delta Stopwatch Engine (SystemClock.elapsedRealtime) with zero timer drift.
  * - Strict 30-minute usage limit and hardened 5-hour cooldown lock per app.
- * - AI Voice Warnings (TextToSpeech) paired with High-Priority Notifications (Notification-First).
- * - Only Reels & Shorts Blocker Mode, Night Sleep Guard (11:30 PM - 6:00 AM), and Deep Work Mode.
+ * - AI Voice Warnings (TextToSpeech) with Custom Voice Alert Messages & Notification-First rule.
+ * - Only Reels & Shorts Blocker Mode, Night Sleep Guard (11:30 PM - 6:00 AM), and Deep Work Mode with Cancel support.
+ * - Last 5-Minute Dopamine Killer Dark/Red Warning Tint Overlay (non-touchable, zero flicker).
+ * - Weakness & Blocked Attempts Log with 5-second debounce.
  * - Midnight Auto-Reset (12:00 AM) & Daily History Archiving.
  * - Emergency 5-Minute Master PIN Bypass support.
  * - Layer 1: OS-level UsageEvents reconstruction when data is empty.
@@ -75,11 +77,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastScrollsText = ""
     private var lastTimerText = ""
 
-    // v7.0 TextToSpeech & Debounce State
+    // v7.0 / v8.0 TextToSpeech, Dopamine Dimmer & Blocked Attempt Debounce State
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     private var lastBlockedVoiceAlertElapsedMs = 0L
     private var lastReelsBlockAlertElapsedMs = 0L
+    private var lastBlockedAttemptLogElapsedMs = 0L
+    private var lastDopamineTintColor = 0
+    private var lastDopamineTintUpdateElapsedMs = 0L
 
     // v6.3 Post-Scroll Settled Verification State
     private var lastScrollCountElapsedMs = 0L
@@ -172,6 +177,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             if (pm != null && !pm.isInteractive) {
                 currentForegroundAppKey = null
                 removeFloatingPill()
+                hideDopamineTintOverlay()
                 tickerHandler.postDelayed(this, 50L)
                 return
             }
@@ -267,6 +273,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 if (isAppLocked(activeKey, applicationContext)) {
                     currentForegroundAppKey = null
                     removeFloatingPill()
+                    hideDopamineTintOverlay()
+                    recordBlockedOpenAttempt(activeKey)
                     stopAllMediaPlayback()
                     launchLockScreen(activeKey)
                 } else {
@@ -317,6 +325,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     val limitMs = prefs.getUsageLimitMs()
                     val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
                     updateFloatingPill(activeKey, remainingAllowance)
+                    updateDopamineTintOverlay(activeKey, remainingAllowance)
 
                     // Smart Warning Notifications + Voice Alerts (10-Min, 5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
@@ -324,6 +333,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     if (updatedUsage >= limitMs) {
                         Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
                         removeFloatingPill()
+                        hideDopamineTintOverlay()
                         val cooldownMs = prefs.getCooldownDurationMs()
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
@@ -348,6 +358,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 if (isPillAttached) {
                     removeFloatingPill()
                 }
+                hideDopamineTintOverlay()
             }
 
             // 5. Periodic auto-checkpoint persistence every 40 ticks (~2000ms)
@@ -581,6 +592,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 currentForegroundAppKey?.let { saveStateToPrefs(it) }
                 currentForegroundAppKey = null
                 removeFloatingPill()
+                hideDopamineTintOverlay()
             }
             return
         }
@@ -592,6 +604,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 Log.w(TAG, "[$detectedKey] Opened during active cooldown lock. Enforcing LockScreen.")
                 currentForegroundAppKey = null
                 removeFloatingPill()
+                hideDopamineTintOverlay()
+                recordBlockedOpenAttempt(detectedKey)
                 stopAllMediaPlayback()
                 launchLockScreen(detectedKey)
             } else {
@@ -604,12 +618,27 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 val usedMs = accumulatedUsageMap[detectedKey] ?: 0L
                 val remainingAllowance = maxOf(0L, limitMs - usedMs)
                 showFloatingScrollCounterPill(detectedKey, remainingAllowance)
+                updateDopamineTintOverlay(detectedKey, remainingAllowance)
             }
         } else {
             // User switched to another real application or Home Launcher
             currentForegroundAppKey?.let { saveStateToPrefs(it) }
             currentForegroundAppKey = null
             removeFloatingPill()
+            hideDopamineTintOverlay()
+        }
+    }
+
+    fun speakImmediate(voiceText: String) {
+        tickerHandler.post {
+            try {
+                if (tts == null) {
+                    initTextToSpeech()
+                }
+                tts?.speak(voiceText, TextToSpeech.QUEUE_FLUSH, null, "tts_preview_${System.currentTimeMillis()}")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -677,7 +706,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * v7.0 Feature 1: Fires Notification + AI Voice Warning at 10 Minutes, 5 Minutes, and 1 Minute remaining.
+     * v7.0 / v8.0: Fires Notification + Custom AI Voice Warning at 10 Minutes, 5 Minutes, and 1 Minute remaining.
      */
     private fun checkAndTriggerWarningNotifications(appKey: String, usedMs: Long, limitMs: Long) {
         val remainingMs = limitMs - usedMs
@@ -688,6 +717,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         val trackedApp = TrackedApp.fromKey(appKey)
         val appName = trackedApp?.displayName ?: appKey
+        val customWarnSuffix = prefs.customVoiceWarningMsg.trim()
+            .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_WARNING_MSG }
 
         // 1. 10-Minute Warning Alert
         if (remainingMs in (threshold5Min + 1)..threshold10Min && warned10MinMap[appKey] != true) {
@@ -695,8 +726,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             fireNotificationThenVoice(
                 notificationId = 3010,
                 title = "⏳ 10 Minutes Left on $appName!",
-                message = "Only 10 minutes remaining before your 5-hour focus lock.",
-                voiceText = "Attention! You have 10 minutes left on $appName before it locks for 5 hours."
+                message = "Only 10 minutes remaining before your 5-hour focus lock. $customWarnSuffix",
+                voiceText = "Attention! Only 10 minutes left on $appName. $customWarnSuffix"
             )
         }
 
@@ -707,8 +738,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             fireNotificationThenVoice(
                 notificationId = 3005,
                 title = "⚠️ 5 Minutes Left on $appName!",
-                message = "Your 30-minute limit is almost up. Wrap up now!",
-                voiceText = "Warning! Only 5 minutes remaining on $appName. Please wrap up now."
+                message = "Your 30-minute limit is almost up. $customWarnSuffix",
+                voiceText = "Attention! Only 5 minutes left on $appName. $customWarnSuffix"
             )
         }
 
@@ -720,8 +751,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             fireNotificationThenVoice(
                 notificationId = 3001,
                 title = "🚨 Final 1 Minute on $appName!",
-                message = "Locking $appName for 5 hours in 60 seconds!",
-                voiceText = "Final warning! Only 1 minute left on $appName. Locking in 60 seconds."
+                message = "Locking $appName for 5 hours in 60 seconds! $customWarnSuffix",
+                voiceText = "Attention! Only 1 minute left on $appName. $customWarnSuffix"
             )
         }
     }
@@ -742,8 +773,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     prefs.setAccumulatedUsage(key, 0L)
                 }
             }
-            // Feature 1: Reset today's scroll count on midnight
+            // Feature 1: Reset today's scroll count and blocked attempts on midnight
             scrollCountTodayMap.clear()
+            blockedAttemptsTodayMap.clear()
 
             // Reset warning notification flags
             warned10MinMap.clear()
@@ -870,8 +902,47 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * v8.0 Feature 4: Records every attempt to open a locked app with a strict 5-second debounce.
+     */
+    private fun recordBlockedOpenAttempt(appKey: String) {
+        val nowElapsed = SystemClock.elapsedRealtime()
+        if (nowElapsed - lastBlockedAttemptLogElapsedMs < 5000L) return
+        lastBlockedAttemptLogElapsedMs = nowElapsed
+
+        val tracked = TrackedApp.fromKey(appKey)
+        val appDisplayName = tracked?.displayName ?: run {
+            try {
+                val pm = packageManager
+                val info = pm.getApplicationInfo(appKey, 0)
+                pm.getApplicationLabel(info).toString()
+            } catch (e: Exception) {
+                appKey
+            }
+        }
+
+        val todayStr = getTodayDateStr()
+        val todayCount = (blockedAttemptsTodayMap[appKey] ?: prefs.getBlockedAttemptsToday(todayStr, appKey)) + 1
+        val totalCount = (blockedAttemptsTotalMap[appKey] ?: prefs.getBlockedAttemptsTotal(appKey)) + 1
+        blockedAttemptsTodayMap[appKey] = todayCount
+        blockedAttemptsTotalMap[appKey] = totalCount
+
+        prefs.setBlockedAttemptsToday(todayStr, appKey, todayCount)
+        prefs.setBlockedAttemptsTotal(appKey, totalCount)
+
+        val timeStr = SimpleDateFormat("hh:mm a", Locale.US).format(Date())
+        val newEntry = "$timeStr • Tried opening $appDisplayName (Locked)"
+        val existingLog = prefs.getBlockedAttemptsLog(todayStr)
+        val updatedLines = mutableListOf(newEntry)
+        if (existingLog.isNotBlank()) {
+            existingLog.lines().filter { it.isNotBlank() }.take(7).forEach { updatedLines.add(it) }
+        }
+        prefs.setBlockedAttemptsLog(todayStr, updatedLines.joinToString("\n"))
+    }
+
     private fun launchLockScreen(appKey: String) {
         removeFloatingPill()
+        hideDopamineTintOverlay()
         val tracked = TrackedApp.fromKey(appKey)
         val appDisplayName = tracked?.displayName ?: run {
             try {
@@ -918,15 +989,18 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             killPipWindowsIfAny()
         }, 240L)
 
-        // v7.0 Feature 1D.4: Notification-First + AI Voice Warning on Blocked App Open / Lock Trigger
+        // v7.0 / v8.0 Feature 2: Notification-First + Custom AI Voice Warning on Blocked App Open / Lock Trigger
         val nowElapsed = SystemClock.elapsedRealtime()
         if (nowElapsed - lastBlockedVoiceAlertElapsedMs >= 4000L) {
             lastBlockedVoiceAlertElapsedMs = nowElapsed
+            val customBlockedMsg = prefs.customVoiceBlockedMsg.trim()
+                .ifEmpty { GuardPreferences.DEFAULT_CUSTOM_VOICE_BLOCKED_MSG }
+                .replace("{app}", appDisplayName, ignoreCase = true)
             fireNotificationThenVoice(
                 notificationId = 3099,
                 title = "🔒 $appDisplayName is Blocked!",
-                message = "$appDisplayName is locked for focus. Stay disciplined!",
-                voiceText = "Access denied! $appDisplayName is currently locked for focus. Get back to your goals!"
+                message = customBlockedMsg,
+                voiceText = customBlockedMsg
             )
         }
 
@@ -956,6 +1030,110 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         return getAllTrackedKeys().any { getLiveUsageMs(it, applicationContext) > 0L }
     }
 
+    /**
+     * v8.0 Feature 3: Non-Touchable Full-Screen Dopamine Dimmer Tint Overlay.
+     * Added to WindowManager ONCE below the Top-Center Floating Pill so the pill stays bright on top
+     * and never flickers.
+     */
+    private fun createDopamineTintLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+    }
+
+    private fun ensureDopamineTintOverlayAttached() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
+        if (isDopamineTintAttached && dopamineTintOverlayView != null) return
+
+        val tintView = View(this).apply {
+            setBackgroundColor(Color.parseColor("#55280505"))
+            visibility = View.GONE
+        }
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            if (wm != null) {
+                wm.addView(tintView, createDopamineTintLayoutParams())
+                dopamineTintOverlayView = tintView
+                isDopamineTintAttached = true
+                lastDopamineTintColor = Color.parseColor("#55280505")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to attach dopamine tint overlay: ${e.message}")
+            dopamineTintOverlayView = null
+            isDopamineTintAttached = false
+        }
+    }
+
+    private fun updateDopamineTintOverlay(activeKey: String, remainingMs: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            hideDopamineTintOverlay()
+            return
+        }
+        if (!prefs.isDopamineDimmerEnabled || isOurAppScreenOpen || activeKey.isEmpty()) {
+            hideDopamineTintOverlay()
+            return
+        }
+
+        val isTestMode = prefs.isTestMode
+        val warningWindowMs = if (isTestMode) 20_000L else 300_000L // Last 5 Minutes (or 20s in Test Mode)
+        val finalMinuteThresholdMs = if (isTestMode) 10_000L else 60_000L // Final 1 Minute (or 10s in Test Mode)
+
+        if (!isAppLocked(activeKey, applicationContext) && remainingMs in 1L..warningWindowMs) {
+            if (!isDopamineTintAttached || dopamineTintOverlayView == null) {
+                ensureDopamineTintOverlayAttached()
+            }
+            val view = dopamineTintOverlayView ?: return
+            val targetColor = if (remainingMs <= finalMinuteThresholdMs) {
+                Color.parseColor("#773B0707") // Deeper Warning Red Dimmer (Final 1 Minute)
+            } else {
+                Color.parseColor("#55280505") // Subtle Dark Crimson/Amber Dopamine Dimmer (5m down to 1m)
+            }
+
+            val nowElapsed = SystemClock.elapsedRealtime()
+            if (view.visibility != View.VISIBLE) {
+                view.setBackgroundColor(targetColor)
+                lastDopamineTintColor = targetColor
+                lastDopamineTintUpdateElapsedMs = nowElapsed
+                view.visibility = View.VISIBLE
+            } else if (targetColor != lastDopamineTintColor && nowElapsed - lastDopamineTintUpdateElapsedMs >= 1000L) {
+                view.setBackgroundColor(targetColor)
+                lastDopamineTintColor = targetColor
+                lastDopamineTintUpdateElapsedMs = nowElapsed
+            }
+        } else {
+            hideDopamineTintOverlay()
+        }
+    }
+
+    private fun hideDopamineTintOverlay() {
+        val view = dopamineTintOverlayView
+        if (view != null && view.visibility == View.VISIBLE) {
+            view.visibility = View.GONE
+        }
+    }
+
+    private fun removeDopamineTintOverlayCompletely() {
+        val view = dopamineTintOverlayView
+        if (isDopamineTintAttached && view != null) {
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                wm?.removeView(view)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing dopamine tint overlay: ${e.message}")
+            }
+            isDopamineTintAttached = false
+            dopamineTintOverlayView = null
+            lastDopamineTintColor = 0
+        }
+    }
+
     private fun createPillLayoutParams(): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -976,6 +1154,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             hideFloatingPill()
             return
         }
+
+        // Attach Dopamine Tint Overlay FIRST (once) so the Top-Center Floating Pill is always above it in Z-order
+        ensureDopamineTintOverlayAttached()
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
@@ -1625,6 +1806,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     override fun onInterrupt() {
         removeFloatingPill()
+        hideDopamineTintOverlay()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
     }
@@ -1641,6 +1823,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             e.printStackTrace()
         }
         removeFloatingPillCompletely()
+        removeDopamineTintOverlayCompletely()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -1700,6 +1883,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         val customTrackedPackages = ConcurrentHashMap.newKeySet<String>()
         val scrollCountTodayMap = ConcurrentHashMap<String, Int>()
         val scrollCountTotalMap = ConcurrentHashMap<String, Int>()
+        val blockedAttemptsTodayMap = ConcurrentHashMap<String, Int>()
+        val blockedAttemptsTotalMap = ConcurrentHashMap<String, Int>()
 
         @Volatile
         var maintenanceUntilMs: Long = 0L
@@ -1733,6 +1918,12 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         @Volatile
         var isPillAttached: Boolean = false
+
+        @Volatile
+        var dopamineTintOverlayView: View? = null
+
+        @Volatile
+        var isDopamineTintAttached: Boolean = false
 
         fun getTodayDateStr(): String {
             return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -1771,6 +1962,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 val daily = prefs.getDailyTotal(todayStr, key)
                 val scrollToday = prefs.getScrollToday(todayStr, key)
                 val scrollTotal = prefs.getScrollTotal(key)
+                val blockedToday = prefs.getBlockedAttemptsToday(todayStr, key)
+                val blockedTotal = prefs.getBlockedAttemptsTotal(key)
 
                 if (unlock > 0L && unlock <= now) {
                     accumulatedUsageMap[key] = 0L
@@ -1786,6 +1979,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 dailyTotalMap[key] = daily
                 scrollCountTodayMap[key] = scrollToday
                 scrollCountTotalMap[key] = scrollTotal
+                blockedAttemptsTodayMap[key] = blockedToday
+                blockedAttemptsTotalMap[key] = blockedTotal
             }
 
             // Only reconstruct from OS system events if SharedPreferences is 100% empty
@@ -1814,6 +2009,39 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 total += getScrollToday(key, context)
             }
             return total
+        }
+
+        fun getBlockedAttemptsToday(appKey: String, context: Context? = null): Int {
+            val inMem = blockedAttemptsTodayMap[appKey]
+            if (inMem != null) return inMem
+            val ctx = context ?: appContext
+            return ctx?.let { GuardPreferences(it).getBlockedAttemptsToday(getTodayDateStr(), appKey) } ?: 0
+        }
+
+        fun getBlockedAttemptsTotal(appKey: String, context: Context? = null): Int {
+            val inMem = blockedAttemptsTotalMap[appKey]
+            if (inMem != null) return inMem
+            val ctx = context ?: appContext
+            return ctx?.let { GuardPreferences(it).getBlockedAttemptsTotal(appKey) } ?: 0
+        }
+
+        fun getTotalBlockedAttemptsToday(context: Context? = null): Int {
+            var total = 0
+            for (key in getAllTrackedKeys()) {
+                total += getBlockedAttemptsToday(key, context)
+            }
+            return total
+        }
+
+        fun getBlockedAttemptsLogToday(context: Context? = null): String {
+            val ctx = context ?: appContext ?: return ""
+            return GuardPreferences(ctx).getBlockedAttemptsLog(getTodayDateStr())
+        }
+
+        fun previewCustomVoice(voiceText: String): Boolean {
+            val service = activeServiceInstance ?: return false
+            service.speakImmediate(voiceText)
+            return true
         }
 
         /**
@@ -2059,6 +2287,20 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 return 0L
             }
             return maxOf(0L, rem)
+        }
+
+        fun isDeepWorkModeActive(context: Context? = null): Boolean {
+            if (context != null) {
+                return getDeepWorkRemainingMs(context) > 0L
+            }
+            return System.currentTimeMillis() < deepWorkUnlockAtMs || getDeepWorkRemainingMs() > 0L
+        }
+
+        fun cancelDeepWorkMode(context: Context) {
+            deepWorkUnlockAtMs = 0L
+            val prefs = context.getSharedPreferences(GuardPreferences.PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putLong("deep_work_unlock_ms", 0L).apply()
+            InstaGuardWidgetProvider.updateAllWidgets(context.applicationContext)
         }
 
         fun activateDeepWorkMode(context: Context, durationMs: Long) {

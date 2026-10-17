@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v7.0 (AI Voice &amp; Focus Suite)"
+                        android:text="InstaGuard Pro v8.0 (Custom Voice &amp; Dopamine Shield)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -461,6 +461,157 @@
                             android:textStyle="bold"
                             app:cornerRadius="12dp"
                             app:strokeColor="#F59E0B"
+                            app:strokeWidth="1dp" />
+                    </LinearLayout>
+
+                    <!-- v8.0 Feature 1: Cancel / Stop Study Mode Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnCancelStudyMode"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="42dp"
+                        android:layout_marginTop="8dp"
+                        android:text="⏹️ Cancel / Stop Study Mode"
+                        android:textColor="#EF4444"
+                        android:textSize="11.5sp"
+                        android:textStyle="bold"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="#EF4444"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- v8.0 Feature 3: Last 5-Min Dopamine Dimmer Tint Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardDopamineDimmer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🌑 Last 5-Min Dopamine Dimmer Tint"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Applies a dark red warning tint over Reels/Videos during the final 5 minutes before lock"
+                            android:textColor="@color/cyber_text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchDopamineDimmer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- v8.0 Feature 2: Custom Voice Alert Message Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardCustomVoiceAlert"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🗣️ Custom Voice Alert Message"
+                        android:textColor="@color/cyber_text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Personalize the AI voice line spoken when an app locks or during 10m/5m/1m warnings"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/tvCurrentCustomVoice"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@color/cyber_bg"
+                        android:fontFamily="monospace"
+                        android:padding="10dp"
+                        android:text="“Access denied! This app is locked for focus. Stop wasting time and get back to your goals!”"
+                        android:textColor="#38BDF8"
+                        android:textSize="11.5sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnEditCustomVoice"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_marginEnd="6dp"
+                            android:layout_weight="1"
+                            android:text="✏️ Edit Voice Message"
+                            android:textColor="#38BDF8"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp"
+                            app:strokeColor="#38BDF8"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnTestCustomVoice"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_marginStart="6dp"
+                            android:layout_weight="1"
+                            android:text="🔊 Test Voice Now"
+                            android:textColor="#10B981"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp"
+                            app:strokeColor="#10B981"
                             app:strokeWidth="1dp" />
                     </LinearLayout>
                 </LinearLayout>
@@ -1052,6 +1203,86 @@
                         android:lineSpacingExtra="2dp"
                         android:text="No custom apps added yet. Tap '+ Add Custom App' to monitor any app."
                         android:textColor="@color/cyber_text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- v8.0 Feature 4: Weakness & Blocked Attempts Log Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardWeaknessLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/cyber_stroke"
+                app:cardBackgroundColor="@color/cyber_surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="🕵️ Weakness &amp; Impulse Tracker"
+                            android:textColor="@color/cyber_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="4dp"
+                            android:text="IMPULSE SHIELD"
+                            android:textColor="#EF4444"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvWeaknessTotalToday"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="🚫 Total Blocked Attempts Today: 0"
+                        android:textColor="#F87171"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvWeaknessAppBreakdown"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:text="IG: 0  •  YT: 0  •  FB: 0  •  TT: 0"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvWeaknessImpulseLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@color/cyber_bg"
+                        android:fontFamily="monospace"
+                        android:lineSpacingExtra="4dp"
+                        android:padding="12dp"
+                        android:text="✅ 0 Blocked Attempts Today — 100% Pure Discipline!"
+                        android:textColor="#10B981"
                         android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
