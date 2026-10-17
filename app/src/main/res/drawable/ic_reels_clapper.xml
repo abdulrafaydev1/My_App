@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Clapperboard Outline & Slanted Stripes -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M19,4H5C3.9,4 3,4.9 3,6v12c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V6C21,4.9 20.1,4 19,4zM19,6l-1.6,3H15l1.6,-3H19zM12.6,6l-1.6,3H8.6L10.2,6H12.6zM6.2,6L4.6,9H4V6H6.2zM19,18H5v-7h14V18z" />
+    <!-- Center Play Triangle -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10,12v5l4.5,-2.5z" />
+</vector>

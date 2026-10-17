@@ -30,6 +30,8 @@ import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -65,6 +67,8 @@ class AppBlockerService : AccessibilityService() {
     private var tickCounter = 0
     private var lastTamperBlockMs = 0L
     private var lastPillText = ""
+    private var lastScrollsText = ""
+    private var lastTimerText = ""
 
     // v6.3 Post-Scroll Settled Verification State
     private var lastScrollCountElapsedMs = 0L
@@ -769,64 +773,132 @@ class AppBlockerService : AccessibilityService() {
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
+        val targetScrollsText = "Scrolls: $scrolls"
+        val targetTimerText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
             val elapsedSec = ((SystemClock.elapsedRealtime() - youtubeLongVideoStartElapsedMs) / 1000L).toInt()
             val remainingSec = maxOf(0, 10 - elapsedSec)
-            "🎬 Scrolls: $scrolls  |  ⏳ Video: ${remainingSec}s  |  ⏱ $timeStr left"
+            "⏳ ${remainingSec}s | $timeStr left"
         } else {
-            "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+            "$timeStr left"
         }
 
         // 1. Single Persistent Instance: Never re-add or re-create if already attached
         val currentView = floatingPillView
         if (currentView != null && isPillAttached) {
             currentView.visibility = View.VISIBLE
-            val tv = pillTextView
-            if (tv != null && tv.text != targetText) {
-                tv.text = targetText
-                lastPillText = targetText
+            val tvS = tvPillScrolls
+            if (tvS != null && tvS.text != targetScrollsText) {
+                tvS.text = targetScrollsText
+                lastScrollsText = targetScrollsText
+            }
+            val tvT = tvPillTimer
+            if (tvT != null && tvT.text != targetTimerText) {
+                tvT.text = targetTimerText
+                lastTimerText = targetTimerText
             }
             return
         }
 
-        // 2. Build the pill view once
-        val tv = TextView(this).apply {
-            textSize = 12f
-            typeface = Typeface.MONOSPACE
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#F8FAFC"))
-            setPadding(dpToPx(14f), dpToPx(6f), dpToPx(14f), dpToPx(6f))
-            gravity = Gravity.CENTER
+        // 2. Build the pill container view once (v6.4 Dark Capsule Layout)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dpToPx(16f), dpToPx(8f), dpToPx(16f), dpToPx(8f))
             val bg = GradientDrawable().apply {
-                setColor(Color.parseColor("#E60F172A"))
-                cornerRadius = dpToPx(20f).toFloat()
-                setStroke(dpToPx(1.5f), Color.parseColor("#38BDF8"))
+                setColor(Color.parseColor("#EB18191C"))
+                cornerRadius = 100f * resources.displayMetrics.density
+                setStroke(dpToPx(1f), Color.parseColor("#38FFFFFF"))
             }
             background = bg
-            text = targetText
-            elevation = dpToPx(4f).toFloat()
+            elevation = dpToPx(6f).toFloat()
             visibility = View.VISIBLE
         }
 
-        pillTextView = tv
-        floatingPillView = tv
-        lastPillText = targetText
+        // Left Section: Reels Clapperboard Icon (18dp x 18dp)
+        val ivClapper = ImageView(this).apply {
+            setImageResource(R.drawable.ic_reels_clapper)
+            val lp = LinearLayout.LayoutParams(dpToPx(18f), dpToPx(18f)).apply {
+                marginEnd = dpToPx(6f)
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            layoutParams = lp
+        }
+        container.addView(ivClapper)
+
+        // Left Section: Scrolls Text (Bright Golden Yellow)
+        val tvScrolls = TextView(this).apply {
+            textSize = 13.5f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#FFD600"))
+            maxLines = 1
+            gravity = Gravity.CENTER_VERTICAL
+            text = targetScrollsText
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            layoutParams = lp
+        }
+        container.addView(tvScrolls)
+
+        // Right Section: Alarm Clock Icon (18dp x 18dp, 14dp start margin)
+        val ivAlarm = ImageView(this).apply {
+            setImageResource(R.drawable.ic_alarm_clock)
+            val lp = LinearLayout.LayoutParams(dpToPx(18f), dpToPx(18f)).apply {
+                marginStart = dpToPx(14f)
+                marginEnd = dpToPx(6f)
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            layoutParams = lp
+        }
+        container.addView(ivAlarm)
+
+        // Right Section: Timer Text (Pure Crisp White)
+        val tvTimer = TextView(this).apply {
+            textSize = 13.5f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#FFFFFF"))
+            maxLines = 1
+            gravity = Gravity.CENTER_VERTICAL
+            text = targetTimerText
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            layoutParams = lp
+        }
+        container.addView(tvTimer)
+
+        floatingPillView = container
+        tvPillScrolls = tvScrolls
+        tvPillTimer = tvTimer
+        pillTextView = tvTimer
+        lastScrollsText = targetScrollsText
+        lastTimerText = targetTimerText
 
         try {
             val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
             if (wm != null) {
-                wm.addView(tv, createPillLayoutParams())
+                wm.addView(container, createPillLayoutParams())
                 isPillAttached = true
                 Log.d(TAG, "Floating pill attached to WindowManager.")
             } else {
                 isPillAttached = false
                 floatingPillView = null
+                tvPillScrolls = null
+                tvPillTimer = null
                 pillTextView = null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach floating pill: ${e.message}")
             isPillAttached = false
             floatingPillView = null
+            tvPillScrolls = null
+            tvPillTimer = null
             pillTextView = null
         }
     }
@@ -847,19 +919,25 @@ class AppBlockerService : AccessibilityService() {
 
         val timeStr = formatPillTime(remainingMs)
         val scrolls = scrollCountTodayMap[activeKey] ?: 0
-        val targetText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
+        val targetScrollsText = "Scrolls: $scrolls"
+        val targetTimerText = if (activeKey == "YOUTUBE" && isYoutubeLongVideoTimerRunning) {
             val elapsedSec = ((SystemClock.elapsedRealtime() - youtubeLongVideoStartElapsedMs) / 1000L).toInt()
             val remainingSec = maxOf(0, 10 - elapsedSec)
-            "🎬 Scrolls: $scrolls  |  ⏳ Video: ${remainingSec}s  |  ⏱ $timeStr left"
+            "⏳ ${remainingSec}s | $timeStr left"
         } else {
-            "🎬 Scrolls: $scrolls  |  ⏱ $timeStr left"
+            "$timeStr left"
         }
 
         // Zero-Flicker View Mutator Pattern: Only update TextView text if content changed!
-        val tv = pillTextView
-        if (tv != null && tv.text != targetText) {
-            tv.text = targetText
-            lastPillText = targetText
+        val tvS = tvPillScrolls
+        if (tvS != null && tvS.text != targetScrollsText) {
+            tvS.text = targetScrollsText
+            lastScrollsText = targetScrollsText
+        }
+        val tvT = tvPillTimer
+        if (tvT != null && tvT.text != targetTimerText) {
+            tvT.text = targetTimerText
+            lastTimerText = targetTimerText
         }
     }
 
@@ -900,8 +978,12 @@ class AppBlockerService : AccessibilityService() {
             }
             isPillAttached = false
             floatingPillView = null
+            tvPillScrolls = null
+            tvPillTimer = null
             pillTextView = null
             lastPillText = ""
+            lastScrollsText = ""
+            lastTimerText = ""
         }
     }
 
@@ -1331,6 +1413,12 @@ class AppBlockerService : AccessibilityService() {
 
         @Volatile
         var pillTextView: TextView? = null
+
+        @Volatile
+        var tvPillScrolls: TextView? = null
+
+        @Volatile
+        var tvPillTimer: TextView? = null
 
         @Volatile
         var isPillAttached: Boolean = false
