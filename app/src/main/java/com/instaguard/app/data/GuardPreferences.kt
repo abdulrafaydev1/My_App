@@ -292,4 +292,30 @@ class GuardPreferences(context: Context) {
     var isContentShieldPaused: Boolean
         get() = prefs.getBoolean(KEY_CONTENT_SHIELD_PAUSED, false)
         set(value) = prefs.edit().putBoolean(KEY_CONTENT_SHIELD_PAUSED, value).apply()
+
+    fun getAutoSkippedCountToday(dateStr: String): Int {
+        return prefs.getInt("nsfw_autoskipped_today_$dateStr", 0)
+    }
+
+    fun incrementAutoSkippedCountToday(dateStr: String): Int {
+        val current = getAutoSkippedCountToday(dateStr) + 1
+        prefs.edit().putInt("nsfw_autoskipped_today_$dateStr", current).apply()
+        return current
+    }
+
+    fun getBlockedBrowserCountToday(dateStr: String): Int {
+        return prefs.getInt("nsfw_blocked_browser_today_$dateStr", 0)
+    }
+
+    fun incrementBlockedBrowserCountToday(dateStr: String): Int {
+        val current = getBlockedBrowserCountToday(dateStr) + 1
+        prefs.edit().putInt("nsfw_blocked_browser_today_$dateStr", current).apply()
+        return current
+    }
+
+    fun appendBlockedAttemptsLog(dateStr: String, logEntry: String) {
+        val existing = getBlockedAttemptsLog(dateStr)
+        val updated = if (existing.isEmpty()) logEntry else "$logEntry\n$existing"
+        setBlockedAttemptsLog(dateStr, updated)
+    }
 }

@@ -642,12 +642,13 @@
                         android:gravity="center_vertical">
 
                         <TextView
+                            android:id="@+id/tvContentShieldTitle"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="🛡️ AI Visual &amp; Browser Shield (v9.0)"
+                            android:text="🛡️ AI Visual Shield &amp; Safe Browser Guard (ACTIVE)"
                             android:textColor="@color/cyber_text_primary"
-                            android:textSize="15sp"
+                            android:textSize="14.5sp"
                             android:textStyle="bold" />
 
                         <com.google.android.material.materialswitch.MaterialSwitch
@@ -665,6 +666,35 @@
                         android:text="Status: Active • Gestures Ready • API 30+ Screenshot Ready"
                         android:textColor="#10B981"
                         android:textSize="11.5sp" />
+
+                    <!-- Live NSFW Metrics Counters -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="8dp"
+                        android:background="#15FFFFFF"
+                        android:padding="8dp">
+
+                        <TextView
+                            android:id="@+id/tvAutoSkippedCount"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="🎬 Auto-Skipped Suggestive Reels: 0"
+                            android:textColor="#F59E0B"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvBlockedBrowserCount"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="3dp"
+                            android:text="🚫 Blocked Browser Searches/Videos: 0"
+                            android:textColor="#EF4444"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
 
                     <View
                         android:layout_width="match_parent"

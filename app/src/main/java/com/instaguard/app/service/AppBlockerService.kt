@@ -122,6 +122,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastBrowserBlockSignature = ""
     private var lastBrowserBlockElapsedMs = 0L
     private var lastScreenshotRequestElapsedMs = 0L
+    private var lastHardwareScreenshotElapsedMs = 0L
 
     private val verifyScrollRunnable = Runnable {
         val activeKey = currentForegroundAppKey ?: return@Runnable
@@ -217,6 +218,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 } else if (rootPkg == applicationContext.packageName) {
                     if (isOurAppScreenOpen) {
                         currentForegroundAppKey = null
+                    }
+                } else if (rootPkg in VisualAndBrowserShieldEngine.BROWSER_PACKAGES) {
+                    // Browser is in foreground: check every 250ms (every 5 ticks)
+                    if (tickCounter % 5 == 0) {
+                        if (prefs.isContentShieldMasterEnabled && !prefs.isContentShieldPaused && prefs.isBrowserAdultBlockerEnabled) {
+                            handleBrowserCheck(rootPkg)
+                        }
                     }
                 }
             }
@@ -333,7 +341,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
                     // v9.0 AI Visual & Video Content Shield Sampling
                     if (prefs.isContentShieldMasterEnabled && !prefs.isContentShieldPaused && prefs.isAutoSkipVideosEnabled) {
-                        if (nowElapsed - lastScreenshotRequestElapsedMs >= 850L) {
+                        if (nowElapsed - lastScreenshotRequestElapsedMs >= 600L) {
                             requestVisualFrameCheck(activeKey)
                         }
                     }
@@ -1478,17 +1486,24 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * v9.0 AI Visual & Video Content Shield Sampling (Android 11+ / API 30+).
-     * Samples screen frames for visual and caption/hashtag analysis without disk storage or network transfer.
+     * Feature 2: Real-Time Screen Visual Monitoring & Frame Analysis (Android 11+ / API 30+).
+     * Samples screen frames down to 96 x 170 and evaluates multi-zone skin exposure & suggestive metadata.
      */
     private fun requestVisualFrameCheck(activeKey: String) {
         val nowElapsed = SystemClock.elapsedRealtime()
         lastScreenshotRequestElapsedMs = nowElapsed
 
         val root = try { rootInActiveWindow } catch (e: Exception) { null }
-        val hasCaptionTrigger = VisualAndBrowserShieldEngine.checkNodeTextForVisualTriggers(root)
+        val hasSuggestiveMeta = VisualAndBrowserShieldEngine.hasSuggestiveVideoMetadata(root)
+        if (hasSuggestiveMeta) {
+            autoSkipCurrentReelOrVideo()
+            return
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (nowElapsed - lastHardwareScreenshotElapsedMs < 1000L) return
+            lastHardwareScreenshotElapsedMs = nowElapsed
+
             try {
                 takeScreenshot(Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(applicationContext), object : TakeScreenshotCallback {
                     override fun onSuccess(screenshot: ScreenshotResult) {
@@ -1499,22 +1514,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             if (hwBitmap != null) {
                                 val swBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
                                 if (swBitmap != null) {
-                                    val scaledBitmap = Bitmap.createScaledBitmap(swBitmap, 120, 210, true)
+                                    val scaledBitmap = Bitmap.createScaledBitmap(swBitmap, 96, 170, true)
                                     if (scaledBitmap != swBitmap) {
                                         swBitmap.recycle()
                                     }
-                                    val isStrict = prefs.isStrictVisualFilterEnabled
-                                    val isVisualMatch = VisualAndBrowserShieldEngine.analyzeCapturedBitmap(scaledBitmap, isStrict)
+                                    val isSuggestiveVisual = VisualAndBrowserShieldEngine.analyzeBitmapForSuggestiveContent(scaledBitmap)
                                     scaledBitmap.recycle()
 
-                                    if (isVisualMatch) {
-                                        consecutiveVisualMatchCount++
-                                    } else {
-                                        consecutiveVisualMatchCount = 0
-                                    }
-
-                                    if (consecutiveVisualMatchCount >= 2 || (isVisualMatch && hasCaptionTrigger)) {
-                                        performSafeAutoSkip()
+                                    if (isSuggestiveVisual) {
+                                        autoSkipCurrentReelOrVideo()
                                     }
                                 }
                             }
@@ -1527,38 +1535,25 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
                     override fun onFailure(errorCode: Int) {
                         Log.w(TAG, "takeScreenshot failed with code: $errorCode")
-                        if (hasCaptionTrigger) {
-                            performSafeAutoSkip()
-                        }
                     }
                 })
             } catch (e: Exception) {
                 Log.e(TAG, "takeScreenshot invocation error: ${e.message}")
-                if (hasCaptionTrigger) {
-                    performSafeAutoSkip()
-                }
-            }
-        } else {
-            // Pre-Android 11 fallback: relies on metadata/caption cues
-            if (hasCaptionTrigger) {
-                performSafeAutoSkip()
             }
         }
     }
 
     /**
-     * v9.0 Automatic Video / Reel / Short Skipping via Smooth Upward Swipe Gesture.
+     * Feature 2 C: Instant Programmatic Swipe-Up / Auto-Skip Gesture for Suggestive Reels/Shorts.
      */
-    private fun performSafeAutoSkip() {
+    private fun autoSkipCurrentReelOrVideo() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastAutoSkipElapsedMs < 1800L) return
 
         val root = try { rootInActiveWindow } catch (e: Exception) { null }
         val currentSig = getScreenContentSignature(root)
         if (currentSig.isNotEmpty() && currentSig == lastSkippedScreenSignature) {
-            if (skipRetryCountForCurrentItem >= 2) {
-                return
-            }
+            if (skipRetryCountForCurrentItem >= 2) return
             skipRetryCountForCurrentItem++
         } else {
             lastSkippedScreenSignature = currentSig
@@ -1566,39 +1561,29 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         lastAutoSkipElapsedMs = now
-        consecutiveVisualMatchCount = 0
 
-        // Safe center upward swipe gesture avoiding edges, buttons, and system bars
-        val dm = resources.displayMetrics
-        val screenWidth = dm.widthPixels.toFloat()
-        val screenHeight = dm.heightPixels.toFloat()
-        val startX = screenWidth * 0.50f
-        val startY = screenHeight * 0.78f
-        val endX = screenWidth * 0.50f
-        val endY = screenHeight * 0.18f
-
+        val metrics = resources.displayMetrics
+        val centerX = metrics.widthPixels * 0.5f
+        val startY = metrics.heightPixels * 0.82f
+        val endY = metrics.heightPixels * 0.16f
         val path = Path().apply {
-            moveTo(startX, startY)
-            lineTo(endX, endY)
+            moveTo(centerX, startY)
+            lineTo(centerX, endY)
         }
-
-        val stroke = GestureDescription.StrokeDescription(path, 0L, 180L)
+        val stroke = GestureDescription.StrokeDescription(path, 0L, 140L)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        dispatchGesture(gesture, null, null)
 
-        dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.d(TAG, "Auto-skip upward swipe gesture completed.")
-            }
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "Auto-skip upward swipe gesture cancelled.")
-            }
-        }, null)
+        // Haptic feedback & daily counter
+        triggerDoublePulseVibration()
+        val todayStr = getTodayDateStr()
+        prefs.incrementAutoSkippedCountToday(todayStr)
 
         tickerHandler.post {
             try {
                 Toast.makeText(
                     applicationContext,
-                    "⏭️ Auto-Skipped (Visual Filter Rule Matched)",
+                    "🛡️ Suggestive Video Detected — Auto-Skipped!",
                     Toast.LENGTH_SHORT
                 ).show()
             } catch (e: Exception) {
@@ -1608,40 +1593,94 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * v9.0 Google Search & Chrome Adult Blocker + Double-Pulse Vibration FIRST.
+     * Feature 3: Real-Time Browser Search Filtering, Video Playback Inspection & Termination.
      */
     private fun handleBrowserCheck(packageName: String) {
         val root = try { rootInActiveWindow } catch (e: Exception) { null } ?: return
-        val result = VisualAndBrowserShieldEngine.checkBrowserOrSearchContent(root)
+        val result = VisualAndBrowserShieldEngine.checkBrowserForExplicitContent(root)
         if (result.matched) {
+            triggerBrowserBlockAction()
+            return
+        }
+
+        // Active Explicit Video Playback Frame Sampling in Browser (Android 11+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val now = SystemClock.elapsedRealtime()
-            if (result.signature.isNotEmpty() && result.signature == lastBrowserBlockSignature && (now - lastBrowserBlockElapsedMs) < 6000L) {
-                return
-            }
-            lastBrowserBlockSignature = result.signature
-            lastBrowserBlockElapsedMs = now
-
-            // STEP A: Double-Pulse Vibration FIRST
-            if (prefs.isAdultBlockVibrationEnabled) {
-                triggerDoublePulseVibration()
-            }
-
-            // STEP B: Protective Navigation Action Immediately After Vibration Starts (350ms delay)
-            tickerHandler.postDelayed({
-                performGlobalAction(GLOBAL_ACTION_BACK)
-                tickerHandler.postDelayed({
-                    performGlobalAction(GLOBAL_ACTION_HOME)
-                }, 220L)
+            if (now - lastScreenshotRequestElapsedMs >= 1000L) {
+                lastScreenshotRequestElapsedMs = now
                 try {
-                    Toast.makeText(
-                        applicationContext,
-                        "🛡️ Adult Content Blocked! Exiting Browser Safely.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    takeScreenshot(Display.DEFAULT_DISPLAY, ContextCompat.getMainExecutor(applicationContext), object : TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: ScreenshotResult) {
+                            val hwBuffer = screenshot.hardwareBuffer
+                            val colorSpace = screenshot.colorSpace
+                            try {
+                                val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, colorSpace)
+                                if (hwBitmap != null) {
+                                    val swBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
+                                    if (swBitmap != null) {
+                                        val scaledBitmap = Bitmap.createScaledBitmap(swBitmap, 96, 170, true)
+                                        if (scaledBitmap != swBitmap) swBitmap.recycle()
+                                        val isHighExposure = VisualAndBrowserShieldEngine.isHighExposureFrame(scaledBitmap, 0.32f)
+                                        scaledBitmap.recycle()
+                                        if (isHighExposure) {
+                                            triggerBrowserBlockAction()
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            } finally {
+                                hwBuffer.close()
+                            }
+                        }
+                        override fun onFailure(errorCode: Int) {}
+                    })
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-            }, 350L)
+            }
+        }
+    }
+
+    private fun triggerBrowserBlockAction() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastBrowserBlockElapsedMs < 2500L) return
+        lastBrowserBlockElapsedMs = now
+
+        // Step 1: Double-Pulse Haptic Vibration
+        if (prefs.isAdultBlockVibrationEnabled) {
+            triggerDoublePulseVibration()
+        }
+
+        // Step 2: Immediately Close / Exit Chrome or Google App
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        tickerHandler.postDelayed({
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }, 80L)
+
+        // Step 3: Log & High-Priority Notification + Voice Alert
+        val todayDateStr = getTodayDateStr()
+        prefs.incrementBlockedBrowserCountToday(todayDateStr)
+        val timeStr = SimpleDateFormat("h:mm a", Locale.US).format(Date())
+        prefs.appendBlockedAttemptsLog(todayDateStr, "$timeStr • Blocked NSFW Search/Video on Browser")
+
+        fireNotificationThenVoice(
+            notificationId = 4099,
+            title = "🚫 Explicit Content Blocked!",
+            message = "Browser closed for your focus and discipline.",
+            voiceText = "Explicit Content Blocked! Browser closed for your focus and discipline."
+        )
+
+        tickerHandler.post {
+            try {
+                Toast.makeText(
+                    applicationContext,
+                    "🛡️ Explicit Content Blocked! Exiting Browser.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
