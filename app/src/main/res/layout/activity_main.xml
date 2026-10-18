@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v9.0 (AI Visual &amp; Browser Shield)"
+                        android:text="InstaGuard Pro v9.1 (AI Visual &amp; Browser Shield)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"

@@ -1519,45 +1519,46 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         isScreenshotInProgress = true
         lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
 
-        val callbackExecutor = Executor { r -> tickerHandler.post(r) }
         try {
-            takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                callbackExecutor,
-                object : TakeScreenshotCallback {
-                    override fun onSuccess(screenshot: ScreenshotResult) {
-                        val hwBuffer = screenshot.hardwareBuffer
-                        try {
-                            val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                            if (hwBitmap != null) {
-                                val softwareBitmap = Bitmap.createBitmap(96, 170, Bitmap.Config.ARGB_8888)
-                                val canvas = Canvas(softwareBitmap)
-                                val srcRect = Rect(0, 0, hwBitmap.width, hwBitmap.height)
-                                val dstRect = Rect(0, 0, 96, 170)
-                                val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-                                canvas.drawBitmap(hwBitmap, srcRect, dstRect, paint)
-                                hwBitmap.recycle()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    mainExecutor,
+                    object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                            val hwBuffer = screenshot.hardwareBuffer
+                            try {
+                                val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                                val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                                hwBuffer.close()
+                                hwBitmap?.recycle()
+                                if (swBitmap != null) {
+                                    val scaled = Bitmap.createScaledBitmap(swBitmap, 96, 170, false)
+                                    if (scaled != swBitmap) swBitmap.recycle()
 
-                                val isSuggestive = analyzeBitmapForSuggestiveContent(softwareBitmap)
-                                softwareBitmap.recycle()
+                                    val isSuggestive = analyzeBitmapForSuggestiveContent(scaled)
+                                    scaled.recycle()
 
-                                if (isSuggestive) {
-                                    autoSkipCurrentReelOrVideo()
+                                    if (isSuggestive) {
+                                        autoSkipCurrentReelOrVideo()
+                                    }
                                 }
+                            } catch (e: Exception) {
+                                try { hwBuffer.close() } catch (_: Exception) {}
+                                e.printStackTrace()
+                            } finally {
+                                isScreenshotInProgress = false
                             }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        } finally {
-                            try { hwBuffer.close() } catch (e: Exception) {}
+                        }
+
+                        override fun onFailure(errorCode: Int) {
                             isScreenshotInProgress = false
                         }
                     }
-
-                    override fun onFailure(errorCode: Int) {
-                        isScreenshotInProgress = false
-                    }
-                }
-            )
+                )
+            } else {
+                isScreenshotInProgress = false
+            }
         } catch (e: Exception) {
             isScreenshotInProgress = false
             e.printStackTrace()
@@ -1887,45 +1888,46 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         isScreenshotInProgress = true
         lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
 
-        val callbackExecutor = Executor { r -> tickerHandler.post(r) }
         try {
-            takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                callbackExecutor,
-                object : TakeScreenshotCallback {
-                    override fun onSuccess(screenshot: ScreenshotResult) {
-                        val hwBuffer = screenshot.hardwareBuffer
-                        try {
-                            val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                            if (hwBitmap != null) {
-                                val softwareBitmap = Bitmap.createBitmap(96, 170, Bitmap.Config.ARGB_8888)
-                                val canvas = Canvas(softwareBitmap)
-                                val srcRect = Rect(0, 0, hwBitmap.width, hwBitmap.height)
-                                val dstRect = Rect(0, 0, 96, 170)
-                                val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-                                canvas.drawBitmap(hwBitmap, srcRect, dstRect, paint)
-                                hwBitmap.recycle()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    mainExecutor,
+                    object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                            val hwBuffer = screenshot.hardwareBuffer
+                            try {
+                                val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                                val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                                hwBuffer.close()
+                                hwBitmap?.recycle()
+                                if (swBitmap != null) {
+                                    val scaled = Bitmap.createScaledBitmap(swBitmap, 96, 170, false)
+                                    if (scaled != swBitmap) swBitmap.recycle()
 
-                                val skinRatio = computeOverallSkinRatio(softwareBitmap)
-                                softwareBitmap.recycle()
+                                    val skinRatio = computeOverallSkinRatio(scaled)
+                                    scaled.recycle()
 
-                                if (skinRatio >= 0.32f) {
-                                    enforceBrowserBlock(browserPkg, "High Skin Video ($skinRatio)")
+                                    if (skinRatio >= 0.32f) {
+                                        enforceBrowserBlock(browserPkg, "High Skin Video ($skinRatio)")
+                                    }
                                 }
+                            } catch (e: Exception) {
+                                try { hwBuffer.close() } catch (_: Exception) {}
+                                e.printStackTrace()
+                            } finally {
+                                isScreenshotInProgress = false
                             }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        } finally {
-                            try { hwBuffer.close() } catch (e: Exception) {}
+                        }
+
+                        override fun onFailure(errorCode: Int) {
                             isScreenshotInProgress = false
                         }
                     }
-
-                    override fun onFailure(errorCode: Int) {
-                        isScreenshotInProgress = false
-                    }
-                }
-            )
+                )
+            } else {
+                isScreenshotInProgress = false
+            }
         } catch (e: Exception) {
             isScreenshotInProgress = false
             e.printStackTrace()

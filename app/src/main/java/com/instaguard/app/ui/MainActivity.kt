@@ -37,6 +37,7 @@ import com.instaguard.app.util.GuardManager
 import com.instaguard.app.util.UsageStatsHelper
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -181,6 +182,7 @@ class MainActivity : AppCompatActivity() {
             binding.cardNightSleepGuard,
             binding.cardDeepWorkMode,
             binding.cardDopamineDimmer,
+            binding.cardAiVisualShield,
             binding.cardCustomVoiceAlert,
             binding.btnMasterPinSettings,
             binding.btnAddCustomApp,
