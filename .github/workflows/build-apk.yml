@@ -28,11 +28,11 @@ jobs:
           gradle-version: '8.4'
 
       - name: Build Debug APK with Gradle
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
 
       - name: Upload InstaGuard-APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaGuard-v9.3-APK
+          name: InstaGuard-v9.4-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14

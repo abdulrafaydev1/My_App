@@ -11,10 +11,14 @@ android {
         applicationId "com.instaguard.app"
         minSdk 26
         targetSdk 34
-        versionCode 26
-        versionName "9.3"
+        versionCode 27
+        versionName "9.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
 
     buildTypes {

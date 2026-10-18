@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v9.3 (High-Speed Engine)"
+                        android:text="InstaGuard Pro v9.4 (Intelligent Visual Filter)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -531,7 +531,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- v9.0 Feature: AI Visual Shield & Safe Browser Guard Card -->
+            <!-- v9.0 / v9.4 Feature: AI Visual Shield & Safe Browser Guard Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardAiVisualShield"
                 android:layout_width="match_parent"
@@ -587,10 +587,118 @@
                             android:layout_marginStart="10dp" />
                     </LinearLayout>
 
+                    <!-- Protected Platforms Badges -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="PROTECTED PLATFORMS"
+                        android:textColor="@color/cyber_text_secondary"
+                        android:textSize="9.5sp"
+                        android:fontFamily="monospace"
+                        android:letterSpacing="0.08"
+                        android:textStyle="bold" />
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:scrollbars="none">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="📸 Instagram Reels"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="▶️ YouTube Shorts"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="📘 Facebook Reels"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="🎵 TikTok Videos"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="6dp"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="🌐 Google Chrome"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="#1E293B"
+                                android:paddingStart="8dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="8dp"
+                                android:paddingBottom="3dp"
+                                android:text="🔍 Google Search"
+                                android:textColor="#E2E8F0"
+                                android:textSize="10.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </HorizontalScrollView>
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="10dp"
                         android:background="#121824"
                         android:orientation="vertical"
                         android:padding="12dp">
@@ -613,6 +721,44 @@
                             android:textColor="#EF4444"
                             android:textSize="12sp"
                             android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnConfigureVisualFilter"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_marginEnd="5dp"
+                            android:layout_weight="1"
+                            android:text="⚙️ Content Filters"
+                            android:textColor="#22D3EE"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp"
+                            app:strokeColor="#22D3EE"
+                            app:strokeWidth="1dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnToggleMonitoringStatus"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_marginStart="5dp"
+                            android:layout_weight="1"
+                            android:text="⏸️ Pause Shield"
+                            android:textColor="#F43F5E"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="12dp"
+                            app:strokeColor="#F43F5E"
+                            app:strokeWidth="1dp" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

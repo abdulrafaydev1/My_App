@@ -49,6 +49,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
+import com.instaguard.app.classifier.VisualContentClassifier
 import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.ui.LockScreenActivity
@@ -1490,6 +1491,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
      * Pulse 1 (220ms) -> gap (120ms) -> Pulse 2 (280ms)
      */
     private fun triggerDoublePulseVibration() {
+        if (!prefs.isDoublePulseVibrationEnabled) return
         try {
             val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                 val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
@@ -1499,7 +1501,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
             }
             if (vibrator != null && vibrator.hasVibrator()) {
-                val timings = longArrayOf(0L, 220L, 120L, 280L)
+                val p1 = prefs.vibrationPulse1Ms
+                val gap = prefs.vibrationGapMs
+                val p2 = prefs.vibrationPulse2Ms
+                val timings = longArrayOf(0L, p1, gap, p2)
                 val amplitudes = intArrayOf(0, 255, 0, 255)
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1))
@@ -1546,7 +1551,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v9.3 FEATURE 2: Real-Time Visual Scanner & Calibrated Auto-Skip Engine
+    // v9.3 / v9.4 FEATURE: Real-Time Visual Scanner & Calibrated Auto-Skip Engine
     // =========================================================================
 
     private fun captureAndAnalyzeSocialFrame() {
@@ -1570,12 +1575,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                 val scaled = Bitmap.createScaledBitmap(swBitmap, 80, 140, false)
                                 if (scaled != swBitmap) swBitmap.recycle()
 
-                                val shouldSkip = analyzeFrameOnBackgroundThread(scaled)
+                                val (result, newGrid) = VisualContentClassifier.evaluateVisualFrame(scaled, prefs, previousSkinGrid)
+                                previousSkinGrid = newGrid
                                 scaled.recycle()
 
-                                if (shouldSkip) {
+                                if (prefs.isAiVisualShieldEnabled && prefs.isAutoSkipReelsEnabled && result.isMatch) {
                                     tickerHandler.post {
-                                        triggerAutoSkipIfCooldownElapsed()
+                                        triggerAutoSkipIfCooldownElapsed(result.primaryReason)
                                     }
                                 }
                             }
@@ -1603,15 +1609,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
      * Strictly rejects wooden/beige walls, orange/yellow lighting, and neutral clothing.
      */
     private fun isSkinPixel(p: Int): Boolean {
-        val r = Color.red(p)
-        val g = Color.green(p)
-        val b = Color.blue(p)
-        val y = 0.299 * r + 0.587 * g + 0.114 * b
-        val cb = 128.0 - 0.1687 * r - 0.3313 * g + 0.5 * b
-        val cr = 128.0 + 0.5 * r - 0.4187 * g - 0.0813 * b
-        return (r > 80 && g > 45 && b > 30 && r > g && r > b &&
-                (r - minOf(g, b)) > 12 &&
-                cb in 80.0..124.0 && cr in 135.0..172.0 && y in 60.0..240.0)
+        return VisualContentClassifier.isSkinPixel(p)
     }
 
     /**
@@ -1782,16 +1780,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     private fun hasSuggestiveReelIndicators(root: AccessibilityNodeInfo?): Boolean {
-        if (root == null) return false
+        if (root == null || !prefs.isAiVisualShieldEnabled || !prefs.isAutoSkipReelsEnabled) return false
         try {
             val textBuilder = StringBuilder()
             collectNodeTexts(root, textBuilder, depth = 0, maxDepth = 40)
-            val fullText = textBuilder.toString().lowercase(Locale.ROOT)
-            for (indicator in SUGGESTIVE_REEL_INDICATORS) {
-                if (fullText.contains(indicator)) {
-                    Log.i(TAG, "Suggestive indicator detected in UI metadata: '$indicator'")
-                    return true
-                }
+            val fullText = textBuilder.toString()
+            val (isMatch, indicator) = VisualContentClassifier.hasSuggestiveReelMetadata(fullText, prefs)
+            if (isMatch) {
+                Log.i(TAG, "Suggestive indicator detected in UI metadata: '$indicator'")
+                return true
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -1818,15 +1815,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun triggerAutoSkipIfCooldownElapsed() {
+    private fun triggerAutoSkipIfCooldownElapsed(reason: String = "Suggestive Video") {
         val now = SystemClock.elapsedRealtime()
         if (now - lastAutoSkipElapsedMs < 1800L) return
         lastAutoSkipElapsedMs = now
 
-        autoSkipCurrentReelOrVideo()
+        autoSkipCurrentReelOrVideo(reason)
     }
 
-    private fun autoSkipCurrentReelOrVideo() {
+    private fun autoSkipCurrentReelOrVideo(reason: String = "Suggestive Video") {
         try {
             val metrics = resources.displayMetrics
             val centerX = metrics.widthPixels * 0.5f
@@ -1853,7 +1850,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             try {
                 Toast.makeText(
                     applicationContext,
-                    "🛡️ Suggestive Video Detected — Auto-Skipped!",
+                    "🛡️ $reason — Auto-Skipped!",
                     Toast.LENGTH_SHORT
                 ).show()
             } catch (e: Exception) {
@@ -1881,7 +1878,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     // =========================================================================
 
     private fun checkBrowserForExplicitContent(browserPkg: String, event: AccessibilityEvent? = null) {
-        if (!prefs.isAiVisualShieldEnabled) return
+        if (!prefs.isAiVisualShieldEnabled || !prefs.isBrowserAdultBlockEnabled) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastBrowserBlockElapsedMs < 2500L) return
 
@@ -1908,19 +1905,21 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 collectBrowserTexts(root, textBuilder, depth = 0, maxDepth = 40)
             }
 
-            val combinedText = textBuilder.toString().lowercase(Locale.ROOT)
+            val combinedText = textBuilder.toString()
             if (combinedText.isNotEmpty()) {
-                var matchedKeyword: String? = null
-                for (kw in EXPLICIT_BROWSER_KEYWORDS) {
-                    if (containsExplicitKeyword(combinedText, kw)) {
-                        matchedKeyword = kw
-                        break
-                    }
+                // Rule A: Search Query check
+                val (searchMatch, searchReason) = VisualContentClassifier.evaluateSearchQuery(combinedText, prefs)
+                if (searchMatch && searchReason != null) {
+                    Log.w(TAG, "Explicit search detected on browser ($browserPkg): '$searchReason'")
+                    enforceBrowserBlock(browserPkg, searchReason)
+                    return
                 }
 
-                if (matchedKeyword != null) {
-                    Log.w(TAG, "Explicit content detected on browser ($browserPkg): '$matchedKeyword'")
-                    enforceBrowserBlock(browserPkg, matchedKeyword)
+                // Rule B: Page content & URL domain check
+                val (pageMatch, pageReason) = VisualContentClassifier.evaluateBrowserPage(url = combinedText, pageText = combinedText, prefs = prefs)
+                if (pageMatch && pageReason != null) {
+                    Log.w(TAG, "Explicit website detected on browser ($browserPkg): '$pageReason'")
+                    enforceBrowserBlock(browserPkg, pageReason)
                     return
                 }
             }
@@ -2011,7 +2010,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
                                 if (skinRatio >= 0.32f) {
                                     tickerHandler.post {
-                                        enforceBrowserBlock(browserPkg, "High Skin Video ($skinRatio)")
+                                        enforceBrowserBlock(browserPkg, "High Skin Video (${(skinRatio * 100).toInt()}%)")
                                     }
                                 }
                             }
@@ -2051,7 +2050,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val rowOffset = y * width
             for (x in 0 until width) {
                 inspectedTotal++
-                if (isSkinPixel(pixels[rowOffset + x])) {
+                if (VisualContentClassifier.isSkinPixel(pixels[rowOffset + x])) {
                     skinCount++
                 }
             }

@@ -65,6 +65,21 @@ class GuardPreferences(context: Context) {
         const val KEY_AI_VISUAL_SHIELD_ENABLED = "ai_visual_shield_enabled"
         fun autoSkippedTodayKey(dateStr: String): String = "nsfw_autoskipped_today_${dateStr}"
         fun browserBlockedTodayKey(dateStr: String): String = "nsfw_browser_blocked_today_${dateStr}"
+
+        // v9.4 Modular Visual Content Filter & Adult Blocker Keys
+        const val KEY_AUTO_SKIP_REELS_ENABLED = "auto_skip_reels_enabled"
+        const val KEY_BROWSER_ADULT_BLOCK_ENABLED = "browser_adult_block_enabled"
+        const val KEY_STRICT_VISUAL_MODE = "strict_visual_mode"
+        const val KEY_RULE_SHORT_CLOTHING_ENABLED = "rule_short_clothing_enabled"
+        const val KEY_RULE_CHEST_CLEAVAGE_ENABLED = "rule_chest_cleavage_enabled"
+        const val KEY_RULE_REAR_BUTTOCKS_ENABLED = "rule_rear_buttocks_enabled"
+        const val KEY_RULE_SUGGESTIVE_MOTION_ENABLED = "rule_suggestive_motion_enabled"
+        const val KEY_ADULT_SEARCH_BLOCK_ENABLED = "adult_search_block_enabled"
+        const val KEY_ADULT_WEBSITES_BLOCK_ENABLED = "adult_websites_block_enabled"
+        const val KEY_DOUBLE_PULSE_VIBRATION_ENABLED = "double_pulse_vibration_enabled"
+        const val KEY_VIBRATION_PULSE1_MS = "vibration_pulse1_ms"
+        const val KEY_VIBRATION_GAP_MS = "vibration_gap_ms"
+        const val KEY_VIBRATION_PULSE2_MS = "vibration_pulse2_ms"
     }
 
     /**
@@ -296,4 +311,57 @@ class GuardPreferences(context: Context) {
         setBrowserBlockedToday(dateStr, next)
         return next
     }
+
+    // v9.4 Granular Visual Content Filtering & Adult Protection Controls
+    var isAutoSkipReelsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SKIP_REELS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_SKIP_REELS_ENABLED, value).apply()
+
+    var isBrowserAdultBlockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BROWSER_ADULT_BLOCK_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_BROWSER_ADULT_BLOCK_ENABLED, value).apply()
+
+    var isStrictVisualMode: Boolean
+        get() = prefs.getBoolean(KEY_STRICT_VISUAL_MODE, true)
+        set(value) = prefs.edit().putBoolean(KEY_STRICT_VISUAL_MODE, value).apply()
+
+    var isRuleShortClothingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_RULE_SHORT_CLOTHING_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_RULE_SHORT_CLOTHING_ENABLED, value).apply()
+
+    var isRuleChestCleavageEnabled: Boolean
+        get() = prefs.getBoolean(KEY_RULE_CHEST_CLEAVAGE_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_RULE_CHEST_CLEAVAGE_ENABLED, value).apply()
+
+    var isRuleRearButtocksEnabled: Boolean
+        get() = prefs.getBoolean(KEY_RULE_REAR_BUTTOCKS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_RULE_REAR_BUTTOCKS_ENABLED, value).apply()
+
+    var isRuleSuggestiveMotionEnabled: Boolean
+        get() = prefs.getBoolean(KEY_RULE_SUGGESTIVE_MOTION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_RULE_SUGGESTIVE_MOTION_ENABLED, value).apply()
+
+    var isAdultSearchBlockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ADULT_SEARCH_BLOCK_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_ADULT_SEARCH_BLOCK_ENABLED, value).apply()
+
+    var isAdultWebsitesBlockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ADULT_WEBSITES_BLOCK_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_ADULT_WEBSITES_BLOCK_ENABLED, value).apply()
+
+    var isDoublePulseVibrationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_DOUBLE_PULSE_VIBRATION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_DOUBLE_PULSE_VIBRATION_ENABLED, value).apply()
+
+    var vibrationPulse1Ms: Long
+        get() = prefs.getLong(KEY_VIBRATION_PULSE1_MS, 220L)
+        set(value) = prefs.edit().putLong(KEY_VIBRATION_PULSE1_MS, value).apply()
+
+    var vibrationGapMs: Long
+        get() = prefs.getLong(KEY_VIBRATION_GAP_MS, 120L)
+        set(value) = prefs.edit().putLong(KEY_VIBRATION_GAP_MS, value).apply()
+
+    var vibrationPulse2Ms: Long
+        get() = prefs.getLong(KEY_VIBRATION_PULSE2_MS, 280L)
+        set(value) = prefs.edit().putLong(KEY_VIBRATION_PULSE2_MS, value).apply()
 }
