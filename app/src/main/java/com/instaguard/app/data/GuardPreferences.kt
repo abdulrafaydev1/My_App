@@ -51,14 +51,6 @@ class GuardPreferences(context: Context) {
 
         const val KEY_DOPAMINE_DIMMER_ENABLED = "dopamine_dimmer_enabled"
 
-        // v9.0 Content Shield Keys
-        const val KEY_CONTENT_SHIELD_MASTER_ENABLED = "content_shield_master_enabled"
-        const val KEY_AUTO_SKIP_VIDEOS_ENABLED = "auto_skip_videos_enabled"
-        const val KEY_STRICT_VISUAL_FILTER_ENABLED = "strict_visual_filter_enabled"
-        const val KEY_BROWSER_ADULT_BLOCKER_ENABLED = "browser_adult_blocker_enabled"
-        const val KEY_ADULT_BLOCK_VIBRATION_ENABLED = "adult_block_vibration_enabled"
-        const val KEY_CONTENT_SHIELD_PAUSED = "content_shield_paused"
-
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
         fun dailyTotalKey(dateStr: String, appKey: String): String = "daily_total_ms_${dateStr}_${appKey.uppercase()}"
@@ -68,6 +60,11 @@ class GuardPreferences(context: Context) {
         fun blockedAttemptsTodayKey(dateStr: String, appKey: String): String = "blocked_attempts_today_${dateStr}_${appKey.uppercase()}"
         fun blockedAttemptsTotalKey(appKey: String): String = "blocked_attempts_total_${appKey.uppercase()}"
         fun blockedAttemptsLogKey(dateStr: String): String = "blocked_attempts_log_${dateStr}"
+
+        // v9.0 Keys
+        const val KEY_AI_VISUAL_SHIELD_ENABLED = "ai_visual_shield_enabled"
+        fun autoSkippedTodayKey(dateStr: String): String = "nsfw_autoskipped_today_${dateStr}"
+        fun browserBlockedTodayKey(dateStr: String): String = "nsfw_browser_blocked_today_${dateStr}"
     }
 
     /**
@@ -268,54 +265,35 @@ class GuardPreferences(context: Context) {
         prefs.edit().putString(blockedAttemptsLogKey(dateStr), log).apply()
     }
 
-    // v9.0 AI Visual & Browser Content Shield Properties
-    var isContentShieldMasterEnabled: Boolean
-        get() = prefs.getBoolean(KEY_CONTENT_SHIELD_MASTER_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_CONTENT_SHIELD_MASTER_ENABLED, value).apply()
+    var isAiVisualShieldEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AI_VISUAL_SHIELD_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_AI_VISUAL_SHIELD_ENABLED, value).apply()
 
-    var isAutoSkipVideosEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_SKIP_VIDEOS_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_AUTO_SKIP_VIDEOS_ENABLED, value).apply()
-
-    var isStrictVisualFilterEnabled: Boolean
-        get() = prefs.getBoolean(KEY_STRICT_VISUAL_FILTER_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_STRICT_VISUAL_FILTER_ENABLED, value).apply()
-
-    var isBrowserAdultBlockerEnabled: Boolean
-        get() = prefs.getBoolean(KEY_BROWSER_ADULT_BLOCKER_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_BROWSER_ADULT_BLOCKER_ENABLED, value).apply()
-
-    var isAdultBlockVibrationEnabled: Boolean
-        get() = prefs.getBoolean(KEY_ADULT_BLOCK_VIBRATION_ENABLED, true)
-        set(value) = prefs.edit().putBoolean(KEY_ADULT_BLOCK_VIBRATION_ENABLED, value).apply()
-
-    var isContentShieldPaused: Boolean
-        get() = prefs.getBoolean(KEY_CONTENT_SHIELD_PAUSED, false)
-        set(value) = prefs.edit().putBoolean(KEY_CONTENT_SHIELD_PAUSED, value).apply()
-
-    fun getAutoSkippedCountToday(dateStr: String): Int {
-        return prefs.getInt("nsfw_autoskipped_today_$dateStr", 0)
+    fun getAutoSkippedToday(dateStr: String): Int {
+        return prefs.getInt(autoSkippedTodayKey(dateStr), 0)
     }
 
-    fun incrementAutoSkippedCountToday(dateStr: String): Int {
-        val current = getAutoSkippedCountToday(dateStr) + 1
-        prefs.edit().putInt("nsfw_autoskipped_today_$dateStr", current).apply()
-        return current
+    fun setAutoSkippedToday(dateStr: String, count: Int) {
+        prefs.edit().putInt(autoSkippedTodayKey(dateStr), maxOf(0, count)).apply()
     }
 
-    fun getBlockedBrowserCountToday(dateStr: String): Int {
-        return prefs.getInt("nsfw_blocked_browser_today_$dateStr", 0)
+    fun incrementAutoSkippedToday(dateStr: String): Int {
+        val next = getAutoSkippedToday(dateStr) + 1
+        setAutoSkippedToday(dateStr, next)
+        return next
     }
 
-    fun incrementBlockedBrowserCountToday(dateStr: String): Int {
-        val current = getBlockedBrowserCountToday(dateStr) + 1
-        prefs.edit().putInt("nsfw_blocked_browser_today_$dateStr", current).apply()
-        return current
+    fun getBrowserBlockedToday(dateStr: String): Int {
+        return prefs.getInt(browserBlockedTodayKey(dateStr), 0)
     }
 
-    fun appendBlockedAttemptsLog(dateStr: String, logEntry: String) {
-        val existing = getBlockedAttemptsLog(dateStr)
-        val updated = if (existing.isEmpty()) logEntry else "$logEntry\n$existing"
-        setBlockedAttemptsLog(dateStr, updated)
+    fun setBrowserBlockedToday(dateStr: String, count: Int) {
+        prefs.edit().putInt(browserBlockedTodayKey(dateStr), maxOf(0, count)).apply()
+    }
+
+    fun incrementBrowserBlockedToday(dateStr: String): Int {
+        val next = getBrowserBlockedToday(dateStr) + 1
+        setBrowserBlockedToday(dateStr, next)
+        return next
     }
 }

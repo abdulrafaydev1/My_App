@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     private var last7DayReportRenderMs: Long = 0L
     private var previewTts: TextToSpeech? = null
     private var isPreviewTtsReady = false
-    private var shieldUpdateTick = 0
 
     private val liveTickerRunnable = object : Runnable {
         override fun run() {
@@ -85,7 +84,7 @@ class MainActivity : AppCompatActivity() {
         setupTestModeSwitch()
         setupV70FeatureControls()
         setupV80FeatureControls()
-        setupV90ContentShieldControls()
+        setupV90FeatureControls()
         startStatusPulseAnimation()
         playStaggeredEntranceAnimation()
     }
@@ -110,8 +109,7 @@ class MainActivity : AppCompatActivity() {
         AppBlockerService.syncFromPrefs(this)
 
         refreshCustomVoiceDisplay()
-        updateShieldStatusDisplay()
-        updatePauseButtonState()
+        refreshAiVisualShieldDisplay()
         updatePermissionsUI()
         updateAllAppCards()
         InstaGuardWidgetProvider.updateAllWidgets(this)
@@ -142,7 +140,7 @@ class MainActivity : AppCompatActivity() {
         val monospaceViews = listOf(
             binding.tvFocusStreak, binding.tvDisciplineScore, binding.tvDeepWorkStatus,
             binding.tvCurrentCustomVoice,
-            binding.tvAutoSkippedCount, binding.tvBlockedBrowserCount,
+            binding.tvAutoSkippedCount, binding.tvBrowserBlockedCount,
             binding.tvWeaknessTotalToday, binding.tvWeaknessAppBreakdown, binding.tvWeaknessImpulseLog,
             binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus, binding.tvInstagramScrolls,
             binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus, binding.tvYouTubeScrolls,
@@ -184,7 +182,6 @@ class MainActivity : AppCompatActivity() {
             binding.cardDeepWorkMode,
             binding.cardDopamineDimmer,
             binding.cardCustomVoiceAlert,
-            binding.cardContentShield,
             binding.btnMasterPinSettings,
             binding.btnAddCustomApp,
             binding.btnMaintenanceMode,
@@ -350,155 +347,101 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * v9.0 AI Visual & Browser Content Shield Configuration Controls.
+     * v9.0 Feature Controls:
+     * - AI Visual Shield & Safe Browser Guard (toggle, PIN protection & live stats)
      */
-    private fun setupV90ContentShieldControls() {
-        val prefs = guardManager.prefs
+    private fun setupV90FeatureControls() {
+        refreshAiVisualShieldDisplay()
 
-        // 1. Master Switch (Protected by Master PIN when turning OFF)
-        bindContentShieldMasterSwitchListener()
-
-        // 2. Auto Skip Switch
-        binding.swAutoSkipVideos.isChecked = prefs.isAutoSkipVideosEnabled
-        binding.swAutoSkipVideos.setOnCheckedChangeListener { _, isChecked ->
-            prefs.isAutoSkipVideosEnabled = isChecked
-        }
-
-        // 3. Strict Mode Switch
-        binding.swStrictVisualFilter.isChecked = prefs.isStrictVisualFilterEnabled
-        binding.swStrictVisualFilter.setOnCheckedChangeListener { _, isChecked ->
-            prefs.isStrictVisualFilterEnabled = isChecked
-        }
-
-        // 4. Browser Adult Blocker Switch
-        binding.swBrowserAdultBlocker.isChecked = prefs.isBrowserAdultBlockerEnabled
-        binding.swBrowserAdultBlocker.setOnCheckedChangeListener { _, isChecked ->
-            prefs.isBrowserAdultBlockerEnabled = isChecked
-        }
-
-        // 5. Double-Pulse Vibration Switch
-        binding.swAdultBlockVibration.isChecked = prefs.isAdultBlockVibrationEnabled
-        binding.swAdultBlockVibration.setOnCheckedChangeListener { _, isChecked ->
-            prefs.isAdultBlockVibrationEnabled = isChecked
-        }
-
-        // 6. Pause / Stop Button
-        updatePauseButtonState()
-        binding.btnPauseContentShield.setOnClickListener {
-            val paused = prefs.isContentShieldPaused
-            prefs.isContentShieldPaused = !paused
-            updatePauseButtonState()
-            updateShieldStatusDisplay()
-            val msg = if (!paused) "⏸️ Content Shield Paused" else "▶️ Content Shield Resumed"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-        }
-
-        // 7. Status Line & Live Metrics
-        updateShieldStatusDisplay()
-    }
-
-    private fun bindContentShieldMasterSwitchListener() {
-        binding.swContentShieldMaster.setOnCheckedChangeListener(null)
-        binding.swContentShieldMaster.isChecked = guardManager.prefs.isContentShieldMasterEnabled
-        binding.swContentShieldMaster.setOnCheckedChangeListener { buttonView, isChecked ->
+        binding.switchAiVisualShield.setOnCheckedChangeListener(null)
+        binding.switchAiVisualShield.isChecked = guardManager.prefs.isAiVisualShieldEnabled
+        binding.switchAiVisualShield.setOnCheckedChangeListener { _, isChecked ->
             if (!isChecked) {
-                // Intercept disable: Master PIN verification required
-                buttonView.setOnCheckedChangeListener(null)
-                buttonView.isChecked = true
-                bindContentShieldMasterSwitchListener()
-                showContentShieldDisablePinDialog()
-                return@setOnCheckedChangeListener
+                promptPinForVisualShieldDisable()
+            } else {
+                guardManager.prefs.isAiVisualShieldEnabled = true
+                refreshAiVisualShieldDisplay()
+                Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
-
-            guardManager.prefs.isContentShieldMasterEnabled = true
-            updateShieldStatusDisplay()
-            Toast.makeText(this, "🛡️ Content Shield Enabled", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun showContentShieldDisablePinDialog() {
-        val container = FrameLayout(this).apply {
-            setPadding(dpToPx(24f), dpToPx(16f), dpToPx(24f), dpToPx(8f))
+    private fun refreshAiVisualShieldDisplay() {
+        val isEnabled = guardManager.prefs.isAiVisualShieldEnabled
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val autoSkipped = guardManager.prefs.getAutoSkippedToday(todayStr)
+        val browserBlocked = guardManager.prefs.getBrowserBlockedToday(todayStr)
+
+        binding.switchAiVisualShield.setOnCheckedChangeListener(null)
+        binding.switchAiVisualShield.isChecked = isEnabled
+        binding.switchAiVisualShield.setOnCheckedChangeListener { _, isChecked ->
+            if (!isChecked) {
+                promptPinForVisualShieldDisable()
+            } else {
+                guardManager.prefs.isAiVisualShieldEnabled = true
+                refreshAiVisualShieldDisplay()
+                Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
+            }
         }
-        val input = EditText(this).apply {
+
+        if (isEnabled) {
+            binding.tvAiVisualShieldStatus.text = "ACTIVE • Auto-skips suggestive content & terminates adult searches"
+            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#22D3EE"))
+        } else {
+            binding.tvAiVisualShieldStatus.text = "PAUSED • Protection disabled"
+            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#94A3B8"))
+        }
+
+        binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
+        binding.tvBrowserBlockedCount.text = "🚫 Blocked Browser Searches/Videos: $browserBlocked"
+    }
+
+    private fun promptPinForVisualShieldDisable() {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(22f), dpToPx(14f), dpToPx(22f), dpToPx(8f))
+        }
+
+        val tvInfo = TextView(this).apply {
+            text = "Enter your 4-digit Master PIN to disable AI Visual Shield & Safe Browser Guard."
+            setTextColor(Color.parseColor("#94A3B8"))
+            textSize = 13f
+        }
+
+        val etPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            gravity = Gravity.CENTER
-            textSize = 22f
-            typeface = Typeface.MONOSPACE
+            filters = arrayOf(InputFilter.LengthFilter(4))
             setTextColor(Color.WHITE)
             hint = "••••"
             setHintTextColor(Color.parseColor("#64748B"))
-            filters = arrayOf(InputFilter.LengthFilter(4))
         }
-        container.addView(input)
+
+        container.addView(tvInfo)
+        container.addView(etPin)
 
         AlertDialog.Builder(this)
-            .setTitle("🔐 Disable Content Shield")
-            .setMessage("Enter your 4-digit Master PIN to disable AI Visual & Safe Browser Guard protection.")
+            .setTitle("Disable AI Visual Shield?")
             .setView(container)
-            .setCancelable(false)
-            .setPositiveButton("Authorize") { dialog, _ ->
-                val entered = input.text.toString().trim()
+            .setPositiveButton("VERIFY & DISABLE") { dialog, _ ->
+                val entered = etPin.text.toString().trim()
                 if (entered == guardManager.prefs.masterPin) {
-                    guardManager.prefs.isContentShieldMasterEnabled = false
-                    bindContentShieldMasterSwitchListener()
-                    updateShieldStatusDisplay()
-                    Toast.makeText(this, "Content Shield Disabled", Toast.LENGTH_SHORT).show()
+                    guardManager.prefs.isAiVisualShieldEnabled = false
+                    refreshAiVisualShieldDisplay()
+                    Toast.makeText(this, "AI Visual Shield Disabled", Toast.LENGTH_SHORT).show()
                     dialog.dismiss()
                 } else {
-                    Toast.makeText(this, "❌ Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Incorrect Master PIN!", Toast.LENGTH_SHORT).show()
+                    refreshAiVisualShieldDisplay()
                 }
             }
-            .setNegativeButton("Keep Shield ON") { dialog, _ ->
+            .setNegativeButton("CANCEL") { dialog, _ ->
+                refreshAiVisualShieldDisplay()
                 dialog.dismiss()
             }
+            .setOnCancelListener {
+                refreshAiVisualShieldDisplay()
+            }
             .show()
-    }
-
-    private fun updatePauseButtonState() {
-        val isPaused = guardManager.prefs.isContentShieldPaused
-        if (isPaused) {
-            binding.btnPauseContentShield.text = "▶️ Resume Content Shield Immediately"
-            binding.btnPauseContentShield.setTextColor(Color.parseColor("#10B981"))
-            binding.btnPauseContentShield.strokeColor = ColorStateList.valueOf(Color.parseColor("#10B981"))
-        } else {
-            binding.btnPauseContentShield.text = "⏸️ Pause Content Shield Immediately"
-            binding.btnPauseContentShield.setTextColor(Color.parseColor("#F59E0B"))
-            binding.btnPauseContentShield.strokeColor = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
-        }
-    }
-
-    private fun updateShieldStatusDisplay() {
-        val isMasterOn = guardManager.prefs.isContentShieldMasterEnabled
-        val isPaused = guardManager.prefs.isContentShieldPaused
-        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
-
-        val titleText = when {
-            !isMasterOn -> "🛡️ AI Visual Shield & Safe Browser Guard (DISABLED)"
-            isPaused -> "🛡️ AI Visual Shield & Safe Browser Guard (PAUSED)"
-            else -> "🛡️ AI Visual Shield & Safe Browser Guard (ACTIVE)"
-        }
-        binding.tvContentShieldTitle.text = titleText
-
-        val statusText = when {
-            !hasAccessibility -> "Status: ⚠️ Accessibility Service Required for Gestures & Shield"
-            isPaused -> "Status: ⏸️ Paused by User"
-            !isMasterOn -> "Status: Inactive (Master Switch OFF)"
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
-                "Status: Active • Gestures Ready • API 30+ Screenshot Ready"
-            else ->
-                "Status: Active • Gestures Ready • Caption/Metadata Filter Ready"
-        }
-        val statusColor = if (isMasterOn && !isPaused && hasAccessibility) Color.parseColor("#10B981") else Color.parseColor("#EF4444")
-        binding.tvShieldStatus.text = statusText
-        binding.tvShieldStatus.setTextColor(statusColor)
-
-        // Live metrics update
-        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
-        val autoSkipped = guardManager.prefs.getAutoSkippedCountToday(todayStr)
-        val blockedBrowser = guardManager.prefs.getBlockedBrowserCountToday(todayStr)
-        binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
-        binding.tvBlockedBrowserCount.text = "🚫 Blocked Browser Searches/Videos: $blockedBrowser"
     }
 
     private fun refreshCustomVoiceDisplay() {
@@ -853,12 +796,6 @@ class MainActivity : AppCompatActivity() {
 
         // 5. Usage Analytics Dashboard (Feature 5)
         updateAnalyticsDashboard()
-
-        // 6. Live Content Shield Metrics (~1s cadence)
-        if (++shieldUpdateTick >= 30) {
-            shieldUpdateTick = 0
-            updateShieldStatusDisplay()
-        }
     }
 
     private fun updateWeaknessImpulseCard() {
@@ -1052,8 +989,6 @@ class MainActivity : AppCompatActivity() {
             binding.btnGrantOverlay.isEnabled = true
             binding.btnGrantOverlay.text = getString(R.string.btn_grant_overlay)
         }
-
-        updateShieldStatusDisplay()
     }
 
     private fun showMasterPinSettingsDialog() {
