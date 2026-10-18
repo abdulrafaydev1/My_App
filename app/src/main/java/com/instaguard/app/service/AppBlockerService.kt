@@ -97,15 +97,21 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastDopamineTintColor = 0
     private var lastDopamineTintUpdateElapsedMs = 0L
 
-    // v9.2 Real-Time Precision Visual Scanner & Browser Blocker State
+    // v9.3 Real-Time Visual Scanner & Browser Blocker State
+    private val visualAnalyzerExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     @Volatile
     private var isScreenshotInProgress = false
     private var lastScreenshotElapsedMs = 0L
     private var lastAutoSkipElapsedMs = 0L
     private var lastBrowserBlockElapsedMs = 0L
     private var previousSkinGrid: BooleanArray? = null
-    private var consecutiveExplicitFrameCount = 0
     private var lastAnalyzedAppKey: String? = null
+
+    // Protected Foreground App State (Zero-Flicker & Resilience)
+    @Volatile
+    private var lastValidTrackedAppKey: String? = null
+    @Volatile
+    private var lastValidAppSeenElapsedMs: Long = 0L
 
     // v6.3 Post-Scroll Settled Verification State
     private var lastScrollCountElapsedMs = 0L
@@ -130,15 +136,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private val verifyScrollRunnable = Runnable {
         val activeKey = currentForegroundAppKey ?: return@Runnable
         val now = SystemClock.elapsedRealtime()
-        if (now - lastScrollCountElapsedMs < 900L) return@Runnable
+        if (now - lastScrollCountElapsedMs < 750L) return@Runnable
 
         val root = try { rootInActiveWindow } catch (e: Exception) { null }
         val currentSig = getScreenContentSignature(root)
         val indexChanged = (pendingScrollFromIndex >= 0 && pendingScrollFromIndex != lastCountedFromIndex) ||
             (pendingScrollToIndex >= 0 && pendingScrollToIndex != lastCountedToIndex)
         val signatureChanged = currentSig.isNotEmpty() && currentSig != lastCountedScreenSignature
-        val confirmRealFullScroll = indexChanged || signatureChanged ||
-            (currentSig.isEmpty() && pendingScrollFromIndex == -1 && activeKey == "TIKTOK")
+        val confirmRealFullScroll = indexChanged || signatureChanged || currentSig.isEmpty()
 
         if (!confirmRealFullScroll) return@Runnable
 
@@ -150,7 +155,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             "INSTAGRAM", "FACEBOOK" -> {
                 val inReels = isReelsOrWatchTabActive(activeKey, root)
                 val hasVideoNow = hasVideoElementOnScreen(root)
-                if (inReels || hadVideoVisibleBeforeScroll || hasVideoNow) {
+                if (inReels || hadVideoVisibleBeforeScroll || hasVideoNow || currentSig.isEmpty()) {
                     shouldIncrement = true
                 }
             }
@@ -197,6 +202,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
             if (pm != null && !pm.isInteractive) {
                 currentForegroundAppKey = null
+                lastValidTrackedAppKey = null
                 removeFloatingPill()
                 hideDopamineTintOverlay()
                 tickerHandler.postDelayed(this, 50L)
@@ -214,14 +220,28 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
                 null
             }
-            if (rootPkg != null && !IGNORED_SYSTEM_PACKAGES.contains(rootPkg)) {
-                val mapped = mapPackageToAppKey(rootPkg)
-                if (mapped != null) {
-                    currentForegroundAppKey = mapped
-                } else if (rootPkg == applicationContext.packageName) {
-                    if (isOurAppScreenOpen) {
+            if (rootPkg != null) {
+                if (!IGNORED_SYSTEM_PACKAGES.contains(rootPkg)) {
+                    val mapped = mapPackageToAppKey(rootPkg)
+                    if (mapped != null) {
+                        currentForegroundAppKey = mapped
+                        lastValidTrackedAppKey = mapped
+                        lastValidAppSeenElapsedMs = nowElapsed
+                    } else if (rootPkg == applicationContext.packageName) {
+                        if (isOurAppScreenOpen) {
+                            currentForegroundAppKey = null
+                            lastValidTrackedAppKey = null
+                        }
+                    } else if (isLauncherPackage(rootPkg)) {
                         currentForegroundAppKey = null
+                        lastValidTrackedAppKey = null
                     }
+                }
+            } else {
+                // rootPkg is null (transient during screenshot capture or window transition)
+                // Retain currentForegroundAppKey if lastValidTrackedAppKey was seen within last 2000ms
+                if (lastValidTrackedAppKey != null && (nowElapsed - lastValidAppSeenElapsedMs < 2000L)) {
+                    currentForegroundAppKey = lastValidTrackedAppKey
                 }
             }
 
@@ -390,21 +410,19 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 }
             }
 
-            // 4b. Real-Time Precision Visual Scanner & Auto-Skip on active social media apps (every 13 ticks = ~650ms)
-            if (activeKey != null && tickCounter % 13 == 0 && prefs.isAiVisualShieldEnabled) {
-                if (lastAnalyzedAppKey != activeKey) {
-                    lastAnalyzedAppKey = activeKey
-                    consecutiveExplicitFrameCount = 0
-                }
+            // 4b. Real-Time Precision Visual Scanner & Auto-Skip on active social media apps (every 18 ticks = ~900ms)
+            if (activeKey != null && tickCounter % 18 == 0 && prefs.isAiVisualShieldEnabled) {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
                 val isYtHome = activeKey == "YOUTUBE" && isYoutubeHomePageActive(root)
                 if (!isYtHome) {
-                    if (hasExplicitSexualMetadata(root)) {
-                        autoSkipCurrentReelOrVideo()
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInProgress) {
-                        val now = SystemClock.elapsedRealtime()
-                        if (now - lastScreenshotElapsedMs >= 650L) {
-                            captureAndAnalyzeSocialFrame()
+                    if (hasSuggestiveReelIndicators(root)) {
+                        triggerAutoSkipIfCooldownElapsed()
+                    } else if (hasVideoElementOnScreen(root)) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInProgress) {
+                            val now = SystemClock.elapsedRealtime()
+                            if (now - lastScreenshotElapsedMs >= 900L) {
+                                captureAndAnalyzeSocialFrame()
+                            }
                         }
                     }
                 }
@@ -571,14 +589,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             }
         }
 
-        // v9.2 Feature 2: Strict UI Hashtag/Caption metadata check on content change
+        // v9.3 Feature 2: Strict UI Hashtag/Caption metadata check on content change
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             val activeKey = currentForegroundAppKey
             if (activeKey != null && prefs.isAiVisualShieldEnabled) {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
                 val isYtHome = activeKey == "YOUTUBE" && isYoutubeHomePageActive(root)
-                if (!isYtHome && hasExplicitSexualMetadata(root)) {
-                    autoSkipCurrentReelOrVideo()
+                if (!isYtHome && hasSuggestiveReelIndicators(root)) {
+                    triggerAutoSkipIfCooldownElapsed()
                 }
             }
         }
@@ -622,14 +640,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             return
         }
 
-        // v6.3 Step 3: 300ms Post-Scroll Settled Verification Engine
+        // v9.3 Step 3: 250ms Post-Scroll Settled Verification Engine
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-            consecutiveExplicitFrameCount = 0
             val activeKey = currentForegroundAppKey ?: return
             val now = SystemClock.elapsedRealtime()
 
-            // 1. Debounce between counted gestures (900ms minimum between counts)
-            if (now - lastScrollCountElapsedMs < 900L) {
+            // 1. Debounce between counted gestures (750ms minimum between counts)
+            if (now - lastScrollCountElapsedMs < 750L) {
                 return
             }
 
@@ -641,9 +658,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 hadVideoVisibleBeforeScroll = true
             }
 
-            // Schedule (or reset) delayed 300ms verification after finger swipe settles
+            // Schedule (or reset) delayed 250ms verification after finger swipe settles
             tickerHandler.removeCallbacks(verifyScrollRunnable)
-            tickerHandler.postDelayed(verifyScrollRunnable, 300L)
+            tickerHandler.postDelayed(verifyScrollRunnable, 250L)
             return
         }
 
@@ -666,6 +683,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             if (isOurAppScreenOpen) {
                 currentForegroundAppKey?.let { saveStateToPrefs(it) }
                 currentForegroundAppKey = null
+                lastValidTrackedAppKey = null
                 removeFloatingPill()
                 hideDopamineTintOverlay()
             }
@@ -674,7 +692,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         // 5. Check if foreground window matches one of our tracked apps
         val detectedKey = mapPackageToAppKey(packageName)
+        val nowState = SystemClock.elapsedRealtime()
         if (detectedKey != null) {
+            lastValidTrackedAppKey = detectedKey
+            lastValidAppSeenElapsedMs = nowState
             if (isAppLocked(detectedKey, applicationContext)) {
                 Log.w(TAG, "[$detectedKey] Opened during active cooldown lock. Enforcing LockScreen.")
                 currentForegroundAppKey = null
@@ -697,10 +718,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             }
         } else {
             // User switched to another real application or Home Launcher
-            currentForegroundAppKey?.let { saveStateToPrefs(it) }
-            currentForegroundAppKey = null
-            removeFloatingPill()
-            hideDopamineTintOverlay()
+            if (isLauncherPackage(packageName) || !IGNORED_SYSTEM_PACKAGES.contains(packageName)) {
+                currentForegroundAppKey?.let { saveStateToPrefs(it) }
+                currentForegroundAppKey = null
+                lastValidTrackedAppKey = null
+                removeFloatingPill()
+                hideDopamineTintOverlay()
+            }
         }
     }
 
@@ -1522,7 +1546,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v9.0 FEATURE 2: Real-Time Visual Scanner & Programmatic Auto-Skip
+    // v9.3 FEATURE 2: Real-Time Visual Scanner & Calibrated Auto-Skip Engine
     // =========================================================================
 
     private fun captureAndAnalyzeSocialFrame() {
@@ -1531,51 +1555,43 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                takeScreenshot(
-                    Display.DEFAULT_DISPLAY,
-                    mainExecutor,
-                    object : AccessibilityService.TakeScreenshotCallback {
-                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                            val hwBuffer = screenshot.hardwareBuffer
-                            try {
-                                val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                                val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                                hwBuffer.close()
-                                hwBitmap?.recycle()
-                                if (swBitmap != null) {
-                                    val scaled = Bitmap.createScaledBitmap(swBitmap, 96, 170, false)
-                                    if (scaled != swBitmap) swBitmap.recycle()
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                visualAnalyzerExecutor,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        val hwBuffer = screenshot.hardwareBuffer
+                        try {
+                            val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                            val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                            hwBuffer.close()
+                            hwBitmap?.recycle()
+                            if (swBitmap != null) {
+                                val scaled = Bitmap.createScaledBitmap(swBitmap, 80, 140, false)
+                                if (scaled != swBitmap) swBitmap.recycle()
 
-                                    val isExplicit = analyzeBitmapForExplicitBodyExposure(scaled)
-                                    scaled.recycle()
+                                val shouldSkip = analyzeFrameOnBackgroundThread(scaled)
+                                scaled.recycle()
 
-                                    if (isExplicit) {
-                                        consecutiveExplicitFrameCount++
-                                        Log.d(TAG, "Explicit frame confirmed ($consecutiveExplicitFrameCount/2)")
-                                        if (consecutiveExplicitFrameCount >= 2) {
-                                            autoSkipCurrentReelOrVideo()
-                                        }
-                                    } else {
-                                        consecutiveExplicitFrameCount = 0
+                                if (shouldSkip) {
+                                    tickerHandler.post {
+                                        triggerAutoSkipIfCooldownElapsed()
                                     }
                                 }
-                            } catch (e: Exception) {
-                                try { hwBuffer.close() } catch (_: Exception) {}
-                                e.printStackTrace()
-                            } finally {
-                                isScreenshotInProgress = false
                             }
-                        }
-
-                        override fun onFailure(errorCode: Int) {
+                        } catch (e: Exception) {
+                            try { hwBuffer.close() } catch (_: Exception) {}
+                            e.printStackTrace()
+                        } finally {
                             isScreenshotInProgress = false
                         }
                     }
-                )
-            } else {
-                isScreenshotInProgress = false
-            }
+
+                    override fun onFailure(errorCode: Int) {
+                        isScreenshotInProgress = false
+                    }
+                }
+            )
         } catch (e: Exception) {
             isScreenshotInProgress = false
             e.printStackTrace()
@@ -1583,34 +1599,30 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * Gate A: Tight Human Dermis Pixel Classifier (Combined RGB + HSV + YCbCr).
+     * Calibrated Skin Pixel Classifier (Combined RGB + HSV + YCbCr).
      * Strictly rejects wooden/beige walls, orange/yellow lighting, and neutral clothing.
      */
-    private fun isStrictHumanSkinPixel(pixel: Int): Boolean {
-        val r = Color.red(pixel)
-        val g = Color.green(pixel)
-        val b = Color.blue(pixel)
-        // Reject too dark, too bright/white, or greyscale/neutral walls
-        if (r < 75 || g < 45 || b < 30) return false
-        if (r > 248 && g > 240 && b > 235) return false
-        if (r <= g || g <= b) return false // Human skin strictly has R > G > B
-        if ((r - g) < 12 || (r - b) < 25 || (r - b) > 135) return false
-
-        val y  = 0.299 * r + 0.587 * g + 0.114 * b
-        val cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b
-        val cr = 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b
-        return (y in 65.0..235.0) && (cb in 84.0..120.0) && (cr in 138.0..168.0)
+    private fun isSkinPixel(p: Int): Boolean {
+        val r = Color.red(p)
+        val g = Color.green(p)
+        val b = Color.blue(p)
+        val y = 0.299 * r + 0.587 * g + 0.114 * b
+        val cb = 128.0 - 0.1687 * r - 0.3313 * g + 0.5 * b
+        val cr = 128.0 + 0.5 * r - 0.4187 * g - 0.0813 * b
+        return (r > 80 && g > 45 && b > 30 && r > g && r > b &&
+                (r - minOf(g, b)) > 12 &&
+                cb in 80.0..124.0 && cr in 135.0..172.0 && y in 60.0..240.0)
     }
 
     /**
-     * v9.2 4-Gate Anatomical & Clothing Geometry Analyzer.
-     * ZERO false positives on normal clothed people, warm rooms, or selfie talking heads.
-     * ONLY returns true on:
+     * Calibrated Background-Thread Frame Analyzer (80x140).
+     * Runs 100% on visualAnalyzerExecutor.
+     * Evaluates 4 Anatomical Zones and triggers auto-skip on:
      * 1. Exposed Breasts / Cleavage
-     * 2. Short Sexual Dress + Exposed Buttocks (Ass) / Upper Thighs
+     * 2. Short Sexy Dress / Booty Shorts + Exposed Buttocks or Thighs
      * 3. Exposed Bare Back + Buttocks / Shaking Movement
      */
-    private fun analyzeBitmapForExplicitBodyExposure(bitmap: Bitmap): Boolean {
+    private fun analyzeFrameOnBackgroundThread(bitmap: Bitmap): Boolean {
         val width = bitmap.width
         val height = bitmap.height
         if (width <= 0 || height <= 0) return false
@@ -1622,271 +1634,162 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         val lumMap = FloatArray(pixels.size)
         for (i in pixels.indices) {
             val p = pixels[i]
-            skinMap[i] = isStrictHumanSkinPixel(p)
+            skinMap[i] = isSkinPixel(p)
             val r = (p shr 16) and 0xFF
             val g = (p shr 8) and 0xFF
             val b = p and 0xFF
             lumMap[i] = 0.299f * r + 0.587f * g + 0.114f * b
         }
 
-        // =====================================================================
-        // GATE B: Background / Warm Lighting Rejection (Outer Frame Borders)
-        // =====================================================================
-        var borderTotal = 0
-        var borderSkin = 0
-        val borderXLeft = (width * 0.12f).toInt()
-        val borderXRight = (width * 0.88f).toInt()
-        val borderYTop = (height * 0.10f).toInt()
+        // 4 Anatomical Zones (Center Column x from 20% to 80%):
+        val cenMinX = (width * 0.20f).toInt()
+        val cenMaxX = (width * 0.80f).toInt()
+
+        val faceMinY = (height * 0.12f).toInt()
+        val faceMaxY = (height * 0.33f).toInt()
+        val chestMinY = (height * 0.34f).toInt()
+        val chestMaxY = (height * 0.56f).toInt()
+        val midMinY = (height * 0.56f).toInt()
+        val midMaxY = (height * 0.72f).toInt()
+        val lowMinY = (height * 0.72f).toInt()
+        val lowMaxY = (height * 0.90f).toInt()
+
+        val borderLeftMax = (width * 0.10f).toInt()
+        val borderRightMin = (width * 0.90f).toInt()
+
+        var borderTotal = 0; var borderSkin = 0
+        var faceTotal = 0; var faceSkin = 0
+        var chestTotal = 0; var chestSkin = 0
+        var midTorsoTotal = 0; var midTorsoSkin = 0
+        var lowerGluteThighTotal = 0; var lowerGluteThighSkin = 0
+
+        // Sub-boxes for chestCleavageContrast (x = 28%..45%, 45%..55%, 55%..72%)
+        val chestLeftMinX = (width * 0.28f).toInt()
+        val chestLeftMaxX = (width * 0.45f).toInt()
+        val cleavageMinX = (width * 0.45f).toInt()
+        val cleavageMaxX = (width * 0.55f).toInt()
+        val chestRightMinX = (width * 0.55f).toInt()
+        val chestRightMaxX = (width * 0.72f).toInt()
+
+        var cLeftTotal = 0; var cLeftSkin = 0; var cLeftLum = 0f
+        var cCenterTotal = 0; var cCenterSkin = 0; var cCenterLum = 0f
+        var cRightTotal = 0; var cRightSkin = 0; var cRightLum = 0f
 
         for (y in 0 until height) {
             val row = y * width
             for (x in 0 until width) {
-                if (x < borderXLeft || x > borderXRight || y < borderYTop) {
-                    borderTotal++
-                    if (skinMap[row + x]) borderSkin++
-                }
-            }
-        }
-        val borderSkinRatio = borderSkin.toFloat() / maxOf(1, borderTotal)
-        if (borderSkinRatio >= 0.18f) {
-            // Warm orange/yellow lighting, beige/wooden wall, or full color filter -> Do NOT skip!
-            return false
-        }
-
-        // =====================================================================
-        // GATE C: Normal Clothed Person & Close-Up Talking Face Protection
-        // Central Subject Area: x from 22% to 78%
-        // =====================================================================
-        val subjMinX = (width * 0.22f).toInt()
-        val subjMaxX = (width * 0.78f).toInt()
-
-        val faceMinY = (height * 0.12f).toInt()
-        val faceMaxY = (height * 0.35f).toInt()
-        val chestMinY = (height * 0.36f).toInt()
-        val chestMaxY = (height * 0.56f).toInt()
-        val waistMinY = (height * 0.56f).toInt()
-        val waistMaxY = (height * 0.70f).toInt()
-        val lowerMinY = (height * 0.70f).toInt()
-        val lowerMaxY = (height * 0.90f).toInt()
-
-        var faceTotal = 0; var faceSkin = 0
-        var chestTotal = 0; var chestSkin = 0
-        var waistTotal = 0; var waistSkin = 0
-        var lowerTotal = 0; var lowerSkin = 0
-
-        for (y in 0 until height) {
-            val row = y * width
-            for (x in subjMinX..subjMaxX) {
                 val isSkin = skinMap[row + x]
-                if (y in faceMinY..faceMaxY) {
-                    faceTotal++
-                    if (isSkin) faceSkin++
-                } else if (y in chestMinY..chestMaxY) {
-                    chestTotal++
-                    if (isSkin) chestSkin++
-                } else if (y in waistMinY..waistMaxY) {
-                    waistTotal++
-                    if (isSkin) waistSkin++
-                } else if (y in lowerMinY..lowerMaxY) {
-                    lowerTotal++
-                    if (isSkin) lowerSkin++
+                val lum = lumMap[row + x]
+
+                // Outer edge borders (x < 10% or x > 90%)
+                if (x < borderLeftMax || x > borderRightMin) {
+                    borderTotal++
+                    if (isSkin) borderSkin++
+                }
+
+                // Center column (x in 20%..80%)
+                if (x in cenMinX..cenMaxX) {
+                    if (y in faceMinY..faceMaxY) {
+                        faceTotal++
+                        if (isSkin) faceSkin++
+                    } else if (y in chestMinY..chestMaxY) {
+                        chestTotal++
+                        if (isSkin) chestSkin++
+
+                        if (x in chestLeftMinX until chestLeftMaxX) {
+                            cLeftTotal++
+                            if (isSkin) cLeftSkin++
+                            cLeftLum += lum
+                        } else if (x in cleavageMinX until cleavageMaxX) {
+                            cCenterTotal++
+                            if (isSkin) cCenterSkin++
+                            cCenterLum += lum
+                        } else if (x in chestRightMinX..chestRightMaxX) {
+                            cRightTotal++
+                            if (isSkin) cRightSkin++
+                            cRightLum += lum
+                        }
+                    } else if (y in midMinY..midMaxY) {
+                        midTorsoTotal++
+                        if (isSkin) midTorsoSkin++
+                    } else if (y in lowMinY..lowMaxY) {
+                        lowerGluteThighTotal++
+                        if (isSkin) lowerGluteThighSkin++
+                    }
                 }
             }
         }
 
-        val faceSkinRatio = faceSkin.toFloat() / maxOf(1, faceTotal)
-        val chestSkinRatio = chestSkin.toFloat() / maxOf(1, chestTotal)
-        val chestClothingRatio = 1f - chestSkinRatio
-        val waistSkinRatio = waistSkin.toFloat() / maxOf(1, waistTotal)
-        val waistClothingRatio = 1f - waistSkinRatio
-        val lowerBodySkinRatio = lowerSkin.toFloat() / maxOf(1, lowerTotal)
+        val outerEdgeSkinRatio = borderSkin.toFloat() / maxOf(1, borderTotal)
+        val faceRatio = faceSkin.toFloat() / maxOf(1, faceTotal)
+        val chestRatio = chestSkin.toFloat() / maxOf(1, chestTotal)
+        val midTorsoRatio = midTorsoSkin.toFloat() / maxOf(1, midTorsoTotal)
+        val lowerGluteThighRatio = lowerGluteThighSkin.toFloat() / maxOf(1, lowerGluteThighTotal)
 
-        // Strict Rule 1 (Normal Clothed Person): Chest covered and lower body covered
-        if (chestClothingRatio >= 0.76f && lowerBodySkinRatio < 0.28f) {
+        // 1. Reject Full-Screen Warm Wall / Desert Lighting:
+        if (outerEdgeSkinRatio > 0.38f) {
             return false
         }
 
-        // =====================================================================
-        // GATE D: Positive Detection of the 3 Exact Target Conditions
-        // =====================================================================
-
-        // Pattern 1 — Exposed Breasts / Cleavage Detection (Front View)
-        // Chest Box: y from 37% to 58%, x from 28% to 72%
-        val cbMinY = (height * 0.37f).toInt()
-        val cbMaxY = (height * 0.58f).toInt()
-        val cbLeftMinX = (width * 0.28f).toInt()
-        val cbLeftMaxX = (width * 0.46f).toInt()
-        val cbCenterMinX = (width * 0.46f).toInt()
-        val cbCenterMaxX = (width * 0.54f).toInt()
-        val cbRightMinX = (width * 0.54f).toInt()
-        val cbRightMaxX = (width * 0.72f).toInt()
-
-        var leftTotal = 0; var leftSkin = 0; var leftLumSum = 0f
-        var centerTotal = 0; var centerSkin = 0; var centerLumSum = 0f
-        var rightTotal = 0; var rightSkin = 0; var rightLumSum = 0f
-
-        for (y in cbMinY..cbMaxY) {
-            val row = y * width
-            for (x in cbLeftMinX until cbLeftMaxX) {
-                leftTotal++
-                if (skinMap[row + x]) leftSkin++
-                leftLumSum += lumMap[row + x]
-            }
-            for (x in cbCenterMinX until cbCenterMaxX) {
-                centerTotal++
-                if (skinMap[row + x]) centerSkin++
-                centerLumSum += lumMap[row + x]
-            }
-            for (x in cbRightMinX..cbRightMaxX) {
-                rightTotal++
-                if (skinMap[row + x]) rightSkin++
-                rightLumSum += lumMap[row + x]
-            }
+        // 2. Reject Normal Clothed Videos (Face Only, Covered Body):
+        if (chestRatio < 0.18f && midTorsoRatio < 0.16f && lowerGluteThighRatio < 0.18f) {
+            return false
         }
 
-        val leftSkinRatio = leftSkin.toFloat() / maxOf(1, leftTotal)
-        val rightSkinRatio = rightSkin.toFloat() / maxOf(1, rightTotal)
-        val leftLum = leftLumSum / maxOf(1, leftTotal)
-        val centerLum = centerLumSum / maxOf(1, centerTotal)
-        val rightLum = rightLumSum / maxOf(1, rightTotal)
+        // 3. Cleavage contrast calculation:
+        val leftLumAvg = cLeftLum / maxOf(1, cLeftTotal)
+        val centerLumAvg = cCenterLum / maxOf(1, cCenterTotal)
+        val rightLumAvg = cRightLum / maxOf(1, cRightTotal)
+        val leftChestSkinRatio = cLeftSkin.toFloat() / maxOf(1, cLeftTotal)
+        val centerCleavageSkinRatio = cCenterSkin.toFloat() / maxOf(1, cCenterTotal)
+        val rightChestSkinRatio = cRightSkin.toFloat() / maxOf(1, cRightTotal)
 
-        // Outer straps / neckline framing contrast (x = 20%..28% and 72%..80% in chest band)
-        val strapLeftMinX = (width * 0.20f).toInt()
-        val strapLeftMaxX = (width * 0.28f).toInt()
-        val strapRightMinX = (width * 0.72f).toInt()
-        val strapRightMaxX = (width * 0.80f).toInt()
-        var strapTotal = 0; var strapSkin = 0
-        for (y in cbMinY..cbMaxY) {
-            val row = y * width
-            for (x in strapLeftMinX until strapLeftMaxX) {
-                strapTotal++
-                if (skinMap[row + x]) strapSkin++
-            }
-            for (x in strapRightMinX..strapRightMaxX) {
-                strapTotal++
-                if (skinMap[row + x]) strapSkin++
-            }
-        }
-        val strapClothingRatio = 1f - (strapSkin.toFloat() / maxOf(1, strapTotal))
+        val chestCleavageContrast = (centerLumAvg < ((leftLumAvg + rightLumAvg) / 2f) - 8f) ||
+            (centerCleavageSkinRatio < 0.25f && leftChestSkinRatio >= 0.28f && rightChestSkinRatio >= 0.28f)
 
-        val hasCleavageCleft = (centerLum < ((leftLum + rightLum) / 2f) - 10f) ||
-            (centerSkin.toFloat() / maxOf(1, centerTotal) < 0.28f && leftSkinRatio >= 0.42f && rightSkinRatio >= 0.42f)
-        val hasFabricContrast = waistClothingRatio >= 0.35f || strapClothingRatio >= 0.38f
-
-        val pattern1Cleavage = (leftSkinRatio >= 0.42f && rightSkinRatio >= 0.42f) && hasCleavageCleft && hasFabricContrast
-
-        // Strict Rule 2 of Gate C: Close-Up Talking Head / Selfie Vlog Protection
-        if (faceSkinRatio >= 0.35f && lowerBodySkinRatio < 0.15f) {
-            if (!pattern1Cleavage) {
-                return false
-            }
-        }
-
-        // Pattern 2 — Short Sexual Dress + Exposed Buttocks (Ass) / Thighs Detection
-        // Buttocks & Upper-Thigh Zone: y from 62% to 88%, x from 25% to 75%
-        val gluteMinY = (height * 0.62f).toInt()
-        val gluteMaxY = (height * 0.88f).toInt()
-        val gluteLeftMinX = (width * 0.25f).toInt()
-        val gluteLeftMaxX = (width * 0.49f).toInt()
-        val gluteRightMinX = (width * 0.51f).toInt()
-        val gluteRightMaxX = (width * 0.75f).toInt()
-
-        var gLeftTotal = 0; var gLeftSkin = 0
-        var gRightTotal = 0; var gRightSkin = 0
-        var gAllTotal = 0; var gAllSkin = 0
-
-        for (y in gluteMinY..gluteMaxY) {
-            val row = y * width
-            for (x in gluteLeftMinX..gluteLeftMaxX) {
-                gLeftTotal++
-                gAllTotal++
-                if (skinMap[row + x]) { gLeftSkin++; gAllSkin++ }
-            }
-            for (x in gluteRightMinX..gluteRightMaxX) {
-                gRightTotal++
-                gAllTotal++
-                if (skinMap[row + x]) { gRightSkin++; gAllSkin++ }
-            }
-        }
-        val leftGluteSkin = gLeftSkin.toFloat() / maxOf(1, gLeftTotal)
-        val rightGluteSkin = gRightSkin.toFloat() / maxOf(1, gRightTotal)
-        val gluteZoneSkin = gAllSkin.toFloat() / maxOf(1, gAllTotal)
-
-        val hasShortDressGarment = (chestClothingRatio >= 0.35f || waistClothingRatio >= 0.40f)
-        val pattern2ShortDressButtocks = hasShortDressGarment &&
-            (gluteZoneSkin >= 0.40f || lowerBodySkinRatio >= 0.40f) &&
-            (leftGluteSkin >= 0.38f && rightGluteSkin >= 0.38f) &&
-            (borderSkinRatio < 0.12f)
-
-        // Pattern 3 — Exposed Bare Back + Buttocks / Shaking Movement Detection
-        // Upper/Mid Back Zone: y from 30% to 58%, x from 32% to 68%
-        val backMinY = (height * 0.30f).toInt()
-        val backMaxY = (height * 0.58f).toInt()
-        val backMinX = (width * 0.32f).toInt()
-        val backMaxX = (width * 0.68f).toInt()
-        val dressBelowMinY = (height * 0.60f).toInt()
-        val dressBelowMaxY = (height * 0.76f).toInt()
-
-        var backTotal = 0; var backSkin = 0
-        for (y in backMinY..backMaxY) {
-            val row = y * width
-            for (x in backMinX..backMaxX) {
-                backTotal++
-                if (skinMap[row + x]) backSkin++
-            }
-        }
-        val backSkinRatio = backSkin.toFloat() / maxOf(1, backTotal)
-
-        var dressBelowTotal = 0; var dressBelowSkin = 0
-        for (y in dressBelowMinY..dressBelowMaxY) {
-            val row = y * width
-            for (x in backMinX..backMaxX) {
-                dressBelowTotal++
-                if (skinMap[row + x]) dressBelowSkin++
-            }
-        }
-        val dressBelowClothingRatio = 1f - (dressBelowSkin.toFloat() / maxOf(1, dressBelowTotal))
-
-        // Compare with previousFrameZoneGrid for motion / delta
-        var motionDelta = 0f
+        // 4. Frame motion delta:
+        var frameMotionDelta = 0f
         val prevGrid = previousSkinGrid
         val currentGrid = skinMap
         if (prevGrid != null && prevGrid.size == currentGrid.size) {
             var diffCount = 0
-            var testedCount = 0
-            val motionMinY = (height * 0.30f).toInt()
-            val motionMaxY = (height * 0.88f).toInt()
-            val motionMinX = (width * 0.25f).toInt()
-            val motionMaxX = (width * 0.75f).toInt()
-            for (y in motionMinY..motionMaxY) {
+            var totalTested = 0
+            for (y in chestMinY..lowMaxY) {
                 val row = y * width
-                for (x in motionMinX..motionMaxX) {
-                    testedCount++
+                for (x in cenMinX..cenMaxX) {
+                    totalTested++
                     if (currentGrid[row + x] != prevGrid[row + x]) {
                         diffCount++
                     }
                 }
             }
-            motionDelta = diffCount.toFloat() / maxOf(1, testedCount)
+            frameMotionDelta = diffCount.toFloat() / maxOf(1, totalTested)
         }
         previousSkinGrid = currentGrid
 
-        val hasBareBackOrRear = backSkinRatio >= 0.46f && (dressBelowClothingRatio >= 0.35f || lowerBodySkinRatio >= 0.38f)
-        val hasDorsalContrastOrMotion = motionDelta >= 0.12f || (backSkinRatio >= 0.52f && dressBelowClothingRatio >= 0.45f)
-        val pattern3BareBack = hasBareBackOrRear && hasDorsalContrastOrMotion
+        // 5. Trigger Skip (return true) When ANY of These 3 Real-World Exposure Patterns Match:
+        // Trigger 1 (Exposed Breasts / Cleavage or Low-Cut Top):
+        val trigger1 = (chestRatio >= 0.26f) && (midTorsoRatio < chestRatio * 0.85f || chestCleavageContrast)
 
-        return pattern1Cleavage || pattern2ShortDressButtocks || pattern3BareBack
+        // Trigger 2 (Short Sexy Dress / Mini Skirt / Booty Shorts + Exposed Buttocks or Thighs):
+        val trigger2 = (lowerGluteThighRatio >= 0.25f) && ((midTorsoRatio in 0.05f..0.65f) || chestRatio >= 0.18f)
+
+        // Trigger 3 (Bare Back / Backless Dress or Glute/Body Shaking Movement):
+        val trigger3 = (chestRatio + midTorsoRatio >= 0.48f) ||
+            ((chestRatio >= 0.20f || lowerGluteThighRatio >= 0.20f) && frameMotionDelta >= 0.10f)
+
+        return trigger1 || trigger2 || trigger3
     }
 
-    private fun hasExplicitSexualMetadata(root: AccessibilityNodeInfo?): Boolean {
+    private fun hasSuggestiveReelIndicators(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
         try {
             val textBuilder = StringBuilder()
             collectNodeTexts(root, textBuilder, depth = 0, maxDepth = 40)
             val fullText = textBuilder.toString().lowercase(Locale.ROOT)
-            for (tag in STRICT_NSFW_SOCIAL_TAGS) {
-                if (fullText.contains(tag)) {
-                    Log.i(TAG, "Explicit sexual hashtag detected in UI metadata: '$tag'")
+            for (indicator in SUGGESTIVE_REEL_INDICATORS) {
+                if (fullText.contains(indicator)) {
+                    Log.i(TAG, "Suggestive indicator detected in UI metadata: '$indicator'")
                     return true
                 }
             }
@@ -1915,22 +1818,25 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun autoSkipCurrentReelOrVideo() {
+    private fun triggerAutoSkipIfCooldownElapsed() {
         val now = SystemClock.elapsedRealtime()
-        if (now - lastAutoSkipElapsedMs < 2500L) return
+        if (now - lastAutoSkipElapsedMs < 1800L) return
         lastAutoSkipElapsedMs = now
-        consecutiveExplicitFrameCount = 0
 
+        autoSkipCurrentReelOrVideo()
+    }
+
+    private fun autoSkipCurrentReelOrVideo() {
         try {
             val metrics = resources.displayMetrics
             val centerX = metrics.widthPixels * 0.5f
             val startY = metrics.heightPixels * 0.82f
-            val endY = metrics.heightPixels * 0.16f
+            val endY = metrics.heightPixels * 0.15f
             val path = Path().apply {
                 moveTo(centerX, startY)
                 lineTo(centerX, endY)
             }
-            val stroke = GestureDescription.StrokeDescription(path, 0L, 140L)
+            val stroke = GestureDescription.StrokeDescription(path, 0L, 130L)
             val gesture = GestureDescription.Builder().addStroke(stroke).build()
             dispatchGesture(gesture, null, null)
         } catch (e: Exception) {
@@ -1953,6 +1859,20 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private fun isLauncherPackage(pkg: String): Boolean {
+        if (pkg.isEmpty()) return false
+        if (pkg.contains("launcher") || pkg.contains("home") || pkg.contains("trebuchet") || pkg.contains("quickstep")) {
+            return true
+        }
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+            val resolveInfo = packageManager.resolveActivity(intent, 0)
+            resolveInfo?.activityInfo?.packageName == pkg
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -2071,45 +1991,43 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                takeScreenshot(
-                    Display.DEFAULT_DISPLAY,
-                    mainExecutor,
-                    object : AccessibilityService.TakeScreenshotCallback {
-                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                            val hwBuffer = screenshot.hardwareBuffer
-                            try {
-                                val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                                val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                                hwBuffer.close()
-                                hwBitmap?.recycle()
-                                if (swBitmap != null) {
-                                    val scaled = Bitmap.createScaledBitmap(swBitmap, 96, 170, false)
-                                    if (scaled != swBitmap) swBitmap.recycle()
+            takeScreenshot(
+                Display.DEFAULT_DISPLAY,
+                visualAnalyzerExecutor,
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        val hwBuffer = screenshot.hardwareBuffer
+                        try {
+                            val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
+                            val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                            hwBuffer.close()
+                            hwBitmap?.recycle()
+                            if (swBitmap != null) {
+                                val scaled = Bitmap.createScaledBitmap(swBitmap, 80, 140, false)
+                                if (scaled != swBitmap) swBitmap.recycle()
 
-                                    val skinRatio = computeOverallSkinRatio(scaled)
-                                    scaled.recycle()
+                                val skinRatio = computeOverallSkinRatio(scaled)
+                                scaled.recycle()
 
-                                    if (skinRatio >= 0.32f) {
+                                if (skinRatio >= 0.32f) {
+                                    tickerHandler.post {
                                         enforceBrowserBlock(browserPkg, "High Skin Video ($skinRatio)")
                                     }
                                 }
-                            } catch (e: Exception) {
-                                try { hwBuffer.close() } catch (_: Exception) {}
-                                e.printStackTrace()
-                            } finally {
-                                isScreenshotInProgress = false
                             }
-                        }
-
-                        override fun onFailure(errorCode: Int) {
+                        } catch (e: Exception) {
+                            try { hwBuffer.close() } catch (_: Exception) {}
+                            e.printStackTrace()
+                        } finally {
                             isScreenshotInProgress = false
                         }
                     }
-                )
-            } else {
-                isScreenshotInProgress = false
-            }
+
+                    override fun onFailure(errorCode: Int) {
+                        isScreenshotInProgress = false
+                    }
+                }
+            )
         } catch (e: Exception) {
             isScreenshotInProgress = false
             e.printStackTrace()
@@ -2133,7 +2051,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val rowOffset = y * width
             for (x in 0 until width) {
                 inspectedTotal++
-                if (isStrictHumanSkinPixel(pixels[rowOffset + x])) {
+                if (isSkinPixel(pixels[rowOffset + x])) {
                     skinCount++
                 }
             }
@@ -2604,6 +2522,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         super.onDestroy()
         activeServiceInstance = null
         try {
+            visualAnalyzerExecutor.shutdown()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
             tts?.stop()
             tts?.shutdown()
             tts = null
@@ -2616,6 +2539,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
+        lastValidTrackedAppKey = null
     }
 
     companion object {
@@ -2643,6 +2567,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             "com.google.android.googlequicksearchbox",
             "com.sec.android.app.sbrowser",
             "org.mozilla.firefox"
+        )
+
+        val SUGGESTIVE_REEL_INDICATORS = listOf(
+            "cleavage", "bikini", "lingerie", "twerk", "booty", "boobs", "baddie",
+            "thirst trap", "thirsttrap", "short dress", "mini dress", "backless",
+            "hot girl", "sexy girl", "sexy dress", "sexy video", " sexy ", "#sexy",
+            "#hot", "curvy", "thick", "gyatt", "strip", "belly dance", "shaking",
+            "onlyfans", "nsfw", "underboob", "sideboob", "bootyshorts", "hot reel", "bold reel"
         )
 
         val STRICT_NSFW_SOCIAL_TAGS = listOf(
