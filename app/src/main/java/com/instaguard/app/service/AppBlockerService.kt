@@ -22,6 +22,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.util.Log
@@ -1386,6 +1389,35 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         return (dp * density + 0.5f).toInt()
     }
 
+    /**
+     * v8.1 Feature: Double-Pulse Vibration pattern (0ms wait, 250ms pulse, 140ms silence, 300ms strong pulse).
+     */
+    private fun triggerDoublePulseVibration() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                val vibrator = vibratorManager?.defaultVibrator
+                val timings = longArrayOf(0L, 250L, 140L, 300L)
+                val amplitudes = intArrayOf(0, 255, 0, 255)
+                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
+                vibrator?.vibrate(effect)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                val timings = longArrayOf(0L, 250L, 140L, 300L)
+                val amplitudes = intArrayOf(0, 255, 0, 255)
+                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
+                vibrator?.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(longArrayOf(0L, 250L, 140L, 300L), -1)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Vibration failed: ${e.message}")
+        }
+    }
+
     private fun incrementScrollCount(appKey: String) {
         val todayCount = (scrollCountTodayMap[appKey] ?: 0) + 1
         val totalCount = (scrollCountTotalMap[appKey] ?: 0) + 1
@@ -1396,6 +1428,33 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         prefs.setScrollToday(todayDateStr, appKey, todayCount)
         prefs.setScrollTotal(appKey, totalCount)
         InstaGuardWidgetProvider.updateAllWidgets(applicationContext)
+
+        // v8.1: Every 15 Scrolls Double-Pulse Vibration + Flash Red Border + AI Voice Alert
+        if (todayCount > 0 && todayCount % 15 == 0) {
+            triggerDoublePulseVibration()
+
+            tickerHandler.post {
+                try {
+                    (floatingPillView?.background as? GradientDrawable)?.setStroke(dpToPx(1.5f), Color.parseColor("#EF4444"))
+                    tickerHandler.postDelayed({
+                        try {
+                            (floatingPillView?.background as? GradientDrawable)?.setStroke(dpToPx(1f), Color.parseColor("#38FFFFFF"))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }, 1500L)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            fireNotificationThenVoice(
+                notificationId = 4015,
+                title = "⚡ $todayCount Scrolls in a Row!",
+                message = "Wake up! You just scrolled $todayCount reels in a row. Stay mindful!",
+                voiceText = "Wake up! You just scrolled $todayCount reels in a row. Stay mindful!"
+            )
+        }
     }
 
     private fun startYoutubeLongVideoCountdown() {
