@@ -1390,31 +1390,30 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * v8.1 Feature: Double-Pulse Vibration pattern (0ms wait, 250ms pulse, 140ms silence, 300ms strong pulse).
+     * v8.2 Feature: Crisp Double-Pulse Vibration pattern:
+     * Pulse 1 (220ms) -> gap (120ms) -> Pulse 2 (280ms)
      */
     private fun triggerDoublePulseVibration() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                val vibrator = vibratorManager?.defaultVibrator
-                val timings = longArrayOf(0L, 250L, 140L, 300L)
-                val amplitudes = intArrayOf(0, 255, 0, 255)
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator?.vibrate(effect)
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                val timings = longArrayOf(0L, 250L, 140L, 300L)
-                val amplitudes = intArrayOf(0, 255, 0, 255)
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator?.vibrate(effect)
+            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(longArrayOf(0L, 250L, 140L, 300L), -1)
+                getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (vibrator != null && vibrator.hasVibrator()) {
+                val timings = longArrayOf(0L, 220L, 120L, 280L)
+                val amplitudes = intArrayOf(0, 255, 0, 255)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(timings, -1)
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Vibration failed: ${e.message}")
+            e.printStackTrace()
         }
     }
 
@@ -1429,7 +1428,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         prefs.setScrollTotal(appKey, totalCount)
         InstaGuardWidgetProvider.updateAllWidgets(applicationContext)
 
-        // v8.1: Every 15 Scrolls Double-Pulse Vibration + Flash Red Border + AI Voice Alert
+        // v8.2: Every 15 Scrolls Double-Pulse Vibration ONLY (no voice, no notification)
         if (todayCount > 0 && todayCount % 15 == 0) {
             triggerDoublePulseVibration()
 
@@ -1442,18 +1441,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-                    }, 1500L)
+                    }, 1200L)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
-
-            fireNotificationThenVoice(
-                notificationId = 4015,
-                title = "⚡ $todayCount Scrolls in a Row!",
-                message = "Wake up! You just scrolled $todayCount reels in a row. Stay mindful!",
-                voiceText = "Wake up! You just scrolled $todayCount reels in a row. Stay mindful!"
-            )
         }
     }
 
