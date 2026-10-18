@@ -51,6 +51,14 @@ class GuardPreferences(context: Context) {
 
         const val KEY_DOPAMINE_DIMMER_ENABLED = "dopamine_dimmer_enabled"
 
+        // v9.0 Content Shield Keys
+        const val KEY_CONTENT_SHIELD_MASTER_ENABLED = "content_shield_master_enabled"
+        const val KEY_AUTO_SKIP_VIDEOS_ENABLED = "auto_skip_videos_enabled"
+        const val KEY_STRICT_VISUAL_FILTER_ENABLED = "strict_visual_filter_enabled"
+        const val KEY_BROWSER_ADULT_BLOCKER_ENABLED = "browser_adult_blocker_enabled"
+        const val KEY_ADULT_BLOCK_VIBRATION_ENABLED = "adult_block_vibration_enabled"
+        const val KEY_CONTENT_SHIELD_PAUSED = "content_shield_paused"
+
         fun usageKey(appKey: String): String = "usage_ms_${appKey.uppercase()}"
         fun unlockKey(appKey: String): String = "unlock_ms_${appKey.uppercase()}"
         fun dailyTotalKey(dateStr: String, appKey: String): String = "daily_total_ms_${dateStr}_${appKey.uppercase()}"
@@ -259,4 +267,29 @@ class GuardPreferences(context: Context) {
     fun setBlockedAttemptsLog(dateStr: String, log: String) {
         prefs.edit().putString(blockedAttemptsLogKey(dateStr), log).apply()
     }
+
+    // v9.0 AI Visual & Browser Content Shield Properties
+    var isContentShieldMasterEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CONTENT_SHIELD_MASTER_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_CONTENT_SHIELD_MASTER_ENABLED, value).apply()
+
+    var isAutoSkipVideosEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SKIP_VIDEOS_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_SKIP_VIDEOS_ENABLED, value).apply()
+
+    var isStrictVisualFilterEnabled: Boolean
+        get() = prefs.getBoolean(KEY_STRICT_VISUAL_FILTER_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_STRICT_VISUAL_FILTER_ENABLED, value).apply()
+
+    var isBrowserAdultBlockerEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BROWSER_ADULT_BLOCKER_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_BROWSER_ADULT_BLOCKER_ENABLED, value).apply()
+
+    var isAdultBlockVibrationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ADULT_BLOCK_VIBRATION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_ADULT_BLOCK_VIBRATION_ENABLED, value).apply()
+
+    var isContentShieldPaused: Boolean
+        get() = prefs.getBoolean(KEY_CONTENT_SHIELD_PAUSED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CONTENT_SHIELD_PAUSED, value).apply()
 }

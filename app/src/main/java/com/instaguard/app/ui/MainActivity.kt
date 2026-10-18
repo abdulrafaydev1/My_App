@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
         setupTestModeSwitch()
         setupV70FeatureControls()
         setupV80FeatureControls()
+        setupV90ContentShieldControls()
         startStatusPulseAnimation()
         playStaggeredEntranceAnimation()
     }
@@ -108,6 +109,8 @@ class MainActivity : AppCompatActivity() {
         AppBlockerService.syncFromPrefs(this)
 
         refreshCustomVoiceDisplay()
+        updateShieldStatusDisplay()
+        updatePauseButtonState()
         updatePermissionsUI()
         updateAllAppCards()
         InstaGuardWidgetProvider.updateAllWidgets(this)
@@ -341,6 +344,95 @@ class MainActivity : AppCompatActivity() {
         binding.btnTestCustomVoice.setOnClickListener {
             testCustomVoiceMessageNow()
         }
+    }
+
+    /**
+     * v9.0 AI Visual & Browser Content Shield Configuration Controls.
+     */
+    private fun setupV90ContentShieldControls() {
+        val prefs = guardManager.prefs
+
+        // 1. Master Switch
+        binding.swContentShieldMaster.isChecked = prefs.isContentShieldMasterEnabled
+        binding.swContentShieldMaster.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isContentShieldMasterEnabled = isChecked
+            updateShieldStatusDisplay()
+            Toast.makeText(
+                this,
+                if (isChecked) "🛡️ Content Shield Enabled" else "Content Shield Disabled",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        // 2. Auto Skip Switch
+        binding.swAutoSkipVideos.isChecked = prefs.isAutoSkipVideosEnabled
+        binding.swAutoSkipVideos.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isAutoSkipVideosEnabled = isChecked
+        }
+
+        // 3. Strict Mode Switch
+        binding.swStrictVisualFilter.isChecked = prefs.isStrictVisualFilterEnabled
+        binding.swStrictVisualFilter.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isStrictVisualFilterEnabled = isChecked
+        }
+
+        // 4. Browser Adult Blocker Switch
+        binding.swBrowserAdultBlocker.isChecked = prefs.isBrowserAdultBlockerEnabled
+        binding.swBrowserAdultBlocker.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isBrowserAdultBlockerEnabled = isChecked
+        }
+
+        // 5. Double-Pulse Vibration Switch
+        binding.swAdultBlockVibration.isChecked = prefs.isAdultBlockVibrationEnabled
+        binding.swAdultBlockVibration.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isAdultBlockVibrationEnabled = isChecked
+        }
+
+        // 6. Pause / Stop Button
+        updatePauseButtonState()
+        binding.btnPauseContentShield.setOnClickListener {
+            val paused = prefs.isContentShieldPaused
+            prefs.isContentShieldPaused = !paused
+            updatePauseButtonState()
+            updateShieldStatusDisplay()
+            val msg = if (!paused) "⏸️ Content Shield Paused" else "▶️ Content Shield Resumed"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        // 7. Status Line
+        updateShieldStatusDisplay()
+    }
+
+    private fun updatePauseButtonState() {
+        val isPaused = guardManager.prefs.isContentShieldPaused
+        if (isPaused) {
+            binding.btnPauseContentShield.text = "▶️ Resume Content Shield Immediately"
+            binding.btnPauseContentShield.setTextColor(Color.parseColor("#10B981"))
+            binding.btnPauseContentShield.strokeColor = ColorStateList.valueOf(Color.parseColor("#10B981"))
+        } else {
+            binding.btnPauseContentShield.text = "⏸️ Pause Content Shield Immediately"
+            binding.btnPauseContentShield.setTextColor(Color.parseColor("#F59E0B"))
+            binding.btnPauseContentShield.strokeColor = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
+        }
+    }
+
+    private fun updateShieldStatusDisplay() {
+        val isMasterOn = guardManager.prefs.isContentShieldMasterEnabled
+        val isPaused = guardManager.prefs.isContentShieldPaused
+        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+
+        val statusText = when {
+            !hasAccessibility -> "Status: ⚠️ Accessibility Service Required for Gestures & Shield"
+            isPaused -> "Status: ⏸️ Paused by User"
+            !isMasterOn -> "Status: Inactive (Master Switch OFF)"
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                "Status: Active • Gestures Ready • API 30+ Screenshot Ready"
+            else ->
+                "Status: Active • Gestures Ready • Caption/Metadata Filter Ready"
+        }
+        val statusColor = if (isMasterOn && !isPaused && hasAccessibility) Color.parseColor("#10B981") else Color.parseColor("#EF4444")
+        binding.tvShieldStatus.text = statusText
+        binding.tvShieldStatus.setTextColor(statusColor)
     }
 
     private fun refreshCustomVoiceDisplay() {
@@ -888,6 +980,8 @@ class MainActivity : AppCompatActivity() {
             binding.btnGrantOverlay.isEnabled = true
             binding.btnGrantOverlay.text = getString(R.string.btn_grant_overlay)
         }
+
+        updateShieldStatusDisplay()
     }
 
     private fun showMasterPinSettingsDialog() {
