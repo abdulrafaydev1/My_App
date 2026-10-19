@@ -12,14 +12,14 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+typealias MappedBox = DetectionCoordinateMapper.MappedBox
+
 /**
  * Pure-Kotlin coordinate transformation utility that maps normalized source-frame
  * coordinates [0f..1f] into overlay View coordinates, accounting for source frame
  * aspect ratio, display dimensions, and window screen offsets (Phase 6.4).
  */
 object CoordinateTransform {
-
-    typealias MappedBox = DetectionCoordinateMapper.MappedBox
 
     fun mapNormalizedBoxToView(
         normLeft: Float,
