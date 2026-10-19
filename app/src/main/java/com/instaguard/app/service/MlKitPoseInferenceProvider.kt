@@ -9,7 +9,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.pose.Pose
 import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
-import com.google.mlkit.vision.pose.PoseDetectorOptions
+import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import com.google.mlkit.vision.pose.PoseLandmark as MlPoseLandmark
 import java.util.concurrent.TimeUnit
 import kotlin.math.max
@@ -50,7 +50,6 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
         val options = PoseDetectorOptions.Builder()
             .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
-            .setPreferredHardwareConfigs(PoseDetectorOptions.CPU_GPU)
             .build()
 
         val newDetector = PoseDetection.getClient(options)
@@ -352,8 +351,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             MlPoseLandmark.RIGHT_EYE_OUTER -> LandmarkType.RIGHT_EYE_OUTER
             MlPoseLandmark.LEFT_EAR -> LandmarkType.LEFT_EAR
             MlPoseLandmark.RIGHT_EAR -> LandmarkType.RIGHT_EAR
-            MlPoseLandmark.MOUTH_LEFT -> LandmarkType.MOUTH_LEFT
-            MlPoseLandmark.MOUTH_RIGHT -> LandmarkType.MOUTH_RIGHT
+            MlPoseLandmark.LEFT_MOUTH -> LandmarkType.MOUTH_LEFT
+            MlPoseLandmark.RIGHT_MOUTH -> LandmarkType.MOUTH_RIGHT
             MlPoseLandmark.LEFT_SHOULDER -> LandmarkType.LEFT_SHOULDER
             MlPoseLandmark.RIGHT_SHOULDER -> LandmarkType.RIGHT_SHOULDER
             MlPoseLandmark.LEFT_ELBOW -> LandmarkType.LEFT_ELBOW

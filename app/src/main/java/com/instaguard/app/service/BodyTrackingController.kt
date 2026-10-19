@@ -84,8 +84,6 @@ enum class TrackingLifecycleState(val diagnosticLabel: String) {
     NO_FILTER_MATCH_ALLOW("NO FILTER MATCH — ALLOW")
 }
 
-typealias PoseTrackingController = BodyTrackingController
-
 /**
  * Represents estimated velocity (change in normalized units per millisecond).
  */
@@ -126,7 +124,7 @@ data class TrackedSubject(
  * - Immediate tracking purge and box clearance on content item transitions.
  * - Complete transparency guarantee: 0% interior fill, never blurs or obscures face/body.
  */
-class BodyTrackingController(
+open class BodyTrackingController(
     val maxCoastingAgeMs: Long = 850L,
     val staleTimeoutMs: Long = 1200L,
     val velocityDampingFactor: Float = 0.0035f // exp(-lambda * tau)
