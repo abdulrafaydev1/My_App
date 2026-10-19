@@ -627,4 +627,99 @@ class BodyTrackingControllerTest {
         assertTrue(out.activeBoxes.isEmpty())
         assertEquals(SkipActionState.NO_SKIP_REQUESTED, out.skipActionState)
     }
+
+    // =========================================================================
+    // Scenario 19: Dedicated PoseTrackingController tracks ML Kit landmarks
+    // =========================================================================
+    @Test
+    fun scenario19_poseTrackingController_tracksAnatomicalLandmarksAndMaintainsContinuity() {
+        val poseTracker = PoseTrackingController(maxCoastingAgeMs = 850L, staleTimeoutMs = 1200L)
+        val itemId = "reel_pose_19"
+
+        val mlLandmarks = listOf(
+            PoseLandmark(LandmarkType.NOSE, 0.50f, 0.20f, 0.95f),
+            PoseLandmark(LandmarkType.LEFT_SHOULDER, 0.40f, 0.35f, 0.92f),
+            PoseLandmark(LandmarkType.RIGHT_SHOULDER, 0.60f, 0.35f, 0.92f),
+            PoseLandmark(LandmarkType.LEFT_HIP, 0.42f, 0.65f, 0.88f),
+            PoseLandmark(LandmarkType.RIGHT_HIP, 0.58f, 0.65f, 0.88f),
+            PoseLandmark(LandmarkType.LEFT_KNEE, 0.43f, 0.80f, 0.85f),
+            PoseLandmark(LandmarkType.RIGHT_KNEE, 0.57f, 0.80f, 0.85f)
+        )
+
+        poseTracker.updateWithPoseDetections(
+            contentItemId = itemId,
+            timestampMs = 100L,
+            landmarks = mlLandmarks,
+            personBox = NormalizedBox(1, "PERSON", 0.92f, 0.35f, 0.15f, 0.65f, 0.85f, 100L),
+            faceBox = NormalizedBox(1, "FACE", 0.95f, 0.45f, 0.15f, 0.55f, 0.28f, 100L),
+            upperTorsoBox = NormalizedBox(1, "UPPER TORSO", 0.90f, 0.38f, 0.32f, 0.62f, 0.68f, 100L),
+            detectionConfidence = 0.92f,
+            nowMs = 100L
+        )
+
+        assertEquals(TrackingLifecycleState.TRACKING_SUBJECT, poseTracker.currentLifecycleState)
+        val boxes = poseTracker.getRenderableBoxes(100L)
+        assertEquals(3, boxes.size)
+        assertTrue(boxes.any { it.regionLabel == "FACE" })
+        assertTrue(boxes.any { it.regionLabel == "UPPER TORSO" })
+        assertTrue(boxes.any { it.regionLabel == "PERSON" })
+    }
+
+    // =========================================================================
+    // Scenario 20: PoseTrackingController rejects out-of-order frames
+    // =========================================================================
+    @Test
+    fun scenario20_poseTrackingController_rejectsOutOfOrderFrames() {
+        val poseTracker = PoseTrackingController(maxCoastingAgeMs = 850L, staleTimeoutMs = 1200L)
+        val itemId = "reel_pose_ooo_20"
+
+        poseTracker.updateWithPoseDetections(
+            contentItemId = itemId,
+            timestampMs = 400L,
+            landmarks = listOf(PoseLandmark(LandmarkType.NOSE, 0.50f, 0.20f, 0.95f)),
+            personBox = NormalizedBox(1, "PERSON", 0.90f, 0.40f, 0.20f, 0.60f, 0.80f, 400L),
+            detectionConfidence = 0.90f,
+            nowMs = 400L
+        )
+        assertEquals(400L, poseTracker.lastDetectionTimestampMs)
+
+        // Stale out-of-order frame
+        poseTracker.updateWithPoseDetections(
+            contentItemId = itemId,
+            timestampMs = 250L,
+            landmarks = listOf(PoseLandmark(LandmarkType.NOSE, 0.20f, 0.20f, 0.90f)),
+            personBox = NormalizedBox(1, "PERSON", 0.90f, 0.10f, 0.20f, 0.30f, 0.80f, 250L),
+            detectionConfidence = 0.90f,
+            nowMs = 420L
+        )
+
+        // Retains latest valid timestamp and position
+        assertEquals(400L, poseTracker.lastDetectionTimestampMs)
+        val boxes = poseTracker.getRenderableBoxes(420L)
+        assertEquals(1, boxes.size)
+        assertTrue(boxes.first().left >= 0.38f)
+    }
+
+    // =========================================================================
+    // Scenario 21: PoseTrackingController purges on content transition
+    // =========================================================================
+    @Test
+    fun scenario21_poseTrackingController_purgesOnContentTransition() {
+        val poseTracker = PoseTrackingController(maxCoastingAgeMs = 850L, staleTimeoutMs = 1200L)
+
+        poseTracker.updateWithPoseDetections(
+            contentItemId = "reel_video_A",
+            timestampMs = 100L,
+            landmarks = listOf(PoseLandmark(LandmarkType.NOSE, 0.50f, 0.20f, 0.95f)),
+            personBox = NormalizedBox(1, "PERSON", 0.90f, 0.40f, 0.20f, 0.60f, 0.80f, 100L),
+            detectionConfidence = 0.90f,
+            nowMs = 100L
+        )
+        assertFalse(poseTracker.getRenderableBoxes(100L).isEmpty())
+
+        // User scrolls to video B
+        poseTracker.clearTracking()
+        assertTrue(poseTracker.getRenderableBoxes(100L).isEmpty())
+        assertEquals(TrackingLifecycleState.WAITING_FOR_FRAME, poseTracker.currentLifecycleState)
+    }
 }

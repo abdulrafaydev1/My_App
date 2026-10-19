@@ -1644,7 +1644,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private fun captureAndAnalyzeSocialFrame(appKey: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastScreenshotCompletedElapsedMs < 850L) return
+        if (now - lastScreenshotCompletedElapsedMs < 250L) return
 
         isScreenshotInFlight = true
         currentScannerDiagnosticText = DiagnosticStatus.CAPTURING_FRAME.label
@@ -1664,7 +1664,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
                                 val frameTs = SystemClock.elapsedRealtime()
-                                val features = AndroidSdkFaceInferenceProvider.analyzeBitmap(
+                                val features = MlKitPoseInferenceProvider.analyzeBitmap(
                                     bitmap = swBitmap,
                                     contentItemId = itemIdSnapshot,
                                     timestampMs = frameTs,
@@ -2394,6 +2394,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         activeServiceInstance = null
         try {
             visualAnalyzerExecutor.shutdown()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            MlKitPoseInferenceProvider.close()
         } catch (e: Exception) {
             e.printStackTrace()
         }

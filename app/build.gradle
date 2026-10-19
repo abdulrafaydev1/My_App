@@ -50,6 +50,9 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.activity:activity-ktx:1.8.2'
 
+    // Google ML Kit Pose Detection (STREAM_MODE for real-time video tracking)
+    implementation 'com.google.mlkit:pose-detection:18.0.0-beta5'
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

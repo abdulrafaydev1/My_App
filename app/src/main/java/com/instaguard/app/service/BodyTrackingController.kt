@@ -6,20 +6,42 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * Standardized anatomical landmark types for human pose estimation (Phases 2, 4, 5).
+ * Standardized anatomical landmark types for human pose estimation (Phases 2, 4, 5, 6).
  */
 enum class LandmarkType {
     NOSE,
+    LEFT_EYE_INNER,
     LEFT_EYE,
+    LEFT_EYE_OUTER,
+    RIGHT_EYE_INNER,
     RIGHT_EYE,
+    RIGHT_EYE_OUTER,
+    LEFT_EAR,
+    RIGHT_EAR,
+    MOUTH_LEFT,
+    MOUTH_RIGHT,
     LEFT_SHOULDER,
     RIGHT_SHOULDER,
     LEFT_ELBOW,
     RIGHT_ELBOW,
     LEFT_WRIST,
     RIGHT_WRIST,
+    LEFT_PINKY,
+    RIGHT_PINKY,
+    LEFT_INDEX,
+    RIGHT_INDEX,
+    LEFT_THUMB,
+    RIGHT_THUMB,
     LEFT_HIP,
-    RIGHT_HIP
+    RIGHT_HIP,
+    LEFT_KNEE,
+    RIGHT_KNEE,
+    LEFT_ANKLE,
+    RIGHT_ANKLE,
+    LEFT_HEEL,
+    RIGHT_HEEL,
+    LEFT_FOOT_INDEX,
+    RIGHT_FOOT_INDEX
 }
 
 /**
@@ -38,7 +60,7 @@ data class PoseLandmark(
 }
 
 /**
- * Explicit tracking lifecycle states (Phases 5 & 12).
+ * Explicit tracking lifecycle states (Phases 5 & 12, Section 14 Diagnostics).
  */
 enum class TrackingLifecycleState(val diagnosticLabel: String) {
     IDLE("WAITING FOR FRAME"),
@@ -46,13 +68,23 @@ enum class TrackingLifecycleState(val diagnosticLabel: String) {
     FRAME_RECEIVED("FRAME RECEIVED"),
     PERSON_DETECTED("PERSON DETECTED"),
     POSE_INFERENCE_RUNNING("POSE INFERENCE RUNNING"),
+    POSE_DETECTED("POSE DETECTED"),
     LANDMARKS_UPDATED("LANDMARKS UPDATED"),
-    TRACKING_SUBJECT("TRACKING SUBJECT"),
+    COORDINATES_MAPPED("COORDINATES MAPPED"),
+    TRACKING_ACTIVE("TRACKING ACTIVE"),
+    TRACKING_SUBJECT("TRACKING ACTIVE"),
     TRACKING_CONFIDENCE_LOW("TRACKING CONFIDENCE LOW"),
-    COASTING_PREDICTION("TRACKING SUBJECT"),
+    TRACKING_UNCERTAIN("TRACKING UNCERTAIN"),
+    COASTING_PREDICTION("TRACKING ACTIVE"),
     TRACKING_LOST("TRACKING LOST"),
-    ANALYSIS_ERROR("ANALYSIS ERROR")
+    FRAME_STALE("FRAME STALE"),
+    ANALYSIS_FAILED("ANALYSIS FAILED"),
+    ANALYSIS_ERROR("ANALYSIS FAILED"),
+    MODEL_UNAVAILABLE("MODEL UNAVAILABLE"),
+    NO_FILTER_MATCH_ALLOW("NO FILTER MATCH — ALLOW")
 }
+
+typealias PoseTrackingController = BodyTrackingController
 
 /**
  * Represents estimated velocity (change in normalized units per millisecond).
