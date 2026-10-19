@@ -1,43 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Modern OLED Dark Glass Theme Palette (v12.0) -->
+    <color name="bg_primary">#0B0F19</color>
+    <color name="surface_card">#161B22</color>
+    <color name="surface_variant">#21262D</color>
+    <color name="accent_red">#FF1744</color>
+    <color name="accent_yellow">#FFD600</color>
+    <color name="accent_neon_blue">#00E5FF</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8B949E</color>
+
     <!-- Brand / Primary -->
-    <color name="primary">#6366F1</color>
-    <color name="primary_dark">#4338CA</color>
-    <color name="primary_light">#EEF2FF</color>
-    <color name="accent">#EC4899</color>
+    <color name="primary">#00E5FF</color>
+    <color name="primary_dark">#00B0FF</color>
+    <color name="primary_light">#E0F7FA</color>
+    <color name="accent">#FFD600</color>
 
     <!-- Status Colors -->
     <color name="status_green">#10B981</color>
     <color name="status_green_bg">#064E3B</color>
-    <color name="status_red">#EF4444</color>
+    <color name="status_red">#FF1744</color>
     <color name="status_red_bg">#7F1D1D</color>
-    <color name="status_amber">#F59E0B</color>
+    <color name="status_amber">#FFD600</color>
     <color name="status_amber_bg">#78350F</color>
 
-    <!-- Cyber-Dark Theme Palette (v4.0) -->
+    <!-- Cyber-Dark Theme Palette -->
     <color name="cyber_bg">#0B0F19</color>
-    <color name="cyber_surface">#161F30</color>
-    <color name="cyber_stroke">#2A364F</color>
-    <color name="cyber_text_primary">#F8FAFC</color>
-    <color name="cyber_text_secondary">#94A3B8</color>
-    <color name="cyber_timer_allowed">#38BDF8</color>
-    <color name="cyber_timer_locked">#F87171</color>
+    <color name="cyber_surface">#161B22</color>
+    <color name="cyber_stroke">#21262D</color>
+    <color name="cyber_text_primary">#FFFFFF</color>
+    <color name="cyber_text_secondary">#8B949E</color>
+    <color name="cyber_timer_allowed">#00E5FF</color>
+    <color name="cyber_timer_locked">#FF1744</color>
     <color name="cyber_accent_green">#10B981</color>
-    <color name="cyber_accent_red">#EF4444</color>
-    <color name="cyber_accent_amber">#F59E0B</color>
+    <color name="cyber_accent_red">#FF1744</color>
+    <color name="cyber_accent_amber">#FFD600</color>
 
     <!-- Backward Compatibility Colors -->
     <color name="background_light">#0B0F19</color>
-    <color name="surface_light">#161F30</color>
-    <color name="text_primary_light">#F8FAFC</color>
-    <color name="text_secondary_light">#94A3B8</color>
-    <color name="divider_light">#2A364F</color>
+    <color name="surface_light">#161B22</color>
+    <color name="text_primary_light">#FFFFFF</color>
+    <color name="text_secondary_light">#8B949E</color>
+    <color name="divider_light">#21262D</color>
 
     <!-- Lock Screen (Pure Deep Focus Dark Theme) -->
-    <color name="lock_bg">#090D16</color>
-    <color name="lock_surface">#151C2C</color>
-    <color name="lock_accent_red">#EF4444</color>
-    <color name="lock_text_primary">#F8FAFC</color>
-    <color name="lock_text_secondary">#94A3B8</color>
+    <color name="lock_bg">#0B0F19</color>
+    <color name="lock_surface">#161B22</color>
+    <color name="lock_accent_red">#FF1744</color>
+    <color name="lock_text_primary">#FFFFFF</color>
+    <color name="lock_text_secondary">#8B949E</color>
     <color name="lock_timer_bg">#111827</color>
 </resources>
