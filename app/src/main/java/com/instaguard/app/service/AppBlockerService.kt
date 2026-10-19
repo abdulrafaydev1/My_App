@@ -98,15 +98,20 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastDopamineTintColor = 0
     private var lastDopamineTintUpdateElapsedMs = 0L
 
-    // v9.6 Real-Time Visual Scanner & Live Bounding-Box Overlay State
+    // v10.0 6-Stage Visual Decision Engine & Tactical HUD Scanner State
     private val visualAnalyzerExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val decisionEngine = VisualFilterDecisionEngine()
     @Volatile
     private var isScreenshotInFlight = false
     @Volatile
     private var lastScreenshotCompletedElapsedMs = 0L
     private var lastAutoSkipElapsedMs = 0L
     private var lastBrowserBlockElapsedMs = 0L
-    private var previousSkinGrid: BooleanArray? = null
+    private var previousLumaGrid: IntArray? = null
+    @Volatile
+    private var currentScrollSeq = 0L
+    @Volatile
+    private var currentContentItemId = "init_0"
 
     // Protected Foreground App State (Zero-Flicker & Resilience)
     @Volatile
@@ -178,6 +183,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             lastCountedFromIndex = pendingScrollFromIndex
             lastCountedToIndex = pendingScrollToIndex
             hadVideoVisibleBeforeScroll = false
+
+            currentScrollSeq++
+            val sigHash = if (currentSig.isNotEmpty()) currentSig.hashCode() else currentScrollSeq.toInt()
+            val newItemId = "${activeKey}_${sigHash}_${currentScrollSeq}"
+            currentContentItemId = newItemId
+            decisionEngine.resetForNewItem(newItemId)
+            previousLumaGrid = null
+            scannerHudOverlayView?.clearBoxes()
 
             incrementScrollCount(activeKey)
             pulseFloatingPill(activeKey)
@@ -643,10 +656,18 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             return
         }
 
-        // v9.3 Step 3: 250ms Post-Scroll Settled Verification Engine
+        // v9.3 Step 3: 250ms Post-Scroll Settled Verification Engine + v10.0 Instant HUD Reset
         if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
             val activeKey = currentForegroundAppKey ?: return
             val now = SystemClock.elapsedRealtime()
+
+            // Immediately clear HUD boxes and reset item state when user scrolls
+            currentScrollSeq++
+            val scrollItemId = "${activeKey}_scroll_${currentScrollSeq}_${event.fromIndex}_${event.toIndex}"
+            currentContentItemId = scrollItemId
+            decisionEngine.resetForNewItem(scrollItemId)
+            previousLumaGrid = null
+            scannerHudOverlayView?.clearBoxes()
 
             // 1. Debounce between counted gestures (750ms minimum between counts)
             if (now - lastScrollCountElapsedMs < 750L) {
@@ -1551,36 +1572,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v9.5 FEATURE 1 & 4: Live Red Bounding-Box Overlay View & Zone Scanner
+    // v10.0 FEATURE: Tactical HUD Scanner Outline Overlay & 6-Stage Decision Engine
     // =========================================================================
-
-    class ScannerBoundingBoxView(context: Context) : View(context) {
-        @Volatile
-        var detectedBoxes: List<RectF> = emptyList()
-            set(value) {
-                field = value
-                postInvalidate()
-            }
-
-        private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            color = Color.parseColor("#FF1744")
-            strokeWidth = 2.5f * resources.displayMetrics.density
-            isAntiAlias = true
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val boxes = detectedBoxes
-            if (boxes.isEmpty()) return
-            val w = width.toFloat()
-            val h = height.toFloat()
-            for (r in boxes) {
-                // Hollow red rectangular border outline (NO blur, NO fill)
-                canvas.drawRect(r.left * w, r.top * h, r.right * w, r.bottom * h, boxPaint)
-            }
-        }
-    }
 
     private fun createScannerOverlayLayoutParams(): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
@@ -1596,21 +1589,21 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     private fun ensureScannerOverlayAttached() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
-        if (isScannerOverlayAttached && scannerBoundingBoxView != null) return
+        if (isScannerOverlayAttached && scannerHudOverlayView != null) return
 
-        val boxView = ScannerBoundingBoxView(this).apply {
+        val hudView = ScannerHudOverlayView(this).apply {
             visibility = View.GONE
         }
         try {
             val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
             if (wm != null) {
-                wm.addView(boxView, createScannerOverlayLayoutParams())
-                scannerBoundingBoxView = boxView
+                wm.addView(hudView, createScannerOverlayLayoutParams())
+                scannerHudOverlayView = hudView
                 isScannerOverlayAttached = true
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to attach scanner bounding box overlay: ${e.message}")
-            scannerBoundingBoxView = null
+            Log.e(TAG, "Failed to attach tactical HUD scanner overlay: ${e.message}")
+            scannerHudOverlayView = null
             isScannerOverlayAttached = false
         }
     }
@@ -1623,10 +1616,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         val isTrackedVideoApp = activeKey in listOf("INSTAGRAM", "TIKTOK", "FACEBOOK", "YOUTUBE")
         val isEnabled = prefs.isAiVisualShieldEnabled && prefs.isScannerBorderOverlayEnabled
         if (isTrackedVideoApp && !isOurAppScreenOpen && isEnabled) {
-            if (!isScannerOverlayAttached || scannerBoundingBoxView == null) {
+            if (!isScannerOverlayAttached || scannerHudOverlayView == null) {
                 ensureScannerOverlayAttached()
             }
-            val view = scannerBoundingBoxView ?: return
+            val view = scannerHudOverlayView ?: return
             if (view.visibility != View.VISIBLE) {
                 view.visibility = View.VISIBLE
             }
@@ -1636,9 +1629,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     private fun hideScannerBoundingBoxOverlay() {
-        val view = scannerBoundingBoxView
+        val view = scannerHudOverlayView
         if (view != null) {
-            view.detectedBoxes = emptyList()
+            view.clearOverlay()
             if (view.visibility == View.VISIBLE) {
                 view.visibility = View.GONE
             }
@@ -1646,11 +1639,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     private fun clearScannerBoundingBoxes() {
-        scannerBoundingBoxView?.detectedBoxes = emptyList()
+        scannerHudOverlayView?.clearBoxes()
     }
 
     private fun removeScannerOverlayCompletely() {
-        val view = scannerBoundingBoxView
+        val view = scannerHudOverlayView
         if (isScannerOverlayAttached && view != null) {
             try {
                 val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
@@ -1659,7 +1652,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 Log.e(TAG, "Error removing scanner overlay: ${e.message}")
             }
             isScannerOverlayAttached = false
-            scannerBoundingBoxView = null
+            scannerHudOverlayView = null
         }
     }
 
@@ -1669,6 +1662,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (now - lastScreenshotCompletedElapsedMs < 850L) return
 
         isScreenshotInFlight = true
+        currentScannerDiagnosticText = DiagnosticStatus.FRAME_ANALYSIS_IN_PROGRESS.label
+        val itemIdSnapshot = currentContentItemId
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -1682,29 +1677,56 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBuffer.close()
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
-                                val (boxes, shouldSkip) = scanFrameAndDetectZones(swBitmap)
+                                val frameTs = SystemClock.elapsedRealtime()
+                                val (features, nextLumaGrid) = FramePixelExtractor.extractFeaturesFromBitmap(
+                                    bitmap = swBitmap,
+                                    contentItemId = itemIdSnapshot,
+                                    timestampMs = frameTs,
+                                    isSupportedFeed = true,
+                                    prevLumaGrid = previousLumaGrid
+                                )
                                 swBitmap.recycle()
+                                previousLumaGrid = nextLumaGrid
 
-                                // Update live red bounding boxes on screen
+                                val filterConfig = FilterConfig(
+                                    monitoringEnabled = prefs.isAiVisualShieldEnabled
+                                )
+                                val decision = decisionEngine.evaluateFrame(
+                                    features = features,
+                                    activeConfig = filterConfig,
+                                    nowMs = frameTs
+                                )
+                                currentScannerDiagnosticText = decision.diagnosticStatus.label
+
+                                // Update live tactical HUD overlay on MainThread if enabled
                                 tickerHandler.post {
-                                    if (currentForegroundAppKey == appKey && !isOurAppScreenOpen && prefs.isScannerBorderOverlayEnabled) {
+                                    if (currentForegroundAppKey == appKey &&
+                                        !isOurAppScreenOpen &&
+                                        prefs.isAiVisualShieldEnabled &&
+                                        prefs.isScannerBorderOverlayEnabled
+                                    ) {
                                         ensureScannerOverlayAttached()
-                                        val view = scannerBoundingBoxView
+                                        val view = scannerHudOverlayView
                                         if (view != null) {
                                             view.visibility = View.VISIBLE
-                                            view.detectedBoxes = boxes
+                                            view.updateHudState(
+                                                boxes = decision.activeBoxes,
+                                                status = decision.diagnosticStatus,
+                                                frameTimestampMs = frameTs
+                                            )
                                         }
                                     } else {
-                                        clearScannerBoundingBoxes()
+                                        hideScannerBoundingBoxOverlay()
                                     }
-                                }
 
-                                if (shouldSkip) {
-                                    tickerHandler.post { triggerAutoSkipIfCooldownElapsed() }
+                                    if (decision.state == DecisionState.SKIP && prefs.isVisualAutoSkipEnabled) {
+                                        triggerAutoSkipIfCooldownElapsed()
+                                    }
                                 }
                             }
                         } catch (e: Exception) {
                             try { hwBuffer.close() } catch (_: Exception) {}
+                            currentScannerDiagnosticText = DiagnosticStatus.ANALYSIS_FAILED.label
                             e.printStackTrace()
                         } finally {
                             lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
@@ -1715,6 +1737,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     override fun onFailure(errorCode: Int) {
                         lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
                         isScreenshotInFlight = false
+                        currentScannerDiagnosticText = DiagnosticStatus.WAITING_FOR_FRAMES.label
                         Log.d(TAG, "takeScreenshot failed with errorCode=$errorCode")
                     }
                 }
@@ -1722,300 +1745,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
             isScreenshotInFlight = false
+            currentScannerDiagnosticText = DiagnosticStatus.ANALYSIS_FAILED.label
             e.printStackTrace()
         }
-    }
-
-    /**
-     * Real-time Body-Part Bounding Box Localization & Skip Detection (v9.5).
-     * Runs on visualAnalyzerExecutor with scaled 100x180 bitmap.
-     */
-    private fun scanFrameAndDetectZones(source: Bitmap): Pair<List<RectF>, Boolean> {
-        val w = 100
-        val h = 180
-        val scaled = Bitmap.createScaledBitmap(source, w, h, true)
-        val pixels = IntArray(w * h)
-        scaled.getPixels(pixels, 0, w, 0, 0, w, h)
-        if (scaled != source) scaled.recycle()
-
-        val isSkin = BooleanArray(pixels.size)
-        val isHair = BooleanArray(pixels.size)
-        val lum = FloatArray(pixels.size)
-
-        for (i in pixels.indices) {
-            val p = pixels[i]
-            val r = Color.red(p)
-            val g = Color.green(p)
-            val b = Color.blue(p)
-
-            val skin = isSkinPixel(r, g, b)
-            isSkin[i] = skin
-            isHair[i] = !skin && isHairPixel(r, g, b)
-            lum[i] = 0.299f * r + 0.587f * g + 0.114f * b
-        }
-
-        // 1. Edge skin ratio (x < 8% or x > 92%)
-        val edgeSkinCount = run {
-            var count = 0
-            val totalEdgeCols = (w * 0.08f).toInt()
-            val rightColStart = (w * 0.92f).toInt()
-            for (y in 0 until h) {
-                val row = y * w
-                for (x in 0 until totalEdgeCols) {
-                    if (isSkin[row + x]) count++
-                }
-                for (x in rightColStart until w) {
-                    if (isSkin[row + x]) count++
-                }
-            }
-            count
-        }
-        val edgeTotal = (2 * (w * 0.08f).toInt() * h)
-        val edgeSkinRatio = edgeSkinCount.toFloat() / maxOf(1, edgeTotal)
-
-        // 2. Motion Delta calculation
-        val prev = previousSkinGrid
-        var frameMotionDelta = 0f
-        if (prev != null && prev.size == isSkin.size) {
-            var diff = 0
-            for (i in isSkin.indices) {
-                if (prev[i] != isSkin[i]) diff++
-            }
-            frameMotionDelta = diff.toFloat() / isSkin.size
-        }
-        previousSkinGrid = isSkin
-
-        // 3. Locate Subject & Compute Normalized Bounding Boxes
-        val detectedBoxes = ArrayList<RectF>(4)
-
-        // Box 1 — Head / Face & Hair Box (y = 14% to 44%, x = 12% to 88%)
-        val headY0 = (0.14f * h).toInt()
-        val headY1 = (0.44f * h).toInt()
-        val scanX0 = (0.12f * w).toInt()
-        val scanX1 = (0.88f * w).toInt()
-
-        var headSkinAndHair = 0
-        var headTotalPx = 0
-        var minHeadX = w
-        var maxHeadX = 0
-        var minHeadY = h
-        var maxHeadY = 0
-        var headSumX = 0L
-        var headSumY = 0L
-
-        for (y in headY0 until headY1) {
-            val row = y * w
-            for (x in scanX0 until scanX1) {
-                headTotalPx++
-                if (isSkin[row + x] || isHair[row + x]) {
-                    headSkinAndHair++
-                    headSumX += x
-                    headSumY += y
-                    if (x < minHeadX) minHeadX = x
-                    if (x > maxHeadX) maxHeadX = x
-                    if (y < minHeadY) minHeadY = y
-                    if (y > maxHeadY) maxHeadY = y
-                }
-            }
-        }
-
-        var headBox: RectF? = null
-        val headDensity = headSkinAndHair.toFloat() / maxOf(1, headTotalPx)
-        val hasHeadCluster = headDensity >= 0.14f && headSkinAndHair >= 30
-
-        if (hasHeadCluster) {
-            val avgX = (headSumX / headSkinAndHair).toFloat() / w
-            val avgY = (headSumY / headSkinAndHair).toFloat() / h
-            val halfW = ((maxHeadX - minHeadX).toFloat() / w / 2f).coerceIn(0.14f, 0.21f)
-            val halfH = ((maxHeadY - minHeadY).toFloat() / h / 2f).coerceIn(0.09f, 0.13f)
-            val left = (avgX - halfW).coerceIn(0.05f, 0.65f)
-            val right = (left + halfW * 2f).coerceIn(left + 0.28f, 0.95f)
-            val top = (avgY - halfH).coerceIn(0.10f, 0.35f)
-            val bottom = (top + halfH * 2f).coerceIn(top + 0.18f, 0.46f)
-            val box = RectF(left, top, right, bottom)
-            headBox = box
-            detectedBoxes.add(box)
-        }
-
-        // Centroid for torso alignment
-        val torsoCenterX = headBox?.centerX() ?: run {
-            var torsoSumX = 0L
-            var torsoCount = 0
-            val tY0 = (0.36f * h).toInt()
-            val tY1 = (0.68f * h).toInt()
-            for (y in tY0 until tY1) {
-                val row = y * w
-                for (x in scanX0 until scanX1) {
-                    if (isSkin[row + x]) {
-                        torsoSumX += x
-                        torsoCount++
-                    }
-                }
-            }
-            if (torsoCount >= 15) (torsoSumX / torsoCount).toFloat() / w else 0.50f
-        }
-
-        // Box 2 — Chest / Breast / Cleavage Box (y = 36% to 58%)
-        val chestTop = 0.36f
-        val chestBottom = 0.58f
-        val chestHalfW = 0.16f // width 32%
-        val chestLeft = (torsoCenterX - chestHalfW).coerceIn(0.06f, 0.62f)
-        val chestRight = chestLeft + (chestHalfW * 2f)
-
-        val cX0 = (chestLeft * w).toInt().coerceIn(0, w - 1)
-        val cX1 = (chestRight * w).toInt().coerceIn(cX0 + 1, w)
-        val cY0 = (chestTop * h).toInt().coerceIn(0, h - 1)
-        val cY1 = (chestBottom * h).toInt().coerceIn(cY0 + 1, h)
-
-        var chestSkinCount = 0
-        var chestTotalPx = 0
-        var leftLumSum = 0f
-        var leftLumCount = 0
-        var rightLumSum = 0f
-        var rightLumCount = 0
-        var centerLumSum = 0f
-        var centerLumCount = 0
-
-        val midX = (cX0 + cX1) / 2
-        val cleftRadius = maxOf(1, ((cX1 - cX0) * 0.12f).toInt())
-
-        for (y in cY0 until cY1) {
-            val row = y * w
-            for (x in cX0 until cX1) {
-                chestTotalPx++
-                if (isSkin[row + x]) chestSkinCount++
-                val l = lum[row + x]
-                if (Math.abs(x - midX) <= cleftRadius) {
-                    centerLumSum += l
-                    centerLumCount++
-                } else if (x < midX) {
-                    leftLumSum += l
-                    leftLumCount++
-                } else {
-                    rightLumSum += l
-                    rightLumCount++
-                }
-            }
-        }
-
-        val chestSkinRatio = chestSkinCount.toFloat() / maxOf(1, chestTotalPx)
-        val avgLeftLum = leftLumSum / maxOf(1, leftLumCount)
-        val avgRightLum = rightLumSum / maxOf(1, rightLumCount)
-        val avgCenterLum = centerLumSum / maxOf(1, centerLumCount)
-        val chestCleavageShadow = avgCenterLum < (((avgLeftLum + avgRightLum) / 2f) - 6f)
-
-        var chestBox: RectF? = null
-        if (chestSkinRatio >= 0.10f || headBox != null) {
-            val box = RectF(chestLeft, chestTop, chestRight, chestBottom)
-            chestBox = box
-            detectedBoxes.add(box)
-        }
-
-        // Box 3 — Waist / Midriff / Belly / Crop-Top Box (y = 52% to 68%)
-        val waistTop = 0.52f
-        val waistBottom = 0.68f
-        val waistHalfW = 0.15f // width 30%
-        val waistLeft = (torsoCenterX - waistHalfW).coerceIn(0.06f, 0.64f)
-        val waistRight = waistLeft + (waistHalfW * 2f)
-
-        val wX0 = (waistLeft * w).toInt().coerceIn(0, w - 1)
-        val wX1 = (waistRight * w).toInt().coerceIn(wX0 + 1, w)
-        val wY0 = (waistTop * h).toInt().coerceIn(0, h - 1)
-        val wY1 = (waistBottom * h).toInt().coerceIn(wY0 + 1, h)
-
-        var waistSkinCount = 0
-        var waistTotalPx = 0
-        for (y in wY0 until wY1) {
-            val row = y * w
-            for (x in wX0 until wX1) {
-                waistTotalPx++
-                if (isSkin[row + x]) waistSkinCount++
-            }
-        }
-        val midriffSkinRatio = waistSkinCount.toFloat() / maxOf(1, waistTotalPx)
-
-        if (midriffSkinRatio >= 0.12f) {
-            val waistBox = RectF(waistLeft, waistTop, waistRight, waistBottom)
-            detectedBoxes.add(waistBox)
-        }
-
-        // Box 4 — Hip / Buttocks (Ass) / Short Dress / Thighs Box (y = 60% to 86%)
-        val hipTop = 0.60f
-        val hipBottom = 0.86f
-        val hipHalfW = 0.19f // width 38%
-        val hipLeft = (torsoCenterX - hipHalfW).coerceIn(0.04f, 0.58f)
-        val hipRight = hipLeft + (hipHalfW * 2f)
-
-        val hX0 = (hipLeft * w).toInt().coerceIn(0, w - 1)
-        val hX1 = (hipRight * w).toInt().coerceIn(hX0 + 1, w)
-        val hY0 = (hipTop * h).toInt().coerceIn(0, h - 1)
-        val hY1 = (hipBottom * h).toInt().coerceIn(hY0 + 1, h)
-
-        var lowerSkinCount = 0
-        var lowerTotalPx = 0
-        var hipSubjectWidth = 0
-        var waistSubjectWidth = 0
-
-        for (y in hY0 until hY1) {
-            val row = y * w
-            var rowSubject = 0
-            for (x in hX0 until hX1) {
-                lowerTotalPx++
-                if (isSkin[row + x]) {
-                    lowerSkinCount++
-                    rowSubject++
-                }
-            }
-            if (rowSubject > hipSubjectWidth) hipSubjectWidth = rowSubject
-        }
-
-        for (y in wY0 until wY1) {
-            val row = y * w
-            var rowSubject = 0
-            for (x in wX0 until wX1) {
-                if (isSkin[row + x]) rowSubject++
-            }
-            if (rowSubject > waistSubjectWidth) waistSubjectWidth = rowSubject
-        }
-
-        val lowerSkinRatio = lowerSkinCount.toFloat() / maxOf(1, lowerTotalPx)
-        val gluteContourProminence = hipSubjectWidth > (waistSubjectWidth * 1.15f) && hipSubjectWidth >= 12
-
-        var gluteHipBox: RectF? = null
-        if (lowerSkinRatio >= 0.18f || gluteContourProminence) {
-            val box = RectF(hipLeft, hipTop, hipRight, hipBottom)
-            gluteHipBox = box
-            detectedBoxes.add(box)
-        }
-
-        // Back skin ratio (without cleavage shadow or face, y = 36%..56%)
-        val backSkinRatio = if (headBox == null && !chestCleavageShadow) chestSkinRatio else 0f
-
-        // 4. Decide Whether to Auto-Skip
-        val isHumanPresent = detectedBoxes.size >= 2 && edgeSkinRatio < 0.35f
-        var shouldSkipVideo = false
-
-        if (isHumanPresent) {
-            // Condition 1 (Visible Boobs / Breasts / Cleavage or Low-Cut Top)
-            val cond1 = chestSkinRatio >= 0.24f &&
-                (chestCleavageShadow || midriffSkinRatio >= 0.16f || chestSkinRatio >= 0.34f)
-
-            // Condition 2 (Short Dress — Shoulder se Niche + Ghutne se Upar / Midriff Exposed)
-            val cond2 = (chestSkinRatio >= 0.20f || midriffSkinRatio >= 0.22f) && lowerSkinRatio >= 0.22f
-
-            // Condition 3 (Back / Buttocks / Ass / Tight Booty Shorts Pose or Movement)
-            val cond3 = (lowerSkinRatio >= 0.28f) ||
-                (gluteHipBox != null && chestBox != null &&
-                    (frameMotionDelta >= 0.09f || backSkinRatio >= 0.28f || gluteContourProminence))
-
-            shouldSkipVideo = cond1 || cond2 || cond3
-            if (shouldSkipVideo) {
-                Log.i(TAG, "Visual skip triggered: cond1=$cond1 cond2=$cond2 cond3=$cond3 " +
-                    "chestSkin=$chestSkinRatio cleavage=$chestCleavageShadow midriff=$midriffSkinRatio lowerSkin=$lowerSkinRatio delta=$frameMotionDelta")
-            }
-        }
-
-        return Pair(detectedBoxes, shouldSkipVideo)
     }
 
     /**
@@ -2034,12 +1766,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             cb in 77.0..126.0 && cr in 133.0..173.0 && y in 50.0..242.0)
     }
 
-    /** Dark / brown / black low-saturation pixels typical of hair. */
-    private fun isHairPixel(r: Int, g: Int, b: Int): Boolean {
-        val y = 0.299f * r + 0.587f * g + 0.114f * b
-        val spread = maxOf(r, maxOf(g, b)) - minOf(r, minOf(g, b))
-        return y in 12.0..75.0 && spread < 45
-    }
     /**
      * STAGE 0: Metadata trigger limited to strictly explicit hashtags only.
      * Whole-tag match so e.g. "#nudemakeup" / "#nudelipstick" never trigger.
@@ -2082,13 +1808,46 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private fun triggerAutoSkipIfCooldownElapsed() {
         if (!prefs.isVisualAutoSkipEnabled) return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastAutoSkipElapsedMs < 1800L) return
+        if (now - lastAutoSkipElapsedMs < 2000L) return
         lastAutoSkipElapsedMs = now
 
+        val preSkipItemId = currentContentItemId
+        val preSkipRoot = try { rootInActiveWindow } catch (_: Exception) { null }
+        val preSkipSignature = getScreenContentSignature(preSkipRoot)
+
+        currentScannerDiagnosticText = DiagnosticStatus.SKIP_ACTION_REQUESTED.label
+        scannerHudOverlayView?.clearBoxes()
+
         autoSkipCurrentReelOrVideo()
+
+        // Verify navigation transition after 600ms (with at most 1 controlled retry)
+        tickerHandler.postDelayed({
+            try {
+                val activeKey = currentForegroundAppKey
+                if (activeKey != null && !isOurAppScreenOpen) {
+                    val postRoot = try { rootInActiveWindow } catch (_: Exception) { null }
+                    val postSignature = getScreenContentSignature(postRoot)
+                    if (currentContentItemId == preSkipItemId &&
+                        preSkipSignature.isNotEmpty() &&
+                        postSignature == preSkipSignature
+                    ) {
+                        Log.i(TAG, "Skip transition not observed after 600ms; executing 1 controlled retry swipe.")
+                        dispatchSwipeUpGestureOnly()
+                    }
+                    currentScrollSeq++
+                    val nextId = "${activeKey}_skipped_${currentScrollSeq}"
+                    currentContentItemId = nextId
+                    decisionEngine.resetForNewItem(nextId)
+                    previousLumaGrid = null
+                    currentScannerDiagnosticText = DiagnosticStatus.NAVIGATION_VERIFIED.label
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }, 600L)
     }
 
-    private fun autoSkipCurrentReelOrVideo() {
+    private fun dispatchSwipeUpGestureOnly() {
         try {
             val metrics = resources.displayMetrics
             val centerX = metrics.widthPixels * 0.5f
@@ -2104,6 +1863,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to dispatch auto-skip gesture: ${e.message}")
         }
+    }
+
+    private fun autoSkipCurrentReelOrVideo() {
+        dispatchSwipeUpGestureOnly()
 
         triggerDoublePulseVibration()
 
@@ -2942,10 +2705,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         var isDopamineTintAttached: Boolean = false
 
         @Volatile
-        var scannerBoundingBoxView: ScannerBoundingBoxView? = null
+        var scannerHudOverlayView: ScannerHudOverlayView? = null
 
         @Volatile
         var isScannerOverlayAttached: Boolean = false
+
+        @Volatile
+        var currentScannerDiagnosticText: String = DiagnosticStatus.WAITING_FOR_FRAMES.label
 
         fun getTodayDateStr(): String {
             return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

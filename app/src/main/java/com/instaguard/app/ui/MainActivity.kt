@@ -372,7 +372,13 @@ class MainActivity : AppCompatActivity() {
         binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
         binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
             guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
-            val msg = if (isChecked) "🎯 Scanner Red Border Outlines Enabled" else "🎯 Scanner Red Border Outlines Disabled"
+            if (!isChecked) {
+                AppBlockerService.scannerHudOverlayView?.let {
+                    it.clearOverlay()
+                    it.visibility = View.GONE
+                }
+            }
+            val msg = if (isChecked) "🎯 Scanner Outlines Enabled" else "🎯 Scanner Outlines Disabled (Auto-Skip Remains Active)"
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
@@ -407,7 +413,13 @@ class MainActivity : AppCompatActivity() {
         binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
         binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
             guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
-            val msg = if (isChecked) "🎯 Scanner Red Border Outlines Enabled" else "🎯 Scanner Red Border Outlines Disabled"
+            if (!isChecked) {
+                AppBlockerService.scannerHudOverlayView?.let {
+                    it.clearOverlay()
+                    it.visibility = View.GONE
+                }
+            }
+            val msg = if (isChecked) "🎯 Scanner Outlines Enabled" else "🎯 Scanner Outlines Disabled (Auto-Skip Remains Active)"
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
@@ -429,6 +441,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
         binding.tvBrowserBlockedCount.text = "🚫 Blocked Browser Searches/Videos: $browserBlocked"
+        binding.tvScannerDiagnosticLive.text = "📡 HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
     }
 
     private fun promptPinForVisualShieldDisable() {

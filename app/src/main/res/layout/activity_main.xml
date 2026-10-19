@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v9.6 (Live Visual Box Scanner)"
+                        android:text="InstaGuard Pro v10.0 (AI HUD Vision Suite)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -613,6 +613,17 @@
                             android:textColor="#EF4444"
                             android:textSize="12sp"
                             android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvScannerDiagnosticLive"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="monospace"
+                            android:text="📡 HUD Status: WAITING FOR FRAMES"
+                            android:textColor="#38BDF8"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
 
                     <View
@@ -638,7 +649,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="🎯 Show Live Scanner Border Outlines (ON / OFF)"
+                                android:text="🎯 Show Scanner Outlines (ON / OFF)"
                                 android:textColor="@color/cyber_text_primary"
                                 android:textSize="13sp"
                                 android:textStyle="bold" />
@@ -647,7 +658,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="Draws real-time red detection borders around scanned head, chest, waist &amp; hip zones on videos"
+                                android:text="Draws tactical HUD red corner brackets &amp; confidence badges (FACE, CHEST, BACK, BUTTOCKS, FEET) with zero face blur"
                                 android:textColor="#94A3B8"
                                 android:textSize="11sp" />
                         </LinearLayout>
