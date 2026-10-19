@@ -196,18 +196,18 @@ object VisualSkipAnalyzer {
             (height * 0.48f).toInt()
         )
 
-        // Upper & Mid Back Zone (y in 25%..62%)
+        // Upper & Mid Back Zone (y in 25%..52%, shoulders to waist)
         val backSkinRatio = getSkinRatio(
             (width * 0.25f).toInt(),
             (height * 0.25f).toInt(),
             (width * 0.75f).toInt(),
-            (height * 0.62f).toInt()
+            (height * 0.52f).toInt()
         )
 
-        // Hip & Buttocks Zone (y in 50%..86%)
+        // Hip & Buttocks Zone (y in 52%..86%, waist to thighs)
         val hipButtocksSkinRatio = getSkinRatio(
             (width * 0.25f).toInt(),
-            (height * 0.50f).toInt(),
+            (height * 0.52f).toInt(),
             (width * 0.75f).toInt(),
             (height * 0.86f).toInt()
         )
@@ -257,13 +257,13 @@ object VisualSkipAnalyzer {
         // CONDITION 3: Back Body — Bare Back & Exposed Glutes (Evaluated first on rear view)
         // -------------------------------------------------------------------------
         if (isRearPose) {
-            // (a) Bare Back Trigger: upper/mid back zone contains bare skin
-            if (backSkinRatio >= 0.22f || chestBustSkinRatio >= 0.22f) {
-                return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
-            }
-            // (b) Exposed Glutes / Buttocks Trigger
+            // (a) Exposed Glutes / Buttocks Trigger (checked when glutes/hip are prominent)
             if (hipButtocksSkinRatio >= 0.20f || (leftGluteSkin >= 0.18f && rightGluteSkin >= 0.18f)) {
                 return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
+            }
+            // (b) Bare Back Trigger: upper/mid back zone contains bare skin
+            if (backSkinRatio >= 0.22f || chestBustSkinRatio >= 0.22f) {
+                return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
             }
         }
 
@@ -336,12 +336,12 @@ object VisualSkipAnalyzer {
         // -------------------------------------------------------------------------
         // CONDITION 3 (Catch-all for bare back or exposed glutes in any orientation):
         // -------------------------------------------------------------------------
-        if (backSkinRatio >= 0.28f && upperHeadFaceSkinRatio < 0.20f) {
-            return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
-        }
-
         if (hipButtocksSkinRatio >= 0.20f || (leftGluteSkin >= 0.18f && rightGluteSkin >= 0.18f)) {
             return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
+        }
+
+        if (backSkinRatio >= 0.28f && upperHeadFaceSkinRatio < 0.20f) {
+            return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
         }
 
         // (c) Twerking / Motion in Glutes (4x4 luma grid comparison)
