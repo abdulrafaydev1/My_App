@@ -286,13 +286,16 @@ class VisualFilterDecisionEngineTest {
         val posFrame2 = posFrame.copy(frameTimestampMs = 15600L)
 
         val out1 = engine.evaluateFrame(posFrame, defaultConfig, nowMs = 14010L)
-        val out2 = engine.evaluateFrame(negFrame, defaultConfig, nowMs = 14810L)
-        val out3 = engine.evaluateFrame(posFrame2, defaultConfig, nowMs = 15610L)
-
         assertEquals(DecisionState.PENDING_ANALYSIS, out1.state)
+        assertEquals(1, engine.ruleBStreak)
+
+        val out2 = engine.evaluateFrame(negFrame, defaultConfig, nowMs = 14810L)
         assertEquals(DecisionState.ALLOW, out2.state)
         assertEquals(0, engine.ruleBStreak)
+
+        val out3 = engine.evaluateFrame(posFrame2, defaultConfig, nowMs = 15610L)
         assertEquals(DecisionState.PENDING_ANALYSIS, out3.state)
+        assertEquals(1, engine.ruleBStreak)
         assertFalse(out3.state.isSkipAuthorized)
     }
 
