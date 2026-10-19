@@ -349,10 +349,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * v9.0 / v9.4 Feature Controls:
+     * v9.0 Feature Controls:
      * - AI Visual Shield & Safe Browser Guard (toggle, PIN protection & live stats)
-     * - Content Filter Configuration Dialog (Rules A-D, Adult Search & Web, Vibration)
-     * - Pause / Resume Monitoring Action Button
      */
     private fun setupV90FeatureControls() {
         refreshAiVisualShieldDisplay()
@@ -366,20 +364,6 @@ class MainActivity : AppCompatActivity() {
                 guardManager.prefs.isAiVisualShieldEnabled = true
                 refreshAiVisualShieldDisplay()
                 Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        binding.btnConfigureVisualFilter.setOnClickListener {
-            showConfigureVisualFiltersDialog()
-        }
-
-        binding.btnToggleMonitoringStatus.setOnClickListener {
-            if (guardManager.prefs.isAiVisualShieldEnabled) {
-                promptPinForVisualShieldDisable()
-            } else {
-                guardManager.prefs.isAiVisualShieldEnabled = true
-                refreshAiVisualShieldDisplay()
-                Toast.makeText(this, "🛡️ AI Visual Shield Resumed", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -405,144 +389,13 @@ class MainActivity : AppCompatActivity() {
         if (isEnabled) {
             binding.tvAiVisualShieldStatus.text = "ACTIVE • Auto-skips suggestive content & terminates adult searches"
             binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#22D3EE"))
-            binding.btnToggleMonitoringStatus.text = "⏸️ Pause Shield"
-            binding.btnToggleMonitoringStatus.strokeColor = ColorStateList.valueOf(Color.parseColor("#F43F5E"))
-            binding.btnToggleMonitoringStatus.setTextColor(Color.parseColor("#F43F5E"))
         } else {
-            binding.tvAiVisualShieldStatus.text = "PAUSED • Protection temporarily suspended"
+            binding.tvAiVisualShieldStatus.text = "PAUSED • Protection disabled"
             binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#94A3B8"))
-            binding.btnToggleMonitoringStatus.text = "▶️ Resume Shield"
-            binding.btnToggleMonitoringStatus.strokeColor = ColorStateList.valueOf(Color.parseColor("#10B981"))
-            binding.btnToggleMonitoringStatus.setTextColor(Color.parseColor("#10B981"))
         }
 
         binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
         binding.tvBrowserBlockedCount.text = "🚫 Blocked Browser Searches/Videos: $browserBlocked"
-    }
-
-    private fun showConfigureVisualFiltersDialog() {
-        val prefs = guardManager.prefs
-        val scroll = android.widget.ScrollView(this)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(20f), dpToPx(16f), dpToPx(20f), dpToPx(16f))
-        }
-        scroll.addView(container)
-
-        val headerDesc = TextView(this).apply {
-            text = "Fine-tune on-device AI computer-vision and search content rules. All processing runs 100% locally on your device."
-            setTextColor(Color.parseColor("#94A3B8"))
-            textSize = 12f
-            setPadding(0, 0, 0, dpToPx(12f))
-        }
-        container.addView(headerDesc)
-
-        fun addSwitchRow(title: String, subtitle: String, initialValue: Boolean, onToggle: (Boolean) -> Unit) {
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dpToPx(8f), 0, dpToPx(8f))
-            }
-            val textCol = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-            }
-            val tvTitle = TextView(this).apply {
-                text = title
-                setTextColor(Color.WHITE)
-                textSize = 13.5f
-                setTypeface(null, Typeface.BOLD)
-            }
-            val tvSub = TextView(this).apply {
-                text = subtitle
-                setTextColor(Color.parseColor("#94A3B8"))
-                textSize = 11f
-            }
-            textCol.addView(tvTitle)
-            textCol.addView(tvSub)
-
-            val sw = androidx.appcompat.widget.SwitchCompat(this).apply {
-                isChecked = initialValue
-                setOnCheckedChangeListener { _, checked ->
-                    onToggle(checked)
-                }
-            }
-            row.addView(textCol)
-            row.addView(sw)
-            container.addView(row)
-        }
-
-        // Section: Core Protection Engines
-        addSwitchRow(
-            "🎬 Auto-Skip Suggestive Videos",
-            "Automatically swipes away explicit Reels, Shorts, and TikToks",
-            prefs.isAutoSkipReelsEnabled
-        ) { prefs.isAutoSkipReelsEnabled = it }
-
-        addSwitchRow(
-            "🌐 Browser Adult Protection",
-            "Blocks explicit searches & adult websites on Chrome and Google",
-            prefs.isBrowserAdultBlockEnabled
-        ) { prefs.isBrowserAdultBlockEnabled = it }
-
-        addSwitchRow(
-            "⚡ Strict Visual Sensitivity",
-            "Lower skin & cleavage threshold for maximum protection",
-            prefs.isStrictVisualMode
-        ) { prefs.isStrictVisualMode = it }
-
-        // Section: Visual Rules
-        addSwitchRow(
-            "👗 Rule A: Short / Revealing Clothing",
-            "Detects short dresses, tight mini skirts, and high leg slits",
-            prefs.isRuleShortClothingEnabled
-        ) { prefs.isRuleShortClothingEnabled = it }
-
-        addSwitchRow(
-            "👙 Rule B: Chest & Cleavage Framing",
-            "Detects deep plunging necklines and cleavage-focused framing",
-            prefs.isRuleChestCleavageEnabled
-        ) { prefs.isRuleChestCleavageEnabled = it }
-
-        addSwitchRow(
-            "🍑 Rule C: Rear-View & Buttocks Emphasis",
-            "Detects backless dresses and buttocks-focused presentations",
-            prefs.isRuleRearButtocksEnabled
-        ) { prefs.isRuleRearButtocksEnabled = it }
-
-        addSwitchRow(
-            "💃 Rule D: Suggestive Movement",
-            "Detects body shaking and suggestive dance motions",
-            prefs.isRuleSuggestiveMotionEnabled
-        ) { prefs.isRuleSuggestiveMotionEnabled = it }
-
-        // Section: Browser & Feedback
-        addSwitchRow(
-            "🔍 Block Explicit Adult Searches",
-            "Blocks explicit NSFW search queries in Google and Chrome",
-            prefs.isAdultSearchBlockEnabled
-        ) { prefs.isAdultSearchBlockEnabled = it }
-
-        addSwitchRow(
-            "🚫 Block Known Adult Websites",
-            "Instantly closes adult domains and NSFW streaming sites",
-            prefs.isAdultWebsitesBlockEnabled
-        ) { prefs.isAdultWebsitesBlockEnabled = it }
-
-        addSwitchRow(
-            "📳 Double-Pulse Vibration",
-            "Crisp 220ms + 280ms double-pulse haptic vibration on block/skip",
-            prefs.isDoublePulseVibrationEnabled
-        ) { prefs.isDoublePulseVibrationEnabled = it }
-
-        AlertDialog.Builder(this)
-            .setTitle("⚙️ Configure Content Filters")
-            .setView(scroll)
-            .setPositiveButton("DONE") { dialog, _ ->
-                refreshAiVisualShieldDisplay()
-                dialog.dismiss()
-            }
-            .show()
     }
 
     private fun promptPinForVisualShieldDisable() {
