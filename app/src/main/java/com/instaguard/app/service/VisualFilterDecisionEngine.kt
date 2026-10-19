@@ -181,6 +181,10 @@ data class FrameFeatures(
     val qualifyingPersonDetected: Boolean = false,
     val personConfidence: Float = 0f,
     val isMalePresentingOnly: Boolean = false,
+    val isFemaleConfirmed: Boolean = true,
+    val shortDressRuleMatched: Boolean = false,
+    val boobsBreastVisibleMatched: Boolean = false,
+    val backOrButtocksAssMatched: Boolean = false,
     val clothingAnalysisComplete: Boolean = true,
     val shoulderUncoveredConfidence: Float = 0f,
     val hemlineAboveKneeConfidence: Float = 0f,
@@ -454,9 +458,10 @@ class VisualFilterDecisionEngine(
         }
         currentTrackId = features.primaryTrackId
 
-        // Gate 3: Relevant visible subject eligibility gate
+        // Gate 3: Relevant visible female subject eligibility gate (Strict Rule #1)
         val personEligible = features.qualifyingPersonDetected &&
             !features.isMalePresentingOnly &&
+            features.isFemaleConfirmed &&
             features.personConfidence >= activeConfig.minPersonConfidence
 
         if (!personEligible) {
@@ -513,36 +518,44 @@ class VisualFilterDecisionEngine(
         val frameMatchedRules = mutableSetOf<FilterRuleCategory>()
 
         // Rule A: Short or revealing clothing (Composite Rule: BOTH shoulder uncovered AND hemline above knee)
-        val ruleAMatch = features.shoulderUncoveredConfidence >= activeConfig.shortDressThreshold &&
-            features.hemlineAboveKneeConfidence >= activeConfig.shortDressThreshold
+        val ruleAMatch = features.shortDressRuleMatched ||
+            (features.shoulderUncoveredConfidence >= activeConfig.shortDressThreshold &&
+             features.hemlineAboveKneeConfidence >= activeConfig.shortDressThreshold)
         if (ruleAMatch) {
             ruleAStreak++
             frameMatchedRules.add(FilterRuleCategory.RULE_A_SHORT_REVEALING_DRESS)
-            val confA = (features.shoulderUncoveredConfidence + features.hemlineAboveKneeConfidence) * 0.5f
+            val confA = if (features.shortDressRuleMatched && features.shoulderUncoveredConfidence <= 0f) 0.88f
+                        else (features.shoulderUncoveredConfidence + features.hemlineAboveKneeConfidence) * 0.5f
             if (confA > maxMatchedConfidence) maxMatchedConfidence = confA
         } else {
             ruleAStreak = 0
         }
 
-        // Rule B: Chest-related clothing presentation
-        val ruleBMatch = features.chestExposureConfidence >= activeConfig.chestExposureThreshold
+        // Rule B: Chest / Boobs / Cleavage presentation
+        val ruleBMatch = features.boobsBreastVisibleMatched ||
+            features.chestExposureConfidence >= activeConfig.chestExposureThreshold
         if (ruleBMatch) {
             ruleBStreak++
             frameMatchedRules.add(FilterRuleCategory.RULE_B_REVEALING_CHEST)
-            if (features.chestExposureConfidence > maxMatchedConfidence) {
-                maxMatchedConfidence = features.chestExposureConfidence
+            val confB = if (features.boobsBreastVisibleMatched && features.chestExposureConfidence <= 0f) 0.90f
+                        else features.chestExposureConfidence
+            if (confB > maxMatchedConfidence) {
+                maxMatchedConfidence = confB
             }
         } else {
             ruleBStreak = 0
         }
 
-        // Rule C: Rear-view presentation
-        val ruleCMatch = features.rearButtocksExposureConfidence >= activeConfig.rearButtocksThreshold
+        // Rule C: Rear / Back / ASS / Buttocks presentation
+        val ruleCMatch = features.backOrButtocksAssMatched ||
+            features.rearButtocksExposureConfidence >= activeConfig.rearButtocksThreshold
         if (ruleCMatch) {
             ruleCStreak++
             frameMatchedRules.add(FilterRuleCategory.RULE_C_REAR_BUTTOCKS_PRESENTATION)
-            if (features.rearButtocksExposureConfidence > maxMatchedConfidence) {
-                maxMatchedConfidence = features.rearButtocksExposureConfidence
+            val confC = if (features.backOrButtocksAssMatched && features.rearButtocksExposureConfidence <= 0f) 0.88f
+                        else features.rearButtocksExposureConfidence
+            if (confC > maxMatchedConfidence) {
+                maxMatchedConfidence = confC
             }
         } else {
             ruleCStreak = 0

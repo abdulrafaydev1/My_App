@@ -112,6 +112,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var currentScrollSeq = 0L
     @Volatile
     private var currentContentItemId = "init_0"
+    @Volatile
+    private var consecutiveConfirmedMatchFrames = 0
 
     // Protected Foreground App State (Zero-Flicker & Resilience)
     @Volatile
@@ -650,6 +652,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val scrollItemId = "${activeKey}_scroll_${currentScrollSeq}_${event.fromIndex}_${event.toIndex}"
             currentContentItemId = scrollItemId
             decisionEngine.resetForNewItem(scrollItemId)
+            consecutiveConfirmedMatchFrames = 0
             previousLumaGrid = null
             scannerHudOverlayView?.clearBoxes()
 
@@ -1674,7 +1677,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
                                 val evalNowMs = SystemClock.elapsedRealtime()
                                 val filterConfig = FilterConfig(
-                                    monitoringEnabled = prefs.isAiVisualShieldEnabled
+                                    monitoringEnabled = prefs.isAiVisualShieldEnabled,
+                                    requiredStaticConfirmFrames = 3
                                 )
                                 val decision = decisionEngine.evaluateFrame(
                                     features = features,
@@ -1682,6 +1686,17 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                     nowMs = evalNowMs
                                 )
                                 currentScannerDiagnosticText = decision.diagnosticStatus.label
+
+                                val anyRuleMatched = features.shortDressRuleMatched ||
+                                    features.boobsBreastVisibleMatched ||
+                                    features.backOrButtocksAssMatched ||
+                                    decision.matchedRules.isNotEmpty()
+
+                                if (features.isFemaleConfirmed && anyRuleMatched) {
+                                    consecutiveConfirmedMatchFrames++
+                                } else {
+                                    consecutiveConfirmedMatchFrames = 0
+                                }
 
                                 // Update live tactical HUD overlay on MainThread if enabled
                                 tickerHandler.post {
@@ -1712,9 +1727,12 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                         hideScannerBoundingBoxOverlay()
                                     }
 
+                                    // Gate 6: Multi-Frame Confirmation (3 Consecutive Frames) & Live Red Scanner Outlines
                                     if (decision.state == DecisionState.SKIP_CANDIDATE &&
                                         prefs.isVisualAutoSkipEnabled &&
-                                        currentContentItemId == itemIdSnapshot
+                                        currentContentItemId == itemIdSnapshot &&
+                                        features.isFemaleConfirmed &&
+                                        consecutiveConfirmedMatchFrames >= 3
                                     ) {
                                         triggerAutoSkipIfCooldownElapsed(itemIdSnapshot)
                                     }
@@ -1762,6 +1780,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         scannerHudOverlayView?.clearBoxes()
 
         autoSkipCurrentReelOrVideo()
+        consecutiveConfirmedMatchFrames = 0
 
         // Verify navigation transition after 600ms (with at most 1 controlled retry)
         tickerHandler.postDelayed({
@@ -2446,21 +2465,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             "com.google.android.googlequicksearchbox",
             "com.sec.android.app.sbrowser",
             "org.mozilla.firefox"
-        )
-
-        val SUGGESTIVE_REEL_INDICATORS = listOf(
-            "cleavage", "bikini", "lingerie", "twerk", "booty", "boobs", "baddie",
-            "thirst trap", "thirsttrap", "short dress", "mini dress", "backless",
-            "hot girl", "sexy girl", "sexy dress", "sexy video", " sexy ", "#sexy",
-            "#hot", "curvy", "thick", "gyatt", "strip", "belly dance", "shaking",
-            "onlyfans", "nsfw", "underboob", "sideboob", "bootyshorts", "hot reel", "bold reel"
-        )
-
-        val STRICT_NSFW_SOCIAL_TAGS = listOf(
-            "#nsfw", "#onlyfans", "#cleavage", "#boobs", "#bigboobs", "#twerk", "#twerking",
-            "#bootyshake", "#bigass", "#assshake", "#thirsttrap", "#lingerie", "#bikini",
-            "#microbikini", "#stripper", "#striptease", "#sexydress", "#hotcleavage",
-            "#backlessdress", "#bootyshorts", "#underboob", "#sideboob", "#18plus", "#uncensored"
         )
 
         val EXPLICIT_BROWSER_KEYWORDS = arrayOf(

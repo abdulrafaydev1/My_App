@@ -1129,4 +1129,201 @@ class VisualFilterDecisionEngineTest {
         assertEquals(DecisionState.SKIP_CANDIDATE, decision.state)
         assertTrue(decision.state.isSkipAuthorized)
     }
+
+    // =========================================================================
+    // v10.2 Gate 1-6 Precision Verification Tests
+    // =========================================================================
+
+    @Test
+    fun v10_2_videoWithoutConfirmedFemale_returnsAllow() {
+        val nonFemaleFrame = FrameFeatures(
+            contentItemId = "v10_2_no_female_video",
+            frameTimestampMs = 12000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isFemaleConfirmed = false,
+            personConfidence = 0.88f,
+            shortDressRuleMatched = true,
+            boobsBreastVisibleMatched = true
+        )
+        val out1 = engine.evaluateFrame(nonFemaleFrame, defaultConfig, nowMs = 12020L)
+        val out2 = engine.evaluateFrame(nonFemaleFrame.copy(frameTimestampMs = 12500L), defaultConfig, nowMs = 12520L)
+        val out3 = engine.evaluateFrame(nonFemaleFrame.copy(frameTimestampMs = 13000L), defaultConfig, nowMs = 13020L)
+
+        assertEquals(DecisionState.ALLOW, out1.state)
+        assertEquals(DecisionState.ALLOW, out2.state)
+        assertEquals(DecisionState.ALLOW, out3.state)
+        assertEquals(DiagnosticStatus.NO_QUALIFYING_PERSON_DETECTED, out3.diagnosticStatus)
+        assertEquals(0, engine.ruleAStreak)
+        assertEquals(0, engine.ruleBStreak)
+    }
+
+    @Test
+    fun v10_2_maleOnlyVideo_returnsAllow() {
+        val maleFrame = FrameFeatures(
+            contentItemId = "v10_2_male_speaker_video",
+            frameTimestampMs = 14000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isMalePresentingOnly = true,
+            isFemaleConfirmed = false,
+            personConfidence = 0.95f,
+            chestExposureConfidence = 0.90f
+        )
+        val out1 = engine.evaluateFrame(maleFrame, defaultConfig, nowMs = 14020L)
+        val out2 = engine.evaluateFrame(maleFrame.copy(frameTimestampMs = 14500L), defaultConfig, nowMs = 14520L)
+
+        assertEquals(DecisionState.ALLOW, out1.state)
+        assertEquals(DecisionState.ALLOW, out2.state)
+        assertEquals(DiagnosticStatus.NO_QUALIFYING_PERSON_DETECTED, out2.diagnosticStatus)
+    }
+
+    @Test
+    fun v10_2_femaleInNormalModestDress_returnsAllow() {
+        val modestFemaleFrame = FrameFeatures(
+            contentItemId = "v10_2_modest_female_video",
+            frameTimestampMs = 15000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isMalePresentingOnly = false,
+            isFemaleConfirmed = true,
+            personConfidence = 0.92f,
+            shortDressRuleMatched = false,
+            boobsBreastVisibleMatched = false,
+            backOrButtocksAssMatched = false,
+            shoulderUncoveredConfidence = 0.10f,
+            hemlineAboveKneeConfidence = 0.10f,
+            chestExposureConfidence = 0.10f,
+            rearButtocksExposureConfidence = 0.10f
+        )
+        val out1 = engine.evaluateFrame(modestFemaleFrame, defaultConfig, nowMs = 15020L)
+        val out2 = engine.evaluateFrame(modestFemaleFrame.copy(frameTimestampMs = 15500L), defaultConfig, nowMs = 15520L)
+
+        assertEquals(DecisionState.ALLOW, out1.state)
+        assertEquals(DecisionState.ALLOW, out2.state)
+        assertEquals(0, engine.ruleAStreak)
+        assertEquals(0, engine.ruleBStreak)
+        assertEquals(0, engine.ruleCStreak)
+    }
+
+    @Test
+    fun v10_2_femaleInShortDressBelowShoulderAndAboveKneeWithLegs_returnsSkip() {
+        val shortDressConfig = FilterConfig(requiredStaticConfirmFrames = 3)
+        val shortDressFrame1 = FrameFeatures(
+            contentItemId = "v10_2_short_dress_video",
+            frameTimestampMs = 16000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isMalePresentingOnly = false,
+            isFemaleConfirmed = true,
+            personConfidence = 0.94f,
+            shortDressRuleMatched = true,
+            shoulderUncoveredConfidence = 0.90f,
+            hemlineAboveKneeConfidence = 0.88f
+        )
+        val shortDressFrame2 = shortDressFrame1.copy(frameTimestampMs = 16400L)
+        val shortDressFrame3 = shortDressFrame1.copy(frameTimestampMs = 16800L)
+
+        val out1 = engine.evaluateFrame(shortDressFrame1, shortDressConfig, nowMs = 16020L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out1.state)
+        assertEquals(1, engine.ruleAStreak)
+
+        val out2 = engine.evaluateFrame(shortDressFrame2, shortDressConfig, nowMs = 16420L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out2.state)
+        assertEquals(2, engine.ruleAStreak)
+
+        val out3 = engine.evaluateFrame(shortDressFrame3, shortDressConfig, nowMs = 16820L)
+        assertEquals(DecisionState.SKIP_CANDIDATE, out3.state)
+        assertTrue(out3.state.isSkipAuthorized)
+        assertEquals(3, engine.ruleAStreak)
+        assertTrue(out3.matchedRules.contains(FilterRuleCategory.RULE_A_SHORT_REVEALING_DRESS))
+    }
+
+    @Test
+    fun v10_2_femaleWithVisibleBreastsCleavage_returnsSkip() {
+        val boobsConfig = FilterConfig(requiredStaticConfirmFrames = 3)
+        val cleavageFrame1 = FrameFeatures(
+            contentItemId = "v10_2_cleavage_video",
+            frameTimestampMs = 17000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isMalePresentingOnly = false,
+            isFemaleConfirmed = true,
+            personConfidence = 0.95f,
+            boobsBreastVisibleMatched = true,
+            chestExposureConfidence = 0.92f
+        )
+        val cleavageFrame2 = cleavageFrame1.copy(frameTimestampMs = 17350L)
+        val cleavageFrame3 = cleavageFrame1.copy(frameTimestampMs = 17700L)
+
+        val out1 = engine.evaluateFrame(cleavageFrame1, boobsConfig, nowMs = 17020L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out1.state)
+        assertEquals(1, engine.ruleBStreak)
+
+        val out2 = engine.evaluateFrame(cleavageFrame2, boobsConfig, nowMs = 17370L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out2.state)
+        assertEquals(2, engine.ruleBStreak)
+
+        val out3 = engine.evaluateFrame(cleavageFrame3, boobsConfig, nowMs = 17720L)
+        assertEquals(DecisionState.SKIP_CANDIDATE, out3.state)
+        assertTrue(out3.state.isSkipAuthorized)
+        assertEquals(3, engine.ruleBStreak)
+        assertTrue(out3.matchedRules.contains(FilterRuleCategory.RULE_B_REVEALING_CHEST))
+    }
+
+    @Test
+    fun v10_2_femaleShowingBackOrAssButtocks_returnsSkip() {
+        val rearConfig = FilterConfig(requiredStaticConfirmFrames = 3)
+        val rearFrame1 = FrameFeatures(
+            contentItemId = "v10_2_rear_ass_video",
+            frameTimestampMs = 18000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            isMalePresentingOnly = false,
+            isFemaleConfirmed = true,
+            personConfidence = 0.93f,
+            backOrButtocksAssMatched = true,
+            rearButtocksExposureConfidence = 0.89f
+        )
+        val rearFrame2 = rearFrame1.copy(frameTimestampMs = 18350L)
+        val rearFrame3 = rearFrame1.copy(frameTimestampMs = 18700L)
+
+        val out1 = engine.evaluateFrame(rearFrame1, rearConfig, nowMs = 18020L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out1.state)
+        assertEquals(1, engine.ruleCStreak)
+
+        val out2 = engine.evaluateFrame(rearFrame2, rearConfig, nowMs = 18370L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out2.state)
+        assertEquals(2, engine.ruleCStreak)
+
+        val out3 = engine.evaluateFrame(rearFrame3, rearConfig, nowMs = 18720L)
+        assertEquals(DecisionState.SKIP_CANDIDATE, out3.state)
+        assertTrue(out3.state.isSkipAuthorized)
+        assertEquals(3, engine.ruleCStreak)
+        assertTrue(out3.matchedRules.contains(FilterRuleCategory.RULE_C_REAR_BUTTOCKS_PRESENTATION))
+    }
 }

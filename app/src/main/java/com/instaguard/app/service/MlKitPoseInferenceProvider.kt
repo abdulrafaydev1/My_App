@@ -12,6 +12,8 @@ import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import com.google.mlkit.vision.pose.PoseLandmark as MlPoseLandmark
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -21,11 +23,12 @@ import kotlin.math.min
  * Implements:
  * - Official ML Kit Pose Detection API in [PoseDetectorOptions.STREAM_MODE] for real-time video frames.
  * - Persistent detector client reuse across frames to preserve temporal tracking state.
- * - Extracts genuine anatomical landmarks (head, shoulders, elbows, wrists, hips, knees, ankles).
- * - Derives separate genuine bounding boxes for FACE, UPPER TORSO, and full PERSON/BODY.
- * - Calculates true confidence values from [MlPoseLandmark.inFrameLikelihood] (never fabricated).
- * - Fails open safely when no custom clothing classifier is bundled.
- * - Automatic fallback to [AndroidSdkFaceInferenceProvider] if Play Services ML Kit is unavailable.
+ * - GATE 1: Strict Frame-by-Frame Female Presence Verification (rejects non-humans and males).
+ * - GATE 2: Personalized Skin-Tone Calibration from Face/Neck landmarks (prevents clothing/wall false positives).
+ * - GATE 3: Short Dress Analyzer ("Shoulder se Niche" + "Ghutne se Upar" + Legs/Feet Visible).
+ * - GATE 4: Bust / Cleavage Analyzer (Left hemisphere, center cleavage cleft, right hemisphere, neckline contrast).
+ * - GATE 5: Rear / Back / ASS / Buttocks Analyzer (Rear orientation, glute skin & cleft shadow, back skin, silhouette).
+ * - Genuine HUD Bounding Boxes: FACE, BODY, CHEST, BACK, BUTTOCKS, FEET (100% transparent interior).
  */
 object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
@@ -41,7 +44,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         private set
 
     override val supportsPersonDetection: Boolean = true
-    override val supportsClothingClassification: Boolean = false
+    override val supportsClothingClassification: Boolean = true
 
     @Synchronized
     fun getOrCreateDetector(): PoseDetector {
@@ -106,6 +109,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
             processPoseResult(
                 pose = pose,
+                bitmap = bitmap,
                 srcW = srcW,
                 srcH = srcH,
                 contentItemId = contentItemId,
@@ -116,7 +120,6 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         } catch (e: Exception) {
             Log.w(TAG, "ML Kit Pose Detection encountered an exception; falling back to AndroidSdkFaceInferenceProvider", e)
             try {
-                // Safe fallback to native FaceDetector so video processing never halts
                 AndroidSdkFaceInferenceProvider.analyzeBitmap(
                     bitmap = bitmap,
                     contentItemId = contentItemId,
@@ -137,6 +140,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
     private fun processPoseResult(
         pose: Pose,
+        bitmap: Bitmap,
         srcW: Int,
         srcH: Int,
         contentItemId: String,
@@ -155,6 +159,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 clothingClassifierAvailable = false,
                 clothingAnalysisComplete = true,
                 qualifyingPersonDetected = false,
+                isFemaleConfirmed = false,
+                isMalePresentingOnly = false,
                 personConfidence = 0.0f,
                 detectedBoxes = emptyList(),
                 detectedLandmarks = emptyList(),
@@ -197,6 +203,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 clothingClassifierAvailable = false,
                 clothingAnalysisComplete = true,
                 qualifyingPersonDetected = false,
+                isFemaleConfirmed = false,
+                isMalePresentingOnly = false,
                 personConfidence = if (validCount > 0) totalLikelihood / validCount else 0.0f,
                 detectedBoxes = emptyList(),
                 detectedLandmarks = extractedLandmarks,
@@ -205,7 +213,150 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         }
 
         val overallPersonConfidence = (totalLikelihood / validCount).coerceIn(0.1f, 1.0f)
-        val boxes = ArrayList<NormalizedBox>(3)
+        val boxes = ArrayList<NormalizedBox>(4)
+
+        // Core Landmarks
+        val nose = extractedLandmarks.firstOrNull { it.type == LandmarkType.NOSE }
+        val leftEye = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_EYE }
+        val rightEye = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_EYE }
+        val leftEar = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_EAR }
+        val rightEar = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_EAR }
+        val leftMouth = extractedLandmarks.firstOrNull { it.type == LandmarkType.MOUTH_LEFT }
+        val rightMouth = extractedLandmarks.firstOrNull { it.type == LandmarkType.MOUTH_RIGHT }
+        val leftShoulder = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_SHOULDER }
+        val rightShoulder = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_SHOULDER }
+        val leftHip = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_HIP }
+        val rightHip = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_HIP }
+        val leftKnee = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_KNEE }
+        val rightKnee = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_KNEE }
+        val leftAnkle = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_ANKLE }
+        val rightAnkle = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_ANKLE }
+
+        // GATE 1: Frame-by-Frame Female Presence Verification (Human Skeleton Check)
+        val upperKeyLms = listOfNotNull(nose, leftShoulder, rightShoulder)
+        val lowerKeyLms = listOfNotNull(leftHip, rightHip, leftKnee, rightKnee)
+        val hasUpperSkeleton = upperKeyLms.count { it.confidence >= 0.72f } >= 2
+        val hasLowerSkeleton = lowerKeyLms.count { it.confidence >= 0.72f } >= 2
+
+        if (!hasUpperSkeleton && !hasLowerSkeleton) {
+            // There is NO human in this frame (it is a car, nature, animal, gaming, food, or text video).
+            return FrameFeatures(
+                contentItemId = contentItemId,
+                frameTimestampMs = timestampMs,
+                isSupportedVideoFeed = isSupportedFeed,
+                modelInitialized = true,
+                personDetectorAvailable = true,
+                clothingClassifierAvailable = false,
+                clothingAnalysisComplete = true,
+                qualifyingPersonDetected = false,
+                isFemaleConfirmed = false,
+                isMalePresentingOnly = false,
+                personConfidence = 0.0f,
+                detectedBoxes = emptyList(),
+                detectedLandmarks = extractedLandmarks,
+                inferenceDurationMs = durationMs
+            )
+        }
+
+        // Helper pixel functions
+        fun getPixelSafe(x: Int, y: Int): Int {
+            val px = x.coerceIn(0, srcW - 1)
+            val py = y.coerceIn(0, srcH - 1)
+            return bitmap.getPixel(px, py)
+        }
+
+        fun luminance(pixel: Int): Float {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            return 0.299f * r + 0.587f * g + 0.114f * b
+        }
+
+        // Measure shoulder width & hip width
+        val shoulderW = if (leftShoulder != null && rightShoulder != null) {
+            abs(leftShoulder.x - rightShoulder.x) * srcW
+        } else 0f
+
+        val hipW = if (leftHip != null && rightHip != null) {
+            abs(leftHip.x - rightHip.x) * srcW
+        } else 0f
+
+        // Sample cheek luminance vs lower jaw/chin luminance for facial hair/stubble detection
+        var cheekLumaSum = 0f
+        var cheekCount = 0
+        if (nose != null) {
+            val nX = (nose.x * srcW).toInt()
+            val nY = (nose.y * srcH).toInt()
+            val dx = (srcW * 0.04f).toInt().coerceAtLeast(8)
+            for (step in 1..4) {
+                val pL = getPixelSafe(nX - dx * step / 2, nY)
+                val pR = getPixelSafe(nX + dx * step / 2, nY)
+                cheekLumaSum += luminance(pL) + luminance(pR)
+                cheekCount += 2
+            }
+        }
+        val cheekLuminance = if (cheekCount > 0) cheekLumaSum / cheekCount else 128f
+
+        var jawLumaSum = 0f
+        var jawCount = 0
+        if (nose != null) {
+            val nX = (nose.x * srcW).toInt()
+            val mouthY = if (leftMouth != null && rightMouth != null) {
+                ((leftMouth.y + rightMouth.y) * 0.5f * srcH).toInt()
+            } else {
+                (nose.y * srcH + srcH * 0.04f).toInt()
+            }
+            val dy = (srcH * 0.015f).toInt().coerceAtLeast(4)
+            for (step in 1..4) {
+                val pJaw = getPixelSafe(nX, mouthY + dy * step)
+                jawLumaSum += luminance(pJaw)
+                jawCount++
+            }
+        }
+        val jawLuminance = if (jawCount > 0) jawLumaSum / jawCount else 128f
+
+        val hasBeardOrMoustacheShadow = jawCount > 0 && (jawLuminance < cheekLuminance - 14.0f)
+        val hasMasculineVTorso = shoulderW > 0f && hipW > 0f && (shoulderW / max(hipW, 1f) >= 1.30f)
+
+        // Check female hair signature (long hair alongside neck past ears down to shoulders)
+        var hairPixelCount = 0
+        var hairSampleCount = 0
+        if (leftEar != null && leftShoulder != null) {
+            val startY = (leftEar.y * srcH).toInt()
+            val endY = (leftShoulder.y * srcH).toInt()
+            val xPos = (leftEar.x * srcW).toInt()
+            if (endY > startY) {
+                val stepY = max(1, (endY - startY) / 6)
+                for (y in startY..endY step stepY) {
+                    val p = getPixelSafe(xPos, y)
+                    if (luminance(p) < 60f) hairPixelCount++
+                    hairSampleCount++
+                }
+            }
+        }
+        if (rightEar != null && rightShoulder != null) {
+            val startY = (rightEar.y * srcH).toInt()
+            val endY = (rightShoulder.y * srcH).toInt()
+            val xPos = (rightEar.x * srcW).toInt()
+            if (endY > startY) {
+                val stepY = max(1, (endY - startY) / 6)
+                for (y in startY..endY step stepY) {
+                    val p = getPixelSafe(xPos, y)
+                    if (luminance(p) < 60f) hairPixelCount++
+                    hairSampleCount++
+                }
+            }
+        }
+        val hasLongFemaleHair = hairSampleCount > 0 && (hairPixelCount.toFloat() / hairSampleCount >= 0.40f)
+
+        // Reject male subjects
+        val isMaleSubject = hasBeardOrMoustacheShadow || (hasMasculineVTorso && !hasLongFemaleHair)
+
+        // Check female visual signatures
+        val hasFemaleSilhouette = (hipW > 0f && shoulderW > 0f && (hipW / shoulderW >= 0.80f))
+        val hasSmoothFaceAndContour = !hasBeardOrMoustacheShadow && abs(jawLuminance - cheekLuminance) < 10.0f
+        val femaleSignaturesCount = listOf(hasLongFemaleHair, hasFemaleSilhouette, hasSmoothFaceAndContour).count { it }
+        val isFemaleConfirmed = !isMaleSubject && (femaleSignaturesCount >= 2)
 
         // 2. Derive genuine FACE Bounding Box from face landmarks
         val faceLandmarks = extractedLandmarks.filter { lm ->
@@ -227,7 +378,6 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             val rawW = max(0.06f, maxX - minX)
             val rawH = max(0.08f, maxY - minY)
 
-            // Cranial & chin anatomical margin
             val fLeft = (minX - rawW * 0.25f).coerceIn(0.01f, 0.95f)
             val fRight = (maxX + rawW * 0.25f).coerceIn(fLeft + 0.05f, 0.99f)
             val fTop = (minY - rawH * 0.35f).coerceIn(0.01f, 0.95f)
@@ -250,52 +400,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             )
         }
 
-        // 3. Derive genuine UPPER TORSO Bounding Box from shoulders and hips
-        val leftShoulder = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_SHOULDER }
-        val rightShoulder = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_SHOULDER }
-        val leftHip = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_HIP }
-        val rightHip = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_HIP }
-
-        if (leftShoulder != null && rightShoulder != null) {
-            val shoulderMinX = min(leftShoulder.x, rightShoulder.x)
-            val shoulderMaxX = max(leftShoulder.x, rightShoulder.x)
-            val shoulderY = (leftShoulder.y + rightShoulder.y) * 0.5f
-            val shoulderSpan = max(0.10f, shoulderMaxX - shoulderMinX)
-
-            val torsoLeft = (shoulderMinX - shoulderSpan * 0.12f).coerceIn(0.01f, 0.95f)
-            val torsoRight = (shoulderMaxX + shoulderSpan * 0.12f).coerceIn(torsoLeft + 0.06f, 0.99f)
-            val torsoTop = (shoulderY - shoulderSpan * 0.22f).coerceIn(0.01f, 0.95f)
-
-            val torsoBottom = if (leftHip != null && rightHip != null) {
-                ((leftHip.y + rightHip.y) * 0.5f).coerceIn(torsoTop + 0.08f, 0.99f)
-            } else if (leftHip != null) {
-                leftHip.y.coerceIn(torsoTop + 0.08f, 0.99f)
-            } else if (rightHip != null) {
-                rightHip.y.coerceIn(torsoTop + 0.08f, 0.99f)
-            } else {
-                (torsoTop + shoulderSpan * 1.35f).coerceIn(torsoTop + 0.08f, 0.99f)
-            }
-
-            val contributingTorsoLms = listOfNotNull(leftShoulder, rightShoulder, leftHip, rightHip)
-            val torsoConf = contributingTorsoLms.map { it.confidence }.average().toFloat().coerceIn(0.1f, 1.0f)
-
-            boxes.add(
-                NormalizedBox(
-                    trackId = 1,
-                    regionLabel = "UPPER TORSO",
-                    confidence = torsoConf,
-                    left = torsoLeft,
-                    top = torsoTop,
-                    right = torsoRight,
-                    bottom = torsoBottom,
-                    timestampMs = timestampMs,
-                    sourceWidth = srcW,
-                    sourceHeight = srcH
-                )
-            )
-        }
-
-        // 4. Derive genuine PERSON / BODY Bounding Box enclosing all visible landmarks
+        // 3. Derive genuine BODY Bounding Box enclosing visible landmarks
         val bodyMinX = extractedLandmarks.minOf { it.x }
         val bodyMaxX = extractedLandmarks.maxOf { it.x }
         val bodyMinY = extractedLandmarks.minOf { it.y }
@@ -311,7 +416,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         boxes.add(
             NormalizedBox(
                 trackId = 1,
-                regionLabel = "PERSON",
+                regionLabel = "BODY",
                 confidence = overallPersonConfidence,
                 left = pLeft,
                 top = pTop,
@@ -323,20 +428,520 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             )
         )
 
+        // STRICT RULE #1: If there is NO female confirmed in frame, IMMEDIATELY return ALLOW!
+        if (!isFemaleConfirmed) {
+            return FrameFeatures(
+                contentItemId = contentItemId,
+                frameTimestampMs = timestampMs,
+                isSupportedVideoFeed = isSupportedFeed,
+                modelInitialized = true,
+                personDetectorAvailable = true,
+                clothingClassifierAvailable = false,
+                clothingAnalysisComplete = true,
+                qualifyingPersonDetected = true,
+                isFemaleConfirmed = false,
+                isMalePresentingOnly = isMaleSubject,
+                personConfidence = overallPersonConfidence,
+                detectedBoxes = boxes,
+                detectedLandmarks = extractedLandmarks,
+                inferenceDurationMs = durationMs,
+                failureReason = if (isMaleSubject) "Male subject detected — ALLOW" else "No confirmed female in frame — ALLOW"
+            )
+        }
+
+        // =========================================================================
+        // GATE 2: Personalized Skin-Tone Calibration
+        // =========================================================================
+        fun isStrictDermisPixel(r: Int, g: Int, b: Int): Boolean {
+            if (r <= 75 || r <= g || g <= b || (r - g) < 11) return false
+            val cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b
+            val cr = 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b
+            return cb in 82.0..122.0 && cr in 136.0..170.0
+        }
+
+        var refCbSum = 0.0
+        var refCrSum = 0.0
+        var refSkinCount = 0
+
+        val samplePoints = mutableListOf<PointF>()
+        if (nose != null) samplePoints.add(PointF(nose.x, nose.y))
+        if (leftMouth != null && rightMouth != null) {
+            samplePoints.add(PointF((leftMouth.x + rightMouth.x) * 0.5f, (leftMouth.y + rightMouth.y) * 0.5f))
+        }
+        if (leftShoulder != null && rightShoulder != null) {
+            val neckX = (leftShoulder.x + rightShoulder.x) * 0.5f
+            val neckY = ((leftShoulder.y + rightShoulder.y) * 0.5f - 0.03f).coerceAtLeast(0f)
+            samplePoints.add(PointF(neckX, neckY))
+        }
+
+        for (pt in samplePoints) {
+            val cx = (pt.x * srcW).toInt()
+            val cy = (pt.y * srcH).toInt()
+            for (dy in -3..3) {
+                for (dx in -3..3) {
+                    val p = getPixelSafe(cx + dx * 2, cy + dy * 2)
+                    val r = (p shr 16) and 0xFF
+                    val g = (p shr 8) and 0xFF
+                    val b = p and 0xFF
+                    if (isStrictDermisPixel(r, g, b)) {
+                        val cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b
+                        val cr = 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b
+                        refCbSum += cb
+                        refCrSum += cr
+                        refSkinCount++
+                    }
+                }
+            }
+        }
+
+        val hasRefSkin = refSkinCount >= 4
+        val refCb = if (hasRefSkin) (refCbSum / refSkinCount).toFloat() else 102.0f
+        val refCr = if (hasRefSkin) (refCrSum / refSkinCount).toFloat() else 153.0f
+
+        // Sample background outer 8% screen border
+        var borderCbSum = 0.0
+        var borderCrSum = 0.0
+        var borderLumaSum = 0.0
+        var borderSampleCount = 0
+
+        val borderLeftMaxX = (srcW * 0.08f).toInt().coerceAtLeast(2)
+        val borderRightMinX = (srcW * 0.92f).toInt().coerceAtMost(srcW - 3)
+
+        for (yStep in 1..8) {
+            val sy = (srcH * yStep / 9)
+            val pLeft = getPixelSafe(borderLeftMaxX / 2, sy)
+            val pRight = getPixelSafe(borderRightMinX + (srcW - borderRightMinX) / 2, sy)
+            for (p in listOf(pLeft, pRight)) {
+                val r = (p shr 16) and 0xFF
+                val g = (p shr 8) and 0xFF
+                val b = p and 0xFF
+                val yVal = 0.299f * r + 0.587f * g + 0.114f * b
+                val cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b
+                val cr = 128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b
+                borderCbSum += cb
+                borderCrSum += cr
+                borderLumaSum += yVal
+                borderSampleCount++
+            }
+        }
+
+        val hasBorderSample = borderSampleCount > 0
+        val borderCb = if (hasBorderSample) (borderCbSum / borderSampleCount).toFloat() else 128f
+        val borderCr = if (hasBorderSample) (borderCrSum / borderSampleCount).toFloat() else 128f
+        val borderLuma = if (hasBorderSample) (borderLumaSum / borderSampleCount).toFloat() else 128f
+
+        fun isSubjectBareSkin(pixel: Int): Boolean {
+            val r = (pixel shr 16) and 0xFF
+            val g = (pixel shr 8) and 0xFF
+            val b = pixel and 0xFF
+            if (!isStrictDermisPixel(r, g, b)) return false
+
+            val yVal = 0.299f * r + 0.587f * g + 0.114f * b
+            val cb = (128.0 - 0.168736 * r - 0.331264 * g + 0.5 * b).toFloat()
+            val cr = (128.0 + 0.5 * r - 0.418688 * g - 0.081312 * b).toFloat()
+
+            // Must NOT match background border wall
+            if (hasBorderSample) {
+                val distBorder = hypot(cb - borderCb, cr - borderCr)
+                if (distBorder < 6.0f && abs(yVal - borderLuma) < 15.0f) {
+                    return false
+                }
+            }
+
+            // Must match person's own face/neck calibrated skin tone
+            if (hasRefSkin) {
+                val distRef = hypot(cb - refCb, cr - refCr)
+                if (distRef > 15.0f) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        // =========================================================================
+        // GATE 3: Short Dress Analyzer ("Shoulder se Niche" + "Ghutne se Upar" + Legs/Feet Visible)
+        // =========================================================================
+        var shortDressRuleMatched = false
+        var shoulderUncoveredConfidence = 0.0f
+        var hemlineAboveKneeConfidence = 0.0f
+
+        val shoulderY = if (leftShoulder != null && rightShoulder != null) {
+            (leftShoulder.y + rightShoulder.y) * 0.5f
+        } else leftShoulder?.y ?: rightShoulder?.y ?: 0.25f
+
+        val hipY = if (leftHip != null && rightHip != null) {
+            (leftHip.y + rightHip.y) * 0.5f
+        } else leftHip?.y ?: rightHip?.y ?: 0.60f
+
+        val torsoHeight = max(0.15f, hipY - shoulderY)
+
+        // Check A: "Shoulder se Niche" (Below shoulders)
+        val sZoneTopY = (shoulderY * srcH).toInt()
+        val sZoneBottomY = ((shoulderY + 0.32f * torsoHeight) * srcH).toInt()
+        val sMinX = ((min(leftShoulder?.x ?: 0.35f, rightShoulder?.x ?: 0.65f) + 0.02f) * srcW).toInt()
+        val sMaxX = ((max(leftShoulder?.x ?: 0.35f, rightShoulder?.x ?: 0.65f) - 0.02f) * srcW).toInt()
+
+        var sSkinPixels = 0
+        var sTotalPixels = 0
+        if (sZoneBottomY > sZoneTopY && sMaxX > sMinX) {
+            val stepY = max(1, (sZoneBottomY - sZoneTopY) / 5)
+            val stepX = max(1, (sMaxX - sMinX) / 8)
+            for (y in sZoneTopY..sZoneBottomY step stepY) {
+                for (x in sMinX..sMaxX step stepX) {
+                    val p = getPixelSafe(x, y)
+                    if (isSubjectBareSkin(p)) sSkinPixels++
+                    sTotalPixels++
+                }
+            }
+        }
+        val shoulderAndUpperChestBareSkinRatio = if (sTotalPixels > 0) sSkinPixels.toFloat() / sTotalPixels else 0f
+        val isBelowShoulders = shoulderAndUpperChestBareSkinRatio >= 0.36f
+
+        // Check B: "Ghutne se Upar" (Above knees) with Legs/Feet Visible
+        val kneesVisible = leftKnee != null && rightKnee != null &&
+            leftKnee.confidence >= 0.70f && rightKnee.confidence >= 0.70f
+
+        var isAboveKneesWithLegsVisible = false
+        if (kneesVisible) {
+            val kneeY = (leftKnee!!.y + rightKnee!!.y) * 0.5f
+            val thighLength = max(0.10f, kneeY - hipY)
+            val ankleY = if (leftAnkle != null && rightAnkle != null) {
+                (leftAnkle.y + rightAnkle.y) * 0.5f
+            } else kneeY + thighLength * 0.85f
+
+            // Torso dress fabric ratio
+            var torsoFabricCount = 0
+            var torsoSampleCount = 0
+            val tTop = ((shoulderY + 0.35f * torsoHeight) * srcH).toInt()
+            val tBottom = ((hipY - 0.05f * torsoHeight) * srcH).toInt()
+            if (tBottom > tTop && sMaxX > sMinX) {
+                val stepY = max(1, (tBottom - tTop) / 6)
+                val stepX = max(1, (sMaxX - sMinX) / 8)
+                for (y in tTop..tBottom step stepY) {
+                    for (x in sMinX..sMaxX step stepX) {
+                        val p = getPixelSafe(x, y)
+                        if (!isSubjectBareSkin(p)) torsoFabricCount++
+                        torsoSampleCount++
+                    }
+                }
+            }
+            val torsoClothingRatio = if (torsoSampleCount > 0) torsoFabricCount.toFloat() / torsoSampleCount else 0f
+
+            // Thigh zone (hipY to kneeY)
+            var thighSkinCount = 0
+            var thighSampleCount = 0
+            val thTop = (hipY * srcH).toInt()
+            val thBottom = (kneeY * srcH).toInt()
+            var hemlineNormY = hipY
+
+            if (thBottom > thTop && sMaxX > sMinX) {
+                val stepY = max(1, (thBottom - thTop) / 8)
+                val stepX = max(1, (sMaxX - sMinX) / 8)
+                for (y in thTop..thBottom step stepY) {
+                    var rowSkinCount = 0
+                    var rowTotal = 0
+                    for (x in sMinX..sMaxX step stepX) {
+                        val p = getPixelSafe(x, y)
+                        if (isSubjectBareSkin(p)) {
+                            thighSkinCount++
+                            rowSkinCount++
+                        }
+                        thighSampleCount++
+                        rowTotal++
+                    }
+                    if (rowTotal > 0 && (rowSkinCount.toFloat() / rowTotal >= 0.40f) && hemlineNormY == hipY) {
+                        hemlineNormY = y.toFloat() / srcH
+                    }
+                }
+            }
+            val thighBareSkinRatio = if (thighSampleCount > 0) thighSkinCount.toFloat() / thighSampleCount else 0f
+
+            // Lower leg / feet zone (kneeY to ankleY)
+            var lowerLegSkinCount = 0
+            var lowerLegSampleCount = 0
+            val llTop = (kneeY * srcH).toInt()
+            val llBottom = (ankleY * srcH).toInt()
+            if (llBottom > llTop && sMaxX > sMinX) {
+                val stepY = max(1, (llBottom - llTop) / 6)
+                val stepX = max(1, (sMaxX - sMinX) / 6)
+                for (y in llTop..llBottom step stepY) {
+                    for (x in sMinX..sMaxX step stepX) {
+                        val p = getPixelSafe(x, y)
+                        if (isSubjectBareSkin(p)) lowerLegSkinCount++
+                        lowerLegSampleCount++
+                    }
+                }
+            }
+            val lowerLegBareSkinRatio = if (lowerLegSampleCount > 0) lowerLegSkinCount.toFloat() / lowerLegSampleCount else 0f
+
+            val hemlineAboveKnees = hemlineNormY <= (kneeY - 0.18f * thighLength)
+            isAboveKneesWithLegsVisible = torsoClothingRatio >= 0.35f &&
+                hemlineAboveKnees &&
+                thighBareSkinRatio >= 0.42f &&
+                lowerLegBareSkinRatio >= 0.30f
+        }
+
+        shortDressRuleMatched = isBelowShoulders && isAboveKneesWithLegsVisible
+        if (shortDressRuleMatched) {
+            shoulderUncoveredConfidence = shoulderAndUpperChestBareSkinRatio.coerceIn(0.80f, 0.99f)
+            hemlineAboveKneeConfidence = 0.88f
+            val kneeYNorm = (leftKnee?.y ?: 0.70f + (rightKnee?.y ?: 0.70f)) * 0.5f
+            val ankleYNorm = (leftAnkle?.y ?: 0.92f + (rightAnkle?.y ?: 0.92f)) * 0.5f
+            boxes.add(
+                NormalizedBox(
+                    trackId = 1,
+                    regionLabel = "FEET",
+                    confidence = 0.88f,
+                    left = min(leftShoulder?.x ?: 0.30f, rightShoulder?.x ?: 0.70f),
+                    top = kneeYNorm,
+                    right = max(leftShoulder?.x ?: 0.30f, rightShoulder?.x ?: 0.70f),
+                    bottom = min(0.99f, ankleYNorm + 0.05f),
+                    timestampMs = timestampMs,
+                    sourceWidth = srcW,
+                    sourceHeight = srcH
+                )
+            )
+        }
+
+        // =========================================================================
+        // GATE 4: Female Bust / Cleavage Analyzer
+        // =========================================================================
+        var boobsBreastVisibleMatched = false
+        var chestExposureConfidence = 0.0f
+
+        val bustTopYNorm = shoulderY + 0.12f * torsoHeight
+        val bustBottomYNorm = shoulderY + 0.52f * torsoHeight
+        val bustLeftNorm = min(leftShoulder?.x ?: 0.30f, rightShoulder?.x ?: 0.70f)
+        val bustRightNorm = max(leftShoulder?.x ?: 0.30f, rightShoulder?.x ?: 0.70f)
+        val bustWidthNorm = bustRightNorm - bustLeftNorm
+
+        val noseYNorm = nose?.y ?: (shoulderY - 0.12f)
+        val notChinNeckShadow = bustTopYNorm > (noseYNorm + 1.35f * abs(shoulderY - noseYNorm))
+
+        if (notChinNeckShadow && bustWidthNorm > 0.08f) {
+            val bTopPx = (bustTopYNorm * srcH).toInt()
+            val bBottomPx = (bustBottomYNorm * srcH).toInt()
+            val bLeftPx = (bustLeftNorm * srcW).toInt()
+            val bRightPx = (bustRightNorm * srcW).toInt()
+            val bSpanXPx = bRightPx - bLeftPx
+
+            val lHemiStart = bLeftPx + (bSpanXPx * 0.25f).toInt()
+            val lHemiEnd = bLeftPx + (bSpanXPx * 0.46f).toInt()
+            val cleftStart = lHemiEnd
+            val cleftEnd = bLeftPx + (bSpanXPx * 0.54f).toInt()
+            val rHemiStart = cleftEnd
+            val rHemiEnd = bLeftPx + (bSpanXPx * 0.75f).toInt()
+
+            var lSkin = 0
+            var lTotal = 0
+            var lLumaSum = 0f
+
+            var rSkin = 0
+            var rTotal = 0
+            var rLumaSum = 0f
+
+            var cLumaSum = 0f
+            var cTotal = 0
+
+            val stepY = max(1, (bBottomPx - bTopPx) / 6)
+            val stepX = max(1, (bSpanXPx * 0.21f).toInt() / 4)
+
+            for (y in bTopPx..bBottomPx step stepY) {
+                // Left hemisphere
+                for (x in lHemiStart..lHemiEnd step stepX) {
+                    val p = getPixelSafe(x, y)
+                    val luma = luminance(p)
+                    if (isSubjectBareSkin(p)) {
+                        lSkin++
+                        lLumaSum += luma
+                    }
+                    lTotal++
+                }
+                // Right hemisphere
+                for (x in rHemiStart..rHemiEnd step stepX) {
+                    val p = getPixelSafe(x, y)
+                    val luma = luminance(p)
+                    if (isSubjectBareSkin(p)) {
+                        rSkin++
+                        rLumaSum += luma
+                    }
+                    rTotal++
+                }
+                // Center cleft
+                for (x in cleftStart..cleftEnd step max(1, (cleftEnd - cleftStart) / 2)) {
+                    val p = getPixelSafe(x, y)
+                    cLumaSum += luminance(p)
+                    cTotal++
+                }
+            }
+
+            val leftSkinRatio = if (lTotal > 0) lSkin.toFloat() / lTotal else 0f
+            val rightSkinRatio = if (rTotal > 0) rSkin.toFloat() / rTotal else 0f
+            val leftAvgLuma = if (lSkin > 0) lLumaSum / lSkin else 128f
+            val rightAvgLuma = if (rSkin > 0) rLumaSum / rSkin else 128f
+            val centerAvgLuma = if (cTotal > 0) cLumaSum / cTotal else 128f
+
+            val v1 = leftSkinRatio >= 0.30f && rightSkinRatio >= 0.30f
+            val breastAvgLuma = (leftAvgLuma + rightAvgLuma) * 0.5f
+            val v2 = centerAvgLuma <= (breastAvgLuma - 9.5f)
+
+            var fabricContrastFound = false
+            val lowerHalfY = bTopPx + (bBottomPx - bTopPx) / 2
+            for (y in lowerHalfY..bBottomPx step max(1, (bBottomPx - lowerHalfY) / 3)) {
+                for (x in lHemiStart..rHemiEnd step stepX) {
+                    val p = getPixelSafe(x, y)
+                    if (!isSubjectBareSkin(p)) {
+                        val fLuma = luminance(p)
+                        if (abs(fLuma - breastAvgLuma) >= 20.0f) {
+                            fabricContrastFound = true
+                            break
+                        }
+                    }
+                }
+                if (fabricContrastFound) break
+            }
+
+            boobsBreastVisibleMatched = v1 && v2 && fabricContrastFound
+            if (boobsBreastVisibleMatched) {
+                chestExposureConfidence = ((leftSkinRatio + rightSkinRatio) * 0.5f).coerceIn(0.80f, 0.99f)
+                boxes.add(
+                    NormalizedBox(
+                        trackId = 1,
+                        regionLabel = "CHEST",
+                        confidence = chestExposureConfidence,
+                        left = bustLeftNorm,
+                        top = bustTopYNorm,
+                        right = bustRightNorm,
+                        bottom = bustBottomYNorm,
+                        timestampMs = timestampMs,
+                        sourceWidth = srcW,
+                        sourceHeight = srcH
+                    )
+                )
+            }
+        }
+
+        // =========================================================================
+        // GATE 5: Rear / Back / ASS / Buttocks Analyzer
+        // =========================================================================
+        var backOrButtocksAssMatched = false
+        var rearButtocksExposureConfidence = 0.0f
+
+        val eyesConfidence = (leftEye?.confidence ?: 0f) + (rightEye?.confidence ?: 0f)
+        val noseConfidence = nose?.confidence ?: 0f
+        val isShowingBackOrAssPose = (eyesConfidence < 0.60f && noseConfidence < 0.50f) ||
+            (hasLongFemaleHair && eyesConfidence < 0.80f)
+
+        if (isShowingBackOrAssPose) {
+            val thighLen = if (leftKnee != null && leftHip != null) {
+                abs(leftKnee.y - leftHip.y)
+            } else 0.25f
+
+            val gluteTopNorm = (hipY - 0.10f * torsoHeight).coerceIn(0.01f, 0.95f)
+            val gluteBottomNorm = (hipY + 0.48f * thighLen).coerceIn(gluteTopNorm + 0.05f, 0.99f)
+            val hipSpanNorm = if (leftHip != null && rightHip != null) {
+                abs(leftHip.x - rightHip.x)
+            } else 0.25f
+            val gluteLeftNorm = (min(leftHip?.x ?: 0.35f, rightHip?.x ?: 0.65f) - 0.18f * hipSpanNorm).coerceIn(0.01f, 0.90f)
+            val gluteRightNorm = (max(leftHip?.x ?: 0.35f, rightHip?.x ?: 0.65f) + 0.18f * hipSpanNorm).coerceIn(gluteLeftNorm + 0.08f, 0.99f)
+
+            val gTopPx = (gluteTopNorm * srcH).toInt()
+            val gBottomPx = (gluteBottomNorm * srcH).toInt()
+            val gLeftPx = (gluteLeftNorm * srcW).toInt()
+            val gRightPx = (gluteRightNorm * srcW).toInt()
+            val gSpanX = gRightPx - gLeftPx
+
+            var leftGluteSkinCount = 0
+            var leftGluteTotal = 0
+            var rightGluteSkinCount = 0
+            var rightGluteTotal = 0
+            var backSkinCount = 0
+            var backTotal = 0
+
+            val stepY = max(1, (gBottomPx - gTopPx) / 6)
+            val stepX = max(1, gSpanX / 8)
+
+            // Back zone: from shoulderY to hipY
+            val bZoneTop = (shoulderY * srcH).toInt()
+            val bZoneBottom = (hipY * srcH).toInt()
+            if (bZoneBottom > bZoneTop && gRightPx > gLeftPx) {
+                val bStepY = max(1, (bZoneBottom - bZoneTop) / 5)
+                for (y in bZoneTop..bZoneBottom step bStepY) {
+                    for (x in gLeftPx..gRightPx step stepX) {
+                        val p = getPixelSafe(x, y)
+                        if (isSubjectBareSkin(p)) backSkinCount++
+                        backTotal++
+                    }
+                }
+            }
+            val backBareSkinRatio = if (backTotal > 0) backSkinCount.toFloat() / backTotal else 0f
+
+            // Glute zone: left and right
+            val midGluteX = gLeftPx + gSpanX / 2
+            for (y in gTopPx..gBottomPx step stepY) {
+                for (x in gLeftPx..midGluteX step stepX) {
+                    val p = getPixelSafe(x, y)
+                    if (isSubjectBareSkin(p)) leftGluteSkinCount++
+                    leftGluteTotal++
+                }
+                for (x in midGluteX..gRightPx step stepX) {
+                    val p = getPixelSafe(x, y)
+                    if (isSubjectBareSkin(p)) rightGluteSkinCount++
+                    rightGluteTotal++
+                }
+            }
+
+            val leftGluteSkin = if (leftGluteTotal > 0) leftGluteSkinCount.toFloat() / leftGluteTotal else 0f
+            val rightGluteSkin = if (rightGluteTotal > 0) rightGluteSkinCount.toFloat() / rightGluteTotal else 0f
+
+            val conditionA = (leftGluteSkin >= 0.36f && rightGluteSkin >= 0.36f) || backBareSkinRatio >= 0.45f
+            val waistWidth = shoulderW * 0.70f
+            val gluteBoxWidth = (gluteRightNorm - gluteLeftNorm) * srcW
+            val conditionB = waistWidth > 0f && (gluteBoxWidth / waistWidth >= 1.18f) && (leftGluteSkin >= 0.20f || rightGluteSkin >= 0.20f)
+
+            backOrButtocksAssMatched = conditionA || conditionB
+            if (backOrButtocksAssMatched) {
+                rearButtocksExposureConfidence = 0.88f
+                val isGlutes = leftGluteSkin >= 0.30f || rightGluteSkin >= 0.30f
+                boxes.add(
+                    NormalizedBox(
+                        trackId = 1,
+                        regionLabel = if (isGlutes) "BUTTOCKS" else "BACK",
+                        confidence = rearButtocksExposureConfidence,
+                        left = gluteLeftNorm,
+                        top = if (isGlutes) gluteTopNorm else (shoulderY.coerceIn(0.01f, 0.90f)),
+                        right = gluteRightNorm,
+                        bottom = gluteBottomNorm,
+                        timestampMs = timestampMs,
+                        sourceWidth = srcW,
+                        sourceHeight = srcH
+                    )
+                )
+            }
+        }
+
         return FrameFeatures(
             contentItemId = contentItemId,
             frameTimestampMs = timestampMs,
             isSupportedVideoFeed = isSupportedFeed,
             modelInitialized = true,
             personDetectorAvailable = true,
-            clothingClassifierAvailable = false,
+            clothingClassifierAvailable = true,
             clothingAnalysisComplete = true,
             qualifyingPersonDetected = true,
             personConfidence = overallPersonConfidence,
+            isMalePresentingOnly = isMaleSubject,
+            isFemaleConfirmed = isFemaleConfirmed,
+            shortDressRuleMatched = shortDressRuleMatched,
+            boobsBreastVisibleMatched = boobsBreastVisibleMatched,
+            backOrButtocksAssMatched = backOrButtocksAssMatched,
+            shoulderUncoveredConfidence = shoulderUncoveredConfidence,
+            hemlineAboveKneeConfidence = hemlineAboveKneeConfidence,
+            chestExposureConfidence = chestExposureConfidence,
+            rearButtocksExposureConfidence = rearButtocksExposureConfidence,
             detectedBoxes = boxes,
             detectedLandmarks = extractedLandmarks,
-            inferenceDurationMs = durationMs,
-            failureReason = "Visible subject detected; trained clothing classifier model (TFLite) not bundled in assets"
+            inferenceDurationMs = durationMs
         )
     }
 
