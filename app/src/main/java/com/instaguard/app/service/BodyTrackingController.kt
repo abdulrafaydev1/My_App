@@ -152,9 +152,9 @@ class BodyTrackingController(
     fun updateWithFrameDetection(
         contentItemId: String,
         timestampMs: Long,
-        personBox: NormalizedBox?,
-        faceBox: NormalizedBox?,
-        upperTorsoBox: NormalizedBox?,
+        personBox: NormalizedBox? = null,
+        faceBox: NormalizedBox? = null,
+        upperTorsoBox: NormalizedBox? = null,
         landmarks: List<PoseLandmark> = emptyList(),
         detectionConfidence: Float = 0.85f,
         inferenceDurationMs: Long = 0L,
