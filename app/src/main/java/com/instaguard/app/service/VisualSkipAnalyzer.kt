@@ -13,11 +13,12 @@ data class VisualSkipResult(
 )
 
 /**
- * Direct, single-frame confirmed visual auto-skip engine (v10.3).
+ * Direct, single-frame confirmed visual auto-skip engine (v10.4).
  *
  * Evaluates 100 x 180 downscaled video frames in < 2ms with zero window overlays:
- * - Stage 1: Female presence, framing verification (Framings A, B, C) and strict non-human / male / modest protection.
- * - Stage 2: Three skip conditions:
+ * - Stage 1: Female presence & framing verification (front, selfie, bare back, or rear glutes) with
+ *            strict non-human, wall/surface, male, and modest clothing protection.
+ * - Stage 2: Three instant skip conditions:
  *     1. Female Boobs / Breasts / Cleavage Visible (cleavage cleft or low-cut exposed breasts)
  *     2. Short Dress ("Shoulder se Niche" + "Ghutne se Upar" + legs/feet visible)
  *     3. Back Body: Bare back, exposed glutes / buttocks / ASS, or glute twerking/motion
@@ -171,48 +172,78 @@ object VisualSkipAnalyzer {
             return VisualSkipResult(false, "REJECT_INSUFFICIENT_CENTRAL_SKIN", null)
         }
 
-        // 3. Female Framing Check (Framing A, B, or C)
+        // 3. Normalized Region Measurements
+        // Upper Head / Face (strictly head/face zone y in 5%..22%, preventing overlap with neck/back/chest)
+        val upperHeadFaceSkinRatio = getSkinRatio(
+            (width * 0.25f).toInt(),
+            (height * 0.05f).toInt(),
+            (width * 0.75f).toInt(),
+            (height * 0.22f).toInt()
+        )
         val upperHairCount = countHair(
             (width * 0.20f).toInt(),
             (height * 0.03f).toInt(),
             (width * 0.80f).toInt(),
             (height * 0.35f).toInt()
         )
-        val upperFaceSkin = getSkinRatio(
+        val upperHairRatio = upperHairCount.toFloat() / (width * 0.60f * height * 0.32f)
+
+        // Chest / Bust Zone (y in 22%..48%)
+        val chestBustSkinRatio = getSkinRatio(
             (width * 0.25f).toInt(),
-            (height * 0.05f).toInt(),
+            (height * 0.22f).toInt(),
             (width * 0.75f).toInt(),
-            (height * 0.28f).toInt()
+            (height * 0.48f).toInt()
         )
-        val midTorsoSkin = getSkinRatio(
+
+        // Upper & Mid Back Zone (y in 25%..62%)
+        val backSkinRatio = getSkinRatio(
             (width * 0.25f).toInt(),
             (height * 0.25f).toInt(),
             (width * 0.75f).toInt(),
-            (height * 0.60f).toInt()
+            (height * 0.62f).toInt()
         )
-        val lowerBodySkin = getSkinRatio(
+
+        // Hip & Buttocks Zone (y in 50%..86%)
+        val hipButtocksSkinRatio = getSkinRatio(
+            (width * 0.25f).toInt(),
+            (height * 0.50f).toInt(),
+            (width * 0.75f).toInt(),
+            (height * 0.86f).toInt()
+        )
+        val leftGluteSkin = getSkinRatio(
+            (width * 0.28f).toInt(),
+            (height * 0.54f).toInt(),
+            (width * 0.48f).toInt(),
+            (height * 0.86f).toInt()
+        )
+        val rightGluteSkin = getSkinRatio(
+            (width * 0.52f).toInt(),
+            (height * 0.54f).toInt(),
+            (width * 0.72f).toInt(),
+            (height * 0.86f).toInt()
+        )
+
+        // Lower Legs & Feet Zone (y in 60%..95%)
+        val lowerLegsFeetSkinRatio = getSkinRatio(
             (width * 0.20f).toInt(),
-            (height * 0.55f).toInt(),
+            (height * 0.60f).toInt(),
             (width * 0.80f).toInt(),
             (height * 0.95f).toInt()
         )
 
-        val isFramingACloseUp = (upperFaceSkin >= 0.15f || upperHairCount >= 40) && midTorsoSkin >= 0.18f
-        val isFramingBMedium = (upperFaceSkin >= 0.08f || upperHairCount >= 30) && (midTorsoSkin >= 0.12f || lowerBodySkin >= 0.12f)
-        val isFramingCFullOrBack = (upperHairCount >= 20 || upperFaceSkin >= 0.05f) && (midTorsoSkin >= 0.10f || lowerBodySkin >= 0.20f)
+        // Female Subject Eligibility: Allow Front/Selfie, Bare Back Pose, or Exposed Glutes/Legs Pose
+        val isFrontOrSelfieEligible = (upperHairRatio >= 0.08f || upperHairCount >= 30) || (chestBustSkinRatio >= 0.20f)
+        val isBareBackEligible = (chestBustSkinRatio >= 0.22f || backSkinRatio >= 0.22f) && (upperHeadFaceSkinRatio < 0.20f)
+        val isGlutesOrLegsEligible = hipButtocksSkinRatio >= 0.20f || (leftGluteSkin >= 0.18f && rightGluteSkin >= 0.18f) || lowerLegsFeetSkinRatio >= 0.20f
 
-        if (!isFramingACloseUp && !isFramingBMedium && !isFramingCFullOrBack) {
+        val isFemaleSubject = isFrontOrSelfieEligible || isBareBackEligible || isGlutesOrLegsEligible
+        if (!isFemaleSubject) {
             return VisualSkipResult(false, "REJECT_NO_HUMAN_FRAMING", null)
         }
 
-        // 4. Modest Clothing Protection: If neither upper chest nor lower legs have exposed skin
-        val upperChestSkin = getSkinRatio(
-            (width * 0.25f).toInt(),
-            (height * 0.20f).toInt(),
-            (width * 0.75f).toInt(),
-            (height * 0.45f).toInt()
-        )
-        if (upperChestSkin < 0.08f && lowerBodySkin < 0.08f) {
+        // 4. Modest Clothing Protection: If chest, back, buttocks, and legs all have no exposed skin
+        if (chestBustSkinRatio < 0.08f && backSkinRatio < 0.08f && hipButtocksSkinRatio < 0.08f && lowerLegsFeetSkinRatio < 0.08f) {
             return VisualSkipResult(false, "REJECT_FULLY_MODEST_CLOTHING", null)
         }
 
@@ -220,38 +251,26 @@ object VisualSkipAnalyzer {
         // STAGE 2: EVALUATE 3 SKIP CONDITIONS
         // =========================================================================
 
-        val isBackPose = (upperHairCount >= 20 && upperFaceSkin < 0.10f)
+        val isRearPose = upperHeadFaceSkinRatio < 0.20f
 
         // -------------------------------------------------------------------------
-        // CONDITION 3 (Evaluated first when subject is facing away / back view):
+        // CONDITION 3: Back Body — Bare Back & Exposed Glutes (Evaluated first on rear view)
         // -------------------------------------------------------------------------
-        val backY1 = (height * 0.25f).toInt()
-        val backY2 = (height * 0.60f).toInt()
-        val backSkinRatio = getSkinRatio((width * 0.25f).toInt(), backY1, (width * 0.75f).toInt(), backY2)
-
-        val glutesY1 = (height * 0.48f).toInt()
-        val glutesY2 = (height * 0.75f).toInt()
-        val gluteSkinRatio = getSkinRatio((width * 0.25f).toInt(), glutesY1, (width * 0.75f).toInt(), glutesY2)
-
-        if (isBackPose) {
-            if (backSkinRatio >= 0.30f) {
+        if (isRearPose) {
+            // (a) Bare Back Trigger: upper/mid back zone contains bare skin
+            if (backSkinRatio >= 0.22f || chestBustSkinRatio >= 0.22f) {
                 return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
             }
-            if (gluteSkinRatio >= 0.28f) {
+            // (b) Exposed Glutes / Buttocks Trigger
+            if (hipButtocksSkinRatio >= 0.20f || (leftGluteSkin >= 0.18f && rightGluteSkin >= 0.18f)) {
                 return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
             }
         }
 
         // -------------------------------------------------------------------------
-        // CONDITION 1: Female Boobs / Breasts / Cleavage Visible
+        // CONDITION 1: Female Boobs / Breasts / Cleavage Visible (Front View)
         // -------------------------------------------------------------------------
-        val breastZoneY1 = (height * 0.22f).toInt()
-        val breastZoneY2 = (height * 0.48f).toInt()
-        val breastZoneX1 = (width * 0.25f).toInt()
-        val breastZoneX2 = (width * 0.75f).toInt()
-        val breastZoneSkin = getSkinRatio(breastZoneX1, breastZoneY1, breastZoneX2, breastZoneY2)
-
-        if (breastZoneSkin >= 0.22f) {
+        if (chestBustSkinRatio >= 0.22f) {
             // (a) Cleavage Cleft Check: Symmetrical or dual skin lobes with center dip/shadow
             var cleftRowCount = 0
             val midYStart = (height * 0.26f).toInt()
@@ -268,7 +287,6 @@ object VisualSkipAnalyzer {
                     val rightLuma = (luma[rowOffset + (width * 0.60f).toInt()])
                     val avgMoundLuma = (leftLuma + rightLuma) / 2f
 
-                    // Either skin drops at the center cleavage crease or luma dips due to shadow fold
                     if ((centerValleySkin < (leftLobeSkin + rightLobeSkin) / 2f - 0.18f) ||
                         (centerLuma < avgMoundLuma - 0.08f)
                     ) {
@@ -310,7 +328,7 @@ object VisualSkipAnalyzer {
             val legsSkinRatio = getSkinRatio(legsX1, legsY1, legsX2, legsY2)
 
             // Substantial bare skin in legs/thighs zone below short dress hemline
-            if (legsSkinRatio >= 0.22f) {
+            if (legsSkinRatio >= 0.20f) {
                 return VisualSkipResult(true, "SKIP_CONDITION_2_SHORT_DRESS_WITH_EXPOSED_LEGS", null)
             }
         }
@@ -318,15 +336,17 @@ object VisualSkipAnalyzer {
         // -------------------------------------------------------------------------
         // CONDITION 3 (Catch-all for bare back or exposed glutes in any orientation):
         // -------------------------------------------------------------------------
-        if (backSkinRatio >= 0.30f && (upperHairCount >= 20 || upperFaceSkin < 0.10f)) {
+        if (backSkinRatio >= 0.28f && upperHeadFaceSkinRatio < 0.20f) {
             return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
         }
 
-        if (gluteSkinRatio >= 0.28f) {
+        if (hipButtocksSkinRatio >= 0.20f || (leftGluteSkin >= 0.18f && rightGluteSkin >= 0.18f)) {
             return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
         }
 
         // (c) Twerking / Motion in Glutes (4x4 luma grid comparison)
+        val glutesY1 = (height * 0.54f).toInt()
+        val glutesY2 = (height * 0.86f).toInt()
         val newGluteLumaGrid = FloatArray(16)
         val gridStepX = ((width * 0.50f) / 4f).toInt().coerceAtLeast(1)
         val gridStepY = ((glutesY2 - glutesY1) / 4f).toInt().coerceAtLeast(1)
@@ -357,7 +377,7 @@ object VisualSkipAnalyzer {
                 totalDelta += abs(newGluteLumaGrid[i] - prevGluteLumaGrid[i])
             }
             val avgMotionDelta = totalDelta / 16f
-            if (avgMotionDelta >= 0.09f && gluteSkinRatio >= 0.18f) {
+            if (avgMotionDelta >= 0.09f && hipButtocksSkinRatio >= 0.18f) {
                 return VisualSkipResult(true, "SKIP_CONDITION_3_GLUTE_MOTION_TWERKING", newGluteLumaGrid)
             }
         }

@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v10.3 (AI Visual &amp; Focus Shield)"
+                        android:text="InstaGuard Pro v10.4 (AI Visual &amp; Focus Shield)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
