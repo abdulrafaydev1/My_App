@@ -11,8 +11,8 @@ android {
         applicationId "com.instaguard.app"
         minSdk 26
         targetSdk 34
-        versionCode 34
-        versionName "10.4"
+        versionCode 37
+        versionName "11.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -50,10 +50,11 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.activity:activity-ktx:1.8.2'
 
-    // Google ML Kit Pose and Face Detection
+    // Google ML Kit Pose, Face Detection & TFLite Selfie Segmentation
     implementation 'com.google.mlkit:pose-detection:18.0.0-beta5'
     implementation 'com.google.mlkit:pose-detection-accurate:18.0.0-beta5'
     implementation 'com.google.mlkit:face-detection:16.1.7'
+    implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

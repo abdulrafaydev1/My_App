@@ -191,6 +191,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val newItemId = "${activeKey}_${sigHash}_${currentScrollSeq}"
             currentContentItemId = newItemId
             decisionEngine.resetForNewItem(newItemId)
+            consecutiveConfirmedMatchFrames = 0
             previousLumaGrid = null
 
             incrementScrollCount(activeKey)
@@ -1553,10 +1554,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v10.3 Direct Single-Frame Confirmed Visual Auto-Skip Engine (No HUD Overlay)
+    // v11.0 ML Kit 33-Landmark & TFLite Segmentation Locked Visual Auto-Skip Engine
     // =========================================================================
-
-    private var gluteLumaGrid: FloatArray? = null
 
     private fun captureAndAnalyzeSocialFrame(appKey: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
@@ -1580,22 +1579,23 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBuffer.close()
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
-                                val scaledBitmap = Bitmap.createScaledBitmap(
-                                    swBitmap,
-                                    VisualSkipAnalyzer.TARGET_WIDTH,
-                                    VisualSkipAnalyzer.TARGET_HEIGHT,
-                                    true
-                                )
+                                // Downscale to 480p width for fast, reliable ML Kit Pose + TFLite Segmentation inference
+                                val targetW = 480
+                                val targetH = ((swBitmap.height.toFloat() / swBitmap.width) * targetW).toInt().coerceAtLeast(1)
+                                val scaledBitmap = Bitmap.createScaledBitmap(swBitmap, targetW, targetH, true)
                                 swBitmap.recycle()
 
-                                val analysisResult = VisualSkipAnalyzer.analyzeVideoFrame(
+                                val frameFeatures = MlKitPoseInferenceProvider.analyzeBitmap(
                                     bitmap = scaledBitmap,
-                                    prevGluteLumaGrid = gluteLumaGrid
+                                    contentItemId = itemIdSnapshot,
+                                    timestampMs = now,
+                                    isSupportedFeed = true
                                 )
-                                gluteLumaGrid = analysisResult.newGluteLumaGrid
                                 scaledBitmap.recycle()
 
-                                if (analysisResult.shouldSkip) {
+                                val decision = decisionEngine.evaluateFrame(frameFeatures, nowMs = now)
+
+                                if (decision.state == DecisionState.SKIP_CANDIDATE) {
                                     currentScannerDiagnosticText = DiagnosticStatus.MATCH_CONFIRMED_SKIP.label
                                     tickerHandler.post {
                                         if (currentContentItemId == itemIdSnapshot &&
@@ -1606,18 +1606,20 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                             val skipNow = SystemClock.elapsedRealtime()
                                             if (skipNow - lastAutoSkipElapsedMs >= 1600L) {
                                                 lastAutoSkipElapsedMs = skipNow
-                                                Log.i(TAG, "v10.3 Visual Auto-Skip Triggered: ${analysisResult.skipReason}")
+                                                decisionEngine.markSkipExecuted(itemIdSnapshot, skipNow)
+                                                Log.i(TAG, "v11.0 ML Kit Locked Visual Auto-Skip Triggered: rules=${decision.matchedRules}")
                                                 autoSkipCurrentReelOrVideo()
                                                 currentScrollSeq++
                                                 val nextId = "${appKey}_skipped_${currentScrollSeq}"
                                                 currentContentItemId = nextId
                                                 decisionEngine.resetForNewItem(nextId)
+                                                consecutiveConfirmedMatchFrames = 0
                                                 previousLumaGrid = null
                                             }
                                         }
                                     }
                                 } else {
-                                    currentScannerDiagnosticText = DiagnosticStatus.NO_MATCH_ALLOW.label
+                                    currentScannerDiagnosticText = decision.diagnosticStatus.label
                                 }
                             }
                         } catch (e: Exception) {

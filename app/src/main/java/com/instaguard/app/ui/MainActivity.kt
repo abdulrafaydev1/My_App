@@ -354,7 +354,7 @@ class MainActivity : AppCompatActivity() {
      * - Live Red Bounding-Box Scanner Overlay & Auto-Skip Toggles
      */
     private fun setupV90FeatureControls() {
-        binding.tvHeaderTitle.text = "InstaGuard Pro v10.4 (AI Visual & Focus Shield)"
+        binding.tvHeaderTitle.text = "InstaGuard Pro v11.0 (AI Visual & Focus Shield)"
         refreshAiVisualShieldDisplay()
 
         binding.switchAiVisualShield.setOnCheckedChangeListener(null)

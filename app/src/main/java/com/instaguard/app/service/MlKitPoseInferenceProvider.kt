@@ -11,6 +11,11 @@ import com.google.mlkit.vision.pose.PoseDetection
 import com.google.mlkit.vision.pose.PoseDetector
 import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions
 import com.google.mlkit.vision.pose.PoseLandmark as MlPoseLandmark
+import com.google.mlkit.vision.segmentation.Segmentation
+import com.google.mlkit.vision.segmentation.Segmenter
+import com.google.mlkit.vision.segmentation.SegmentationMask
+import com.google.mlkit.vision.segmentation.selfie.SelfieSegmenterOptions
+import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -18,17 +23,17 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Production-grade Google ML Kit Pose Detection Provider (STREAM_MODE).
+ * Production-grade Google ML Kit Pose Detection & TFLite Selfie Segmentation Provider (STREAM_MODE).
  *
  * Implements:
  * - Official ML Kit Pose Detection API in [PoseDetectorOptions.STREAM_MODE] for real-time video frames.
+ * - Official ML Kit TFLite Selfie Segmentation API in [SelfieSegmenterOptions.STREAM_MODE] for foreground human masks.
  * - Persistent detector client reuse across frames to preserve temporal tracking state.
- * - GATE 1: Strict Frame-by-Frame Female Presence Verification (rejects non-humans and males).
- * - GATE 2: Personalized Skin-Tone Calibration from Face/Neck landmarks (prevents clothing/wall false positives).
+ * - GATE 1: TFLite Human Foreground Verification (>= 12% human) + ML Kit 33-Landmark Skeleton Lock.
+ * - GATE 2: Male Rejection & Personalized Face-Calibrated Skin-Tone Dermis Lock.
  * - GATE 3: Short Dress Analyzer ("Shoulder se Niche" + "Ghutne se Upar" + Legs/Feet Visible).
- * - GATE 4: Bust / Cleavage Analyzer (Left hemisphere, center cleavage cleft, right hemisphere, neckline contrast).
+ * - GATE 4: Female Bust / Cleavage Analyzer (Left hemisphere, center cleavage cleft shadow, right hemisphere, fabric contrast).
  * - GATE 5: Rear / Back / ASS / Buttocks Analyzer (Rear orientation, glute skin & cleft shadow, back skin, silhouette).
- * - Genuine HUD Bounding Boxes: FACE, BODY, CHEST, BACK, BUTTOCKS, FEET (100% transparent interior).
  */
 object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
@@ -38,6 +43,9 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
     @Volatile
     private var poseDetectorInstance: PoseDetector? = null
+
+    @Volatile
+    private var selfieSegmenterInstance: Segmenter? = null
 
     @Volatile
     override var isModelInitialized: Boolean = false
@@ -60,6 +68,21 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         isModelInitialized = true
         Log.i(TAG, "Initialized Google ML Kit PoseDetector in STREAM_MODE.")
         return newDetector
+    }
+
+    @Synchronized
+    fun getOrCreateSegmenter(): Segmenter {
+        val existing = selfieSegmenterInstance
+        if (existing != null) return existing
+
+        val options = SelfieSegmenterOptions.Builder()
+            .setDetectorMode(SelfieSegmenterOptions.STREAM_MODE)
+            .build()
+
+        val newSegmenter = Segmentation.getClient(options)
+        selfieSegmenterInstance = newSegmenter
+        Log.i(TAG, "Initialized Google ML Kit SelfieSegmenter in STREAM_MODE.")
+        return newSegmenter
     }
 
     override fun analyzeBitmap(
@@ -100,15 +123,26 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
         return try {
             val detector = getOrCreateDetector()
-            val inputImage = InputImage.fromBitmap(bitmap, rotationDegrees)
+            val segmenter = getOrCreateSegmenter()
+            val poseInput = InputImage.fromBitmap(bitmap, rotationDegrees)
+            val segInput = InputImage.fromBitmap(bitmap, rotationDegrees)
 
             // Execute inference synchronously on worker thread via Tasks.await with timeout safeguard
-            val task = detector.process(inputImage)
-            val pose: Pose = Tasks.await(task, INFERENCE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            val poseTask = detector.process(poseInput)
+            val segTask = segmenter.process(segInput)
+
+            val pose: Pose = Tasks.await(poseTask, INFERENCE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            val segMask: SegmentationMask? = try {
+                Tasks.await(segTask, INFERENCE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            } catch (segEx: Exception) {
+                Log.w(TAG, "Selfie segmentation task timed out or failed; proceeding with pose only", segEx)
+                null
+            }
             val durationMs = (System.nanoTime() - startNs) / 1_000_000L
 
             processPoseResult(
                 pose = pose,
+                segMask = segMask,
                 bitmap = bitmap,
                 srcW = srcW,
                 srcH = srcH,
@@ -118,7 +152,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 isSupportedFeed = isSupportedFeed
             )
         } catch (e: Exception) {
-            Log.w(TAG, "ML Kit Pose Detection encountered an exception; falling back to AndroidSdkFaceInferenceProvider", e)
+            Log.w(TAG, "ML Kit Vision inference encountered an exception; falling back to AndroidSdkFaceInferenceProvider", e)
             try {
                 AndroidSdkFaceInferenceProvider.analyzeBitmap(
                     bitmap = bitmap,
@@ -140,6 +174,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
 
     private fun processPoseResult(
         pose: Pose,
+        segMask: SegmentationMask?,
         bitmap: Bitmap,
         srcW: Int,
         srcH: Int,
@@ -148,6 +183,53 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         durationMs: Long,
         isSupportedFeed: Boolean
     ): FrameFeatures {
+        // TFLite Human Selfie Segmentation Mask Evaluation (Gate 1: >= 12% human foreground)
+        var humanForegroundRatio = 0f
+        var maskBuffer: ByteBuffer? = null
+        var maskW = 0
+        var maskH = 0
+
+        if (segMask != null) {
+            maskW = segMask.width
+            maskH = segMask.height
+            val buf = segMask.buffer
+            buf.rewind()
+            val totalMaskPixels = maskW * maskH
+            if (totalMaskPixels > 0) {
+                var fgCount = 0
+                for (i in 0 until totalMaskPixels) {
+                    if (buf.getFloat() >= 0.50f) {
+                        fgCount++
+                    }
+                }
+                humanForegroundRatio = fgCount.toFloat() / totalMaskPixels
+                buf.rewind()
+                maskBuffer = buf
+            }
+
+            // Gate 1 Fail-Open: If human foreground is less than 12%, this is a non-human video
+            // (e.g. landscape, cars, animals, gaming, food, text, graphics, room).
+            if (humanForegroundRatio < 0.12f) {
+                return FrameFeatures(
+                    contentItemId = contentItemId,
+                    frameTimestampMs = timestampMs,
+                    isSupportedVideoFeed = isSupportedFeed,
+                    modelInitialized = true,
+                    personDetectorAvailable = true,
+                    clothingClassifierAvailable = false,
+                    clothingAnalysisComplete = true,
+                    qualifyingPersonDetected = false,
+                    isFemaleConfirmed = false,
+                    isMalePresentingOnly = false,
+                    personConfidence = 0.0f,
+                    detectedBoxes = emptyList(),
+                    detectedLandmarks = emptyList(),
+                    inferenceDurationMs = durationMs,
+                    failureReason = "Non-human video feed (< 12% human foreground) — ALLOW"
+                )
+            }
+        }
+
         val allMlLandmarks = pose.allPoseLandmarks
         if (allMlLandmarks.isEmpty()) {
             return FrameFeatures(
@@ -164,7 +246,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 personConfidence = 0.0f,
                 detectedBoxes = emptyList(),
                 detectedLandmarks = emptyList(),
-                inferenceDurationMs = durationMs
+                inferenceDurationMs = durationMs,
+                failureReason = "No landmarks detected — ALLOW"
             )
         }
 
@@ -208,7 +291,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 personConfidence = if (validCount > 0) totalLikelihood / validCount else 0.0f,
                 detectedBoxes = emptyList(),
                 detectedLandmarks = extractedLandmarks,
-                inferenceDurationMs = durationMs
+                inferenceDurationMs = durationMs,
+                failureReason = "Insufficient valid landmarks — ALLOW"
             )
         }
 
@@ -232,14 +316,14 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         val leftAnkle = extractedLandmarks.firstOrNull { it.type == LandmarkType.LEFT_ANKLE }
         val rightAnkle = extractedLandmarks.firstOrNull { it.type == LandmarkType.RIGHT_ANKLE }
 
-        // GATE 1: Frame-by-Frame Female Presence Verification (Human Skeleton Check)
+        // GATE 1: Strict 33-Landmark Skeleton Lock
         val upperKeyLms = listOfNotNull(nose, leftShoulder, rightShoulder)
         val lowerKeyLms = listOfNotNull(leftHip, rightHip, leftKnee, rightKnee)
         val hasUpperSkeleton = upperKeyLms.count { it.confidence >= 0.72f } >= 2
         val hasLowerSkeleton = lowerKeyLms.count { it.confidence >= 0.72f } >= 2
 
         if (!hasUpperSkeleton && !hasLowerSkeleton) {
-            // There is NO human in this frame (it is a car, nature, animal, gaming, food, or text video).
+            // There is NO human skeleton in this frame (car, nature, animal, gaming, food, or text video).
             return FrameFeatures(
                 contentItemId = contentItemId,
                 frameTimestampMs = timestampMs,
@@ -254,7 +338,8 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 personConfidence = 0.0f,
                 detectedBoxes = emptyList(),
                 detectedLandmarks = extractedLandmarks,
-                inferenceDurationMs = durationMs
+                inferenceDurationMs = durationMs,
+                failureReason = "No confirmed 33-landmark skeleton (>= 0.72f) — ALLOW"
             )
         }
 
@@ -352,11 +437,18 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         // Reject male subjects
         val isMaleSubject = hasBeardOrMoustacheShadow || (hasMasculineVTorso && !hasLongFemaleHair)
 
+        val eyesConfidence = (leftEye?.confidence ?: 0f) + (rightEye?.confidence ?: 0f)
+        val noseConfidence = nose?.confidence ?: 0f
+        val isShowingBackOrAssPose = (eyesConfidence < 0.60f && noseConfidence < 0.50f) ||
+            (hasLongFemaleHair && eyesConfidence < 0.80f)
+
         // Check female visual signatures
         val hasFemaleSilhouette = (hipW > 0f && shoulderW > 0f && (hipW / shoulderW >= 0.80f))
         val hasSmoothFaceAndContour = !hasBeardOrMoustacheShadow && abs(jawLuminance - cheekLuminance) < 10.0f
         val femaleSignaturesCount = listOf(hasLongFemaleHair, hasFemaleSilhouette, hasSmoothFaceAndContour).count { it }
-        val isFemaleConfirmed = !isMaleSubject && (femaleSignaturesCount >= 2)
+        val isFrontFemale = !isMaleSubject && (femaleSignaturesCount >= 2)
+        val isRearFemale = isShowingBackOrAssPose && !isMaleSubject && (hasLongFemaleHair || hasFemaleSilhouette || (hipW > 0f && shoulderW > 0f && hipW / shoulderW >= 0.75f))
+        val isFemaleConfirmed = isFrontFemale || isRearFemale
 
         // 2. Derive genuine FACE Bounding Box from face landmarks
         val faceLandmarks = extractedLandmarks.filter { lm ->
@@ -530,7 +622,17 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         val borderCr = if (hasBorderSample) (borderCrSum / borderSampleCount).toFloat() else 128f
         val borderLuma = if (hasBorderSample) (borderLumaSum / borderSampleCount).toFloat() else 128f
 
-        fun isSubjectBareSkin(pixel: Int): Boolean {
+        fun isPointOnHumanBody(normX: Float, normY: Float): Boolean {
+            if (maskW <= 0 || maskH <= 0 || maskBuffer == null) return true
+            val mx = (normX * maskW).toInt().coerceIn(0, maskW - 1)
+            val my = (normY * maskH).toInt().coerceIn(0, maskH - 1)
+            val byteOffset = (my * maskW + mx) * 4
+            val conf = maskBuffer.getFloat(byteOffset)
+            return conf >= 0.35f
+        }
+
+        fun isSubjectBareSkin(pixel: Int, normX: Float, normY: Float): Boolean {
+            if (!isPointOnHumanBody(normX, normY)) return false
             val r = (pixel shr 16) and 0xFF
             val g = (pixel shr 8) and 0xFF
             val b = pixel and 0xFF
@@ -551,11 +653,26 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             // Must match person's own face/neck calibrated skin tone
             if (hasRefSkin) {
                 val distRef = hypot(cb - refCb, cr - refCr)
-                if (distRef > 15.0f) {
+                if (distRef > 18.0f) {
                     return false
                 }
             }
             return true
+        }
+
+        fun isSubjectBareSkin(pixel: Int, x: Int, y: Int): Boolean {
+            return isSubjectBareSkin(pixel, x.toFloat() / srcW, y.toFloat() / srcH)
+        }
+
+        fun isSubjectBareSkin(pixel: Int): Boolean {
+            return isSubjectBareSkin(pixel, 0.5f, 0.5f)
+        }
+
+        fun isSubjectClothingFabric(pixel: Int, x: Int, y: Int): Boolean {
+            val normX = x.toFloat() / srcW
+            val normY = y.toFloat() / srcH
+            if (!isPointOnHumanBody(normX, normY)) return false
+            return !isSubjectBareSkin(pixel, normX, normY)
         }
 
         // =========================================================================
@@ -589,7 +706,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             for (y in sZoneTopY..sZoneBottomY step stepY) {
                 for (x in sMinX..sMaxX step stepX) {
                     val p = getPixelSafe(x, y)
-                    if (isSubjectBareSkin(p)) sSkinPixels++
+                    if (isSubjectBareSkin(p, x, y)) sSkinPixels++
                     sTotalPixels++
                 }
             }
@@ -620,7 +737,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 for (y in tTop..tBottom step stepY) {
                     for (x in sMinX..sMaxX step stepX) {
                         val p = getPixelSafe(x, y)
-                        if (!isSubjectBareSkin(p)) torsoFabricCount++
+                        if (isSubjectClothingFabric(p, x, y)) torsoFabricCount++
                         torsoSampleCount++
                     }
                 }
@@ -642,7 +759,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                     var rowTotal = 0
                     for (x in sMinX..sMaxX step stepX) {
                         val p = getPixelSafe(x, y)
-                        if (isSubjectBareSkin(p)) {
+                        if (isSubjectBareSkin(p, x, y)) {
                             thighSkinCount++
                             rowSkinCount++
                         }
@@ -667,7 +784,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 for (y in llTop..llBottom step stepY) {
                     for (x in sMinX..sMaxX step stepX) {
                         val p = getPixelSafe(x, y)
-                        if (isSubjectBareSkin(p)) lowerLegSkinCount++
+                        if (isSubjectBareSkin(p, x, y)) lowerLegSkinCount++
                         lowerLegSampleCount++
                     }
                 }
@@ -751,7 +868,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 for (x in lHemiStart..lHemiEnd step stepX) {
                     val p = getPixelSafe(x, y)
                     val luma = luminance(p)
-                    if (isSubjectBareSkin(p)) {
+                    if (isSubjectBareSkin(p, x, y)) {
                         lSkin++
                         lLumaSum += luma
                     }
@@ -761,7 +878,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 for (x in rHemiStart..rHemiEnd step stepX) {
                     val p = getPixelSafe(x, y)
                     val luma = luminance(p)
-                    if (isSubjectBareSkin(p)) {
+                    if (isSubjectBareSkin(p, x, y)) {
                         rSkin++
                         rLumaSum += luma
                     }
@@ -790,7 +907,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             for (y in lowerHalfY..bBottomPx step max(1, (bBottomPx - lowerHalfY) / 3)) {
                 for (x in lHemiStart..rHemiEnd step stepX) {
                     val p = getPixelSafe(x, y)
-                    if (!isSubjectBareSkin(p)) {
+                    if (isSubjectClothingFabric(p, x, y)) {
                         val fLuma = luminance(p)
                         if (abs(fLuma - breastAvgLuma) >= 20.0f) {
                             fabricContrastFound = true
@@ -869,7 +986,7 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
                 for (y in bZoneTop..bZoneBottom step bStepY) {
                     for (x in gLeftPx..gRightPx step stepX) {
                         val p = getPixelSafe(x, y)
-                        if (isSubjectBareSkin(p)) backSkinCount++
+                        if (isSubjectBareSkin(p, x, y)) backSkinCount++
                         backTotal++
                     }
                 }
@@ -881,12 +998,12 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
             for (y in gTopPx..gBottomPx step stepY) {
                 for (x in gLeftPx..midGluteX step stepX) {
                     val p = getPixelSafe(x, y)
-                    if (isSubjectBareSkin(p)) leftGluteSkinCount++
+                    if (isSubjectBareSkin(p, x, y)) leftGluteSkinCount++
                     leftGluteTotal++
                 }
                 for (x in midGluteX..gRightPx step stepX) {
                     val p = getPixelSafe(x, y)
-                    if (isSubjectBareSkin(p)) rightGluteSkinCount++
+                    if (isSubjectBareSkin(p, x, y)) rightGluteSkinCount++
                     rightGluteTotal++
                 }
             }
@@ -993,6 +1110,13 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         } finally {
             poseDetectorInstance = null
             isModelInitialized = false
+        }
+        try {
+            selfieSegmenterInstance?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing SelfieSegmenter", e)
+        } finally {
+            selfieSegmenterInstance = null
         }
     }
 }
