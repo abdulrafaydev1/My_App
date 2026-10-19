@@ -181,7 +181,22 @@ class BodyTrackingController(
             return
         }
 
-        val primaryIncomingBox = personBox ?: upperTorsoBox ?: faceBox!!
+        val primaryIncomingBox = personBox ?: upperTorsoBox ?: faceBox ?: run {
+            val minX = landmarks.minOfOrNull { it.x } ?: 0.3f
+            val maxX = landmarks.maxOfOrNull { it.x } ?: 0.7f
+            val minY = landmarks.minOfOrNull { it.y } ?: 0.2f
+            val maxY = landmarks.maxOfOrNull { it.y } ?: 0.8f
+            NormalizedBox(
+                trackId = 1,
+                regionLabel = "PERSON",
+                confidence = detectionConfidence,
+                left = minX.coerceIn(0.01f, 0.95f),
+                top = minY.coerceIn(0.01f, 0.95f),
+                right = maxX.coerceIn(minX + 0.04f, 0.99f),
+                bottom = maxY.coerceIn(minY + 0.04f, 0.99f),
+                timestampMs = timestampMs
+            )
+        }
         val current = activeSubject
 
         val trackId: Int

@@ -940,29 +940,30 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
                 if (nose.isValid()) landmarks.add(nose)
 
                 if (detectedTorsoBox != null) {
+                    val torsoConf = detectedTorsoBox.confidence ?: normalizedConf
                     val shoulderLeft = PoseLandmark(
                         type = LandmarkType.LEFT_SHOULDER,
                         x = detectedTorsoBox.left,
                         y = detectedTorsoBox.top,
-                        confidence = detectedTorsoBox.confidence
+                        confidence = torsoConf
                     )
                     val shoulderRight = PoseLandmark(
                         type = LandmarkType.RIGHT_SHOULDER,
                         x = detectedTorsoBox.right,
                         y = detectedTorsoBox.top,
-                        confidence = detectedTorsoBox.confidence
+                        confidence = torsoConf
                     )
                     val hipLeft = PoseLandmark(
                         type = LandmarkType.LEFT_HIP,
                         x = (detectedTorsoBox.left + (detectedTorsoBox.right - detectedTorsoBox.left) * 0.15f).coerceIn(0.01f, 0.99f),
                         y = detectedTorsoBox.bottom,
-                        confidence = detectedTorsoBox.confidence * 0.8f
+                        confidence = torsoConf * 0.8f
                     )
                     val hipRight = PoseLandmark(
                         type = LandmarkType.RIGHT_HIP,
                         x = (detectedTorsoBox.right - (detectedTorsoBox.right - detectedTorsoBox.left) * 0.15f).coerceIn(0.01f, 0.99f),
                         y = detectedTorsoBox.bottom,
-                        confidence = detectedTorsoBox.confidence * 0.8f
+                        confidence = torsoConf * 0.8f
                     )
                     if (shoulderLeft.isValid()) landmarks.add(shoulderLeft)
                     if (shoulderRight.isValid()) landmarks.add(shoulderRight)
