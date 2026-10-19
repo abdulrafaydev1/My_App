@@ -28,7 +28,20 @@ jobs:
           gradle-version: '8.4'
 
       - name: Run Unit Tests & Build Debug APK with Gradle
-        run: gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          gradle compileDebugKotlin --stacktrace --no-daemon 2>&1 | tee compile.log || {
+            grep -E "e: |FAILED|FAILURE" compile.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          }
+          gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon 2>&1 | tee test.log || {
+            grep -E "FAILED|FAILURE|failure|e: " test.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          }
 
       - name: Upload InstaGuard-APK Artifact
         uses: actions/upload-artifact@v4
