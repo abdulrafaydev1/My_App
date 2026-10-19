@@ -142,6 +142,9 @@ data class NormalizedBox(
     val normRight: Float get() = right
     val normBottom: Float get() = bottom
 
+    fun width(): Float = right - left
+    fun height(): Float = bottom - top
+
     fun isValid(): Boolean {
         if (trackId < 0) return false
         if (regionLabel.isBlank()) return false
