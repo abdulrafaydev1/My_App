@@ -944,11 +944,6 @@ object MlKitPoseInferenceProvider : VisualInferenceProvider {
         var backOrButtocksAssMatched = false
         var rearButtocksExposureConfidence = 0.0f
 
-        val eyesConfidence = (leftEye?.confidence ?: 0f) + (rightEye?.confidence ?: 0f)
-        val noseConfidence = nose?.confidence ?: 0f
-        val isShowingBackOrAssPose = (eyesConfidence < 0.60f && noseConfidence < 0.50f) ||
-            (hasLongFemaleHair && eyesConfidence < 0.80f)
-
         if (isShowingBackOrAssPose) {
             val thighLen = if (leftKnee != null && leftHip != null) {
                 abs(leftKnee.y - leftHip.y)
