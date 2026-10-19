@@ -1647,7 +1647,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         if (now - lastScreenshotCompletedElapsedMs < 850L) return
 
         isScreenshotInFlight = true
-        currentScannerDiagnosticText = DiagnosticStatus.FRAME_ANALYSIS_IN_PROGRESS.label
+        currentScannerDiagnosticText = DiagnosticStatus.CAPTURING_FRAME.label
         val itemIdSnapshot = currentContentItemId
         try {
             takeScreenshot(
@@ -1655,6 +1655,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 visualAnalyzerExecutor,
                 object : AccessibilityService.TakeScreenshotCallback {
                     override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                        currentScannerDiagnosticText = DiagnosticStatus.FRAME_RECEIVED.label
                         val hwBuffer = screenshot.hardwareBuffer
                         try {
                             val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)

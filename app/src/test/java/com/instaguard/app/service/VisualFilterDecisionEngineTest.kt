@@ -806,4 +806,327 @@ class VisualFilterDecisionEngineTest {
         )
         assertTrue(controller.getRenderableBoxes(nowMs = 7520L).isEmpty())
     }
+
+    // =========================================================================
+    // E. Section 10 Specific Verification Suite (Tests 1–10)
+    // =========================================================================
+
+    @Test
+    fun test1_faceOnlyDetection() {
+        val faceOnlyBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "FACE",
+            confidence = 0.88f,
+            left = 0.35f,
+            top = 0.15f,
+            right = 0.65f,
+            bottom = 0.40f,
+            timestampMs = 1000L
+        )
+        val frame = FrameFeatures(
+            contentItemId = "test1_face_only",
+            frameTimestampMs = 1000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = false,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.88f,
+            detectedBoxes = listOf(faceOnlyBox)
+        )
+        val out = engine.evaluateFrame(frame, defaultConfig, nowMs = 1020L)
+
+        // 1. Must NOT skip solely because a face was detected
+        assertEquals(DecisionState.ALLOW, out.state)
+        assertFalse(out.state.isSkipAuthorized)
+
+        // 2. Contains ONLY the valid face box (no invented torso or clothing box)
+        assertEquals(1, out.activeBoxes.size)
+        assertEquals("FACE", out.activeBoxes[0].regionLabel)
+        assertFalse(out.activeBoxes.any { it.regionLabel == "UPPER TORSO" || it.regionLabel == "CLOTHING" })
+
+        // 3. Overlay controller renders the valid face box when enabled
+        val controller = ScannerOverlayStateController()
+        controller.isOverlayEnabled = true
+        controller.updateState(
+            boxes = out.activeBoxes,
+            status = out.diagnosticStatus,
+            frameTimestampMs = 1000L,
+            contentItemId = "test1_face_only",
+            nowMs = 1030L
+        )
+        val renderable = controller.getRenderableBoxes(nowMs = 1040L)
+        assertEquals(1, renderable.size)
+        assertEquals("FACE", renderable[0].regionLabel)
+    }
+
+    @Test
+    fun test2_realUpperTorsoDetection() {
+        val personBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "PERSON",
+            confidence = 0.90f,
+            left = 0.20f,
+            top = 0.10f,
+            right = 0.80f,
+            bottom = 0.85f,
+            timestampMs = 2000L
+        )
+        val torsoBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "UPPER TORSO",
+            confidence = 0.85f,
+            left = 0.25f,
+            top = 0.42f,
+            right = 0.75f,
+            bottom = 0.70f,
+            timestampMs = 2000L
+        )
+        val faceBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "FACE",
+            confidence = 0.92f,
+            left = 0.35f,
+            top = 0.12f,
+            right = 0.65f,
+            bottom = 0.38f,
+            timestampMs = 2000L
+        )
+        val frame = FrameFeatures(
+            contentItemId = "test2_upper_torso",
+            frameTimestampMs = 2000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = false,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.90f,
+            detectedBoxes = listOf(personBox, torsoBox, faceBox)
+        )
+        val out = engine.evaluateFrame(frame, defaultConfig, nowMs = 2020L)
+
+        assertEquals(3, out.activeBoxes.size)
+        val labels = out.activeBoxes.map { it.regionLabel }.toSet()
+        assertTrue(labels.contains("PERSON"))
+        assertTrue(labels.contains("UPPER TORSO"))
+        assertTrue(labels.contains("FACE"))
+
+        val controller = ScannerOverlayStateController()
+        controller.isOverlayEnabled = true
+        controller.updateState(
+            boxes = out.activeBoxes,
+            status = out.diagnosticStatus,
+            frameTimestampMs = 2000L,
+            contentItemId = "test2_upper_torso",
+            nowMs = 2030L
+        )
+        val visible = controller.getRenderableBoxes(nowMs = 2040L)
+        assertEquals(3, visible.size)
+        val torsoResult = visible.first { it.regionLabel == "UPPER TORSO" }
+        assertEquals(0.25f, torsoResult.left, 0.001f)
+        assertEquals(0.42f, torsoResult.top, 0.001f)
+        assertEquals(0.75f, torsoResult.right, 0.001f)
+        assertEquals(0.70f, torsoResult.bottom, 0.001f)
+    }
+
+    @Test
+    fun test3_clothingAnalysis() {
+        val personBox = NormalizedBox(trackId = 1, regionLabel = "PERSON", confidence = 0.94f, left = 0.2f, top = 0.1f, right = 0.8f, bottom = 0.9f, timestampMs = 3000L)
+        val torsoBox = NormalizedBox(trackId = 1, regionLabel = "UPPER TORSO", confidence = 0.91f, left = 0.25f, top = 0.4f, right = 0.75f, bottom = 0.7f, timestampMs = 3000L)
+        val clothingBox = NormalizedBox(trackId = 1, regionLabel = "CLOTHING", confidence = 0.88f, left = 0.26f, top = 0.42f, right = 0.74f, bottom = 0.68f, timestampMs = 3000L)
+
+        val frame = FrameFeatures(
+            contentItemId = "test3_clothing",
+            frameTimestampMs = 3000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.94f,
+            chestExposureConfidence = 0.92f,
+            detectedBoxes = listOf(personBox, torsoBox, clothingBox)
+        )
+        val out = engine.evaluateFrame(frame, defaultConfig, nowMs = 3020L)
+
+        assertEquals(DecisionState.PENDING_ANALYSIS, out.state)
+        assertEquals(1, engine.ruleBStreak)
+        assertTrue(out.matchedRules.contains(FilterRuleCategory.RULE_B_REVEALING_CHEST))
+        assertEquals(3, out.activeBoxes.size)
+    }
+
+    @Test
+    fun test4_missingClothingModel() {
+        val personBox = NormalizedBox(trackId = 1, regionLabel = "PERSON", confidence = 0.89f, left = 0.2f, top = 0.1f, right = 0.8f, bottom = 0.8f, timestampMs = 4000L)
+        val frame = FrameFeatures(
+            contentItemId = "test4_missing_model",
+            frameTimestampMs = 4000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = false,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.89f,
+            chestExposureConfidence = 0.95f,
+            failureReason = "Visible person detected; on-device clothing classifier model (TFLite) not bundled in assets",
+            detectedBoxes = listOf(personBox)
+        )
+        val out = engine.evaluateFrame(frame, defaultConfig, nowMs = 4020L)
+
+        assertEquals(DecisionState.ALLOW, out.state)
+        assertFalse(out.state.isSkipAuthorized)
+        assertTrue(out.matchedRules.isEmpty())
+        assertNotNull(out.failureReason)
+        assertTrue(out.failureReason!!.contains("clothing classifier", ignoreCase = true) ||
+            out.failureReason!!.contains("not bundled", ignoreCase = true))
+    }
+
+    @Test
+    fun test5_coordinateMapping() {
+        val originalBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "UPPER TORSO",
+            confidence = 0.85f,
+            left = 0.20f,
+            top = 0.30f,
+            right = 0.80f,
+            bottom = 0.70f,
+            timestampMs = 5000L,
+            sourceWidth = 1080,
+            sourceHeight = 2400
+        )
+        val mapped = CoordinateTransform.mapNormalizedBoxToView(
+            box = originalBox,
+            viewWidth = 1080,
+            viewHeight = 2400,
+            windowOffsetX = 0,
+            windowOffsetY = 0
+        )
+        assertNotNull(mapped)
+        assertEquals(1080f * 0.20f, mapped!!.leftPx, 0.5f)
+        assertEquals(2400f * 0.30f, mapped.topPx, 0.5f)
+        assertEquals(1080f * 0.80f, mapped.rightPx, 0.5f)
+        assertEquals(2400f * 0.70f, mapped.bottomPx, 0.5f)
+    }
+
+    @Test
+    fun test6_transparentOverlay() {
+        val controller = ScannerOverlayStateController()
+        assertEquals(0, controller.interiorFillAlpha)
+    }
+
+    @Test
+    fun test7_normalVideo() {
+        val normalFrame1 = FrameFeatures(
+            contentItemId = "test7_normal_video",
+            frameTimestampMs = 7000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.92f,
+            shoulderUncoveredConfidence = 0.15f,
+            hemlineAboveKneeConfidence = 0.10f,
+            chestExposureConfidence = 0.12f,
+            rearButtocksExposureConfidence = 0.08f,
+            singleFrameMovementScore = 0.10f
+        )
+        val normalFrame2 = normalFrame1.copy(frameTimestampMs = 7800L)
+
+        val out1 = engine.evaluateFrame(normalFrame1, defaultConfig, nowMs = 7020L)
+        val out2 = engine.evaluateFrame(normalFrame2, defaultConfig, nowMs = 7820L)
+
+        assertEquals(DecisionState.ALLOW, out1.state)
+        assertEquals(DecisionState.ALLOW, out2.state)
+        assertFalse(out2.state.isSkipAuthorized)
+        assertFalse(engine.skipIssuedForCurrentItem)
+    }
+
+    @Test
+    fun test8_confirmedFilteringMatch() {
+        val matchFrame1 = FrameFeatures(
+            contentItemId = "test8_match_video",
+            frameTimestampMs = 8000L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.94f,
+            chestExposureConfidence = 0.91f
+        )
+        val matchFrame2 = matchFrame1.copy(frameTimestampMs = 8800L)
+
+        val out1 = engine.evaluateFrame(matchFrame1, defaultConfig, nowMs = 8020L)
+        assertEquals(DecisionState.PENDING_ANALYSIS, out1.state)
+        assertFalse(out1.state.isSkipAuthorized)
+
+        val out2 = engine.evaluateFrame(matchFrame2, defaultConfig, nowMs = 8820L)
+        assertEquals(DecisionState.SKIP_CANDIDATE, out2.state)
+        assertTrue(out2.state.isSkipAuthorized)
+        assertEquals(SkipActionState.SKIP_REQUEST_PENDING, out2.skipActionState)
+    }
+
+    @Test
+    fun test9_videoChanges() {
+        val controller = ScannerOverlayStateController()
+        val boxA = NormalizedBox(trackId = 1, regionLabel = "UPPER TORSO", confidence = 0.88f, left = 0.2f, top = 0.3f, right = 0.8f, bottom = 0.7f, timestampMs = 9000L)
+        controller.updateState(
+            boxes = listOf(boxA),
+            status = DiagnosticStatus.PERSON_DETECTED,
+            frameTimestampMs = 9000L,
+            contentItemId = "video_prev_9",
+            nowMs = 9020L
+        )
+        assertEquals(1, controller.getRenderableBoxes(nowMs = 9030L).size)
+
+        controller.onContentItemChanged("video_new_9")
+        engine.resetForNewItem("video_new_9")
+
+        assertTrue(controller.getRenderableBoxes(nowMs = 9040L).isEmpty())
+        assertEquals(0, engine.ruleBStreak)
+        assertEquals("video_new_9", engine.currentItemId)
+    }
+
+    @Test
+    fun test10_overlaySwitch() {
+        val controller = ScannerOverlayStateController()
+        val box = NormalizedBox(trackId = 1, regionLabel = "UPPER TORSO", confidence = 0.90f, left = 0.2f, top = 0.3f, right = 0.8f, bottom = 0.7f, timestampMs = 10000L)
+
+        controller.isOverlayEnabled = true
+        controller.updateState(
+            boxes = listOf(box),
+            status = DiagnosticStatus.PERSON_DETECTED,
+            frameTimestampMs = 10000L,
+            contentItemId = "video_switch_10",
+            nowMs = 10020L
+        )
+        assertEquals(1, controller.getRenderableBoxes(nowMs = 10030L).size)
+
+        controller.isOverlayEnabled = false
+        assertTrue(controller.getRenderableBoxes(nowMs = 10040L).isEmpty())
+
+        val matchFrame1 = FrameFeatures(
+            contentItemId = "video_switch_10",
+            frameTimestampMs = 10500L,
+            isSupportedVideoFeed = true,
+            modelInitialized = true,
+            personDetectorAvailable = true,
+            clothingClassifierAvailable = true,
+            clothingAnalysisComplete = true,
+            qualifyingPersonDetected = true,
+            personConfidence = 0.95f,
+            chestExposureConfidence = 0.92f
+        )
+        val matchFrame2 = matchFrame1.copy(frameTimestampMs = 11200L)
+        engine.evaluateFrame(matchFrame1, defaultConfig, nowMs = 10520L)
+        val decision = engine.evaluateFrame(matchFrame2, defaultConfig, nowMs = 11220L)
+
+        assertEquals(DecisionState.SKIP_CANDIDATE, decision.state)
+        assertTrue(decision.state.isSkipAuthorized)
+    }
 }

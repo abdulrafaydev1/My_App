@@ -328,25 +328,26 @@ class ScannerHudOverlayView(context: Context) : View(context) {
 
     private val reticlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#CCFF1744")
-        strokeWidth = 1.4f * density
+        color = Color.parseColor("#99FF1744")
+        strokeWidth = 1.2f * density
     }
 
     private val tagFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#D9090D16")
+        color = Color.TRANSPARENT
     }
 
     private val tagStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#FF1744")
-        strokeWidth = 1.1f * density
+        color = Color.parseColor("#80FF1744")
+        strokeWidth = 1.0f * density
     }
 
     private val tagTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FF5252")
         textSize = 10.5f * scaledDensity
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        setShadowLayer(2.5f * density, 0f, 0f, Color.BLACK)
     }
 
     private val hudBannerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -503,16 +504,27 @@ class ScannerHudOverlayView(context: Context) : View(context) {
             val tagH = tagTextPaint.textSize + padV * 2f
 
             val tagLeft = if (isFullBody) {
-                (reusableRect.right - tagW).coerceAtLeast(8f * density)
+                (reusableRect.right - tagW).coerceIn(8f * density, (w - tagW - 8f * density).coerceAtLeast(8f * density))
             } else {
                 reusableRect.left.coerceIn(8f * density, (w - tagW - 8f * density).coerceAtLeast(8f * density))
             }
-            val tagBottom = (reusableRect.top - 2f * density).coerceAtLeast(tagH + 4f * density)
-            val tagTop = tagBottom - tagH
+
+            // Position strictly outside the bounding box:
+            // Prefer placing above the box; if insufficient clearance near screen top, flip below the box
+            val hasSpaceAbove = reusableRect.top >= (tagH + 4f * density)
+            val tagTop: Float
+            val tagBottom: Float
+            if (hasSpaceAbove) {
+                tagBottom = reusableRect.top - 2f * density
+                tagTop = tagBottom - tagH
+            } else {
+                tagTop = reusableRect.bottom + 2f * density
+                tagBottom = tagTop + tagH
+            }
 
             tagBgRect.set(tagLeft, tagTop, tagLeft + tagW, tagBottom)
             val cornerRadius = 3f * density
-            canvas.drawRoundRect(tagBgRect, cornerRadius, cornerRadius, tagFillPaint)
+            // Stroke only: 100% transparent interior (no dark fill over face or body)
             canvas.drawRoundRect(tagBgRect, cornerRadius, cornerRadius, tagStrokePaint)
 
             val textY = tagBottom - padV - (tagTextPaint.descent() * 0.5f)
@@ -531,7 +543,9 @@ class ScannerHudOverlayView(context: Context) : View(context) {
         } else {
             0L
         }
-        val statusText = "HUD SCANNER • ${stateController.currentDiagnosticStatus.label} • ${ageMs}ms"
+        val count = stateController.getVisibleBoxes(nowElapsed).size
+        val countText = if (count > 0) " • $count BOXES" else ""
+        val statusText = "HUD SCANNER • ${stateController.currentDiagnosticStatus.label}$countText • ${ageMs}ms"
         val textW = hudBannerTextPaint.measureText(statusText)
         val padH = 8f * density
         val padV = 4f * density

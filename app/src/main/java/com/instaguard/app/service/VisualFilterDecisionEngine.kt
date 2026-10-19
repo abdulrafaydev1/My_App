@@ -1,6 +1,7 @@
 package com.instaguard.app.service
 
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.PointF
 import android.media.FaceDetector
 import kotlin.math.max
@@ -36,28 +37,40 @@ enum class SkipActionState {
  * Real-time scanner diagnostic statuses (Phase 9).
  */
 enum class DiagnosticStatus(val label: String) {
+    // Section 7 Primary Diagnostic Statuses:
+    CAPTURING_FRAME("CAPTURING FRAME"),
+    FRAME_RECEIVED("FRAME RECEIVED"),
+    PERSON_DETECTED("PERSON DETECTED"),
+    UPPER_TORSO_DETECTION_RUNNING("UPPER-TORSO DETECTION RUNNING"),
+    UPPER_TORSO_DETECTED("UPPER TORSO DETECTED"),
+    CLOTHING_ANALYSIS_RUNNING("CLOTHING ANALYSIS RUNNING"),
+    CLOTHING_ANALYSIS_COMPLETE("CLOTHING ANALYSIS COMPLETE"),
+    NO_MATCH_ALLOW("NO MATCH — ALLOW"),
+    MATCH_CONFIRMED_SKIP("MATCH CONFIRMED — SKIP"),
+    MODEL_UNAVAILABLE("MODEL UNAVAILABLE"),
+    ANALYSIS_FAILED("ANALYSIS FAILED"),
+
+    // Compatible / Existing Diagnostic Statuses:
     MONITORING_DISABLED("MONITORING DISABLED"),
     PERMISSION_REQUIRED("PERMISSION REQUIRED"),
     PERMISSION_UNAVAILABLE("PERMISSION REQUIRED"),
     WAITING_FOR_FRAMES("WAITING FOR FRAMES"),
-    CAPTURE_IN_PROGRESS("CAPTURE IN PROGRESS"),
-    FRAME_RECEIVED("FRAME RECEIVED"),
+    CAPTURE_IN_PROGRESS("CAPTURING FRAME"),
     MODEL_INITIALIZING("MODEL INITIALIZING"),
     MODEL_NOT_INITIALIZED("MODEL INITIALIZING"),
-    CLASSIFIER_UNAVAILABLE("CLASSIFIER UNAVAILABLE — ALLOW"),
+    CLASSIFIER_UNAVAILABLE("MODEL UNAVAILABLE"),
     MODEL_READY("MODEL READY"),
-    FRAME_ANALYSIS_IN_PROGRESS("CAPTURE IN PROGRESS"),
-    PERSON_DETECTED("PERSON DETECTED"),
-    NO_RELEVANT_SUBJECT("NO RELEVANT SUBJECT"),
-    NO_QUALIFYING_PERSON_DETECTED("NO RELEVANT SUBJECT"),
-    CLASSIFICATION_PENDING("CLASSIFICATION PENDING"),
-    ANALYZING_CLOTHING("CLASSIFICATION PENDING"),
-    CHECKING_HEMLINE("CLASSIFICATION PENDING"),
-    EVALUATING_PRESENTATION("CLASSIFICATION PENDING"),
-    ANALYZING_MOVEMENT("CLASSIFICATION PENDING"),
-    NO_RULE_MATCHED("NO RULE MATCHED — ALLOW"),
-    MATCH_CONFIRMED("MATCH CONFIRMED"),
-    RULE_MATCHED_SKIP("MATCH CONFIRMED"),
+    FRAME_ANALYSIS_IN_PROGRESS("CAPTURING FRAME"),
+    NO_RELEVANT_SUBJECT("NO MATCH — ALLOW"),
+    NO_QUALIFYING_PERSON_DETECTED("NO MATCH — ALLOW"),
+    CLASSIFICATION_PENDING("CLOTHING ANALYSIS RUNNING"),
+    ANALYZING_CLOTHING("CLOTHING ANALYSIS RUNNING"),
+    CHECKING_HEMLINE("CLOTHING ANALYSIS RUNNING"),
+    EVALUATING_PRESENTATION("CLOTHING ANALYSIS RUNNING"),
+    ANALYZING_MOVEMENT("CLOTHING ANALYSIS RUNNING"),
+    NO_RULE_MATCHED("NO MATCH — ALLOW"),
+    MATCH_CONFIRMED("MATCH CONFIRMED — SKIP"),
+    RULE_MATCHED_SKIP("MATCH CONFIRMED — SKIP"),
     SKIP_REQUESTED("SKIP REQUESTED"),
     SKIP_ACTION_REQUESTED("SKIP REQUESTED"),
     NAVIGATION_VERIFIED("NAVIGATION VERIFIED"),
@@ -65,8 +78,7 @@ enum class DiagnosticStatus(val label: String) {
     TRACKING_LOST("TRACKING LOST"),
     OVERLAY_DISABLED("OVERLAY DISABLED"),
     OVERLAY_UNAVAILABLE("OVERLAY UNAVAILABLE"),
-    ANALYSIS_ERROR("ANALYSIS ERROR"),
-    ANALYSIS_FAILED("ANALYSIS ERROR")
+    ANALYSIS_ERROR("ANALYSIS FAILED")
 }
 
 enum class FilterRuleCategory {
@@ -714,9 +726,8 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
 
             val faces = arrayOfNulls<FaceDetector.Face>(MAX_FACES)
             val foundCount = detector.findFaces(scaled565, faces)
-            scaled565.recycle()
 
-            val boxes = ArrayList<NormalizedBox>(foundCount)
+            val boxes = ArrayList<NormalizedBox>()
             var bestConfidence = 0f
             val midPoint = PointF()
 
@@ -731,35 +742,162 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
 
                 val halfW = (eyeDist * 1.35f) / evenW
                 val halfH = (eyeDist * 1.75f) / evenH
-                val cx = (midPoint.x / evenW).coerceIn(0f, 1f)
-                val cy = (midPoint.y / evenH).coerceIn(0f, 1f)
+                val cxNorm = (midPoint.x / evenW).coerceIn(0f, 1f)
+                val cyNorm = (midPoint.y / evenH).coerceIn(0f, 1f)
 
-                val left = (cx - halfW).coerceIn(0.01f, 0.95f)
-                val right = (cx + halfW).coerceIn(left + 0.04f, 0.99f)
-                val top = (cy - halfH * 0.85f).coerceIn(0.01f, 0.95f)
-                val bottom = (cy + halfH * 1.15f).coerceIn(top + 0.04f, 0.99f)
+                val faceLeft = (cxNorm - halfW).coerceIn(0.01f, 0.95f)
+                val faceRight = (cxNorm + halfW).coerceIn(faceLeft + 0.04f, 0.99f)
+                val faceTop = (cyNorm - halfH * 0.85f).coerceIn(0.01f, 0.95f)
+                val faceBottom = (cyNorm + halfH * 1.15f).coerceIn(faceTop + 0.04f, 0.99f)
 
                 val normalizedConf = conf.coerceIn(0.01f, 1.0f)
                 if (normalizedConf > bestConfidence) {
                     bestConfidence = normalizedConf
                 }
 
-                val box = NormalizedBox(
+                val faceBox = NormalizedBox(
                     trackId = i + 1,
                     regionLabel = "FACE",
                     confidence = normalizedConf,
-                    left = left,
-                    top = top,
-                    right = right,
-                    bottom = bottom,
+                    left = faceLeft,
+                    top = faceTop,
+                    right = faceRight,
+                    bottom = faceBottom,
                     timestampMs = timestampMs,
                     sourceWidth = srcW,
                     sourceHeight = srcH
                 )
-                if (box.isValid()) {
-                    boxes.add(box)
+
+                // Stage B: Anatomical Upper-Torso Region Localization via Bilateral Edge Gradients
+                val cxPx = midPoint.x.toInt().coerceIn(0, evenW - 1)
+                val chinYPx = (faceBottom * evenH).toInt().coerceIn(0, evenH - 1)
+                val clavicleTopPx = (chinYPx + eyeDist * 0.30f).toInt().coerceIn(0, evenH - 1)
+                val torsoBottomPx = (clavicleTopPx + eyeDist * 2.2f).toInt().coerceIn(0, evenH - 1)
+
+                var detectedTorsoBox: NormalizedBox? = null
+                if (torsoBottomPx - clavicleTopPx >= 12 && clavicleTopPx < evenH - 10) {
+                    val sampleRows = (clavicleTopPx until torsoBottomPx step 3).toList()
+                    val leftEdges = ArrayList<Int>()
+                    val rightEdges = ArrayList<Int>()
+                    var validEdgeCount = 0
+
+                    for (rowY in sampleRows) {
+                        var maxLeftGrad = 0
+                        var bestLeftX = -1
+                        val minLeftBound = maxOf(1, (cxPx - eyeDist * 2.2f).toInt())
+                        val startLeft = (cxPx - eyeDist * 0.35f).toInt().coerceIn(minLeftBound, evenW - 2)
+
+                        for (x in startLeft downTo minLeftBound) {
+                            val p1 = scaled565.getPixel(x + 1, rowY)
+                            val p0 = scaled565.getPixel(x - 1, rowY)
+                            val lum1 = (Color.red(p1) * 299 + Color.green(p1) * 587 + Color.blue(p1) * 114) / 1000
+                            val lum0 = (Color.red(p0) * 299 + Color.green(p0) * 587 + Color.blue(p0) * 114) / 1000
+                            val grad = kotlin.math.abs(lum1 - lum0)
+                            if (grad > maxLeftGrad) {
+                                maxLeftGrad = grad
+                                bestLeftX = x
+                            }
+                        }
+
+                        var maxRightGrad = 0
+                        var bestRightX = -1
+                        val maxRightBound = minOf(evenW - 2, (cxPx + eyeDist * 2.2f).toInt())
+                        val startRight = (cxPx + eyeDist * 0.35f).toInt().coerceIn(1, maxRightBound)
+
+                        for (x in startRight..maxRightBound) {
+                            val p1 = scaled565.getPixel(x + 1, rowY)
+                            val p0 = scaled565.getPixel(x - 1, rowY)
+                            val lum1 = (Color.red(p1) * 299 + Color.green(p1) * 587 + Color.blue(p1) * 114) / 1000
+                            val lum0 = (Color.red(p0) * 299 + Color.green(p0) * 587 + Color.blue(p0) * 114) / 1000
+                            val grad = kotlin.math.abs(lum1 - lum0)
+                            if (grad > maxRightGrad) {
+                                maxRightGrad = grad
+                                bestRightX = x
+                            }
+                        }
+
+                        if (bestLeftX != -1 && bestRightX != -1 && maxLeftGrad >= 10 && maxRightGrad >= 10) {
+                            leftEdges.add(bestLeftX)
+                            rightEdges.add(bestRightX)
+                            validEdgeCount++
+                        }
+                    }
+
+                    if (validEdgeCount >= 3 && leftEdges.isNotEmpty() && rightEdges.isNotEmpty()) {
+                        leftEdges.sort()
+                        rightEdges.sort()
+                        val medianLeftPx = leftEdges[leftEdges.size / 2]
+                        val medianRightPx = rightEdges[rightEdges.size / 2]
+                        val detectedWidthPx = medianRightPx - medianLeftPx
+
+                        if (detectedWidthPx >= eyeDist * 1.35f && medianLeftPx < cxPx && medianRightPx > cxPx) {
+                            val torsoLeftNorm = (medianLeftPx.toFloat() / evenW).coerceIn(0.01f, 0.95f)
+                            val torsoRightNorm = (medianRightPx.toFloat() / evenW).coerceIn(torsoLeftNorm + 0.05f, 0.99f)
+                            val torsoTopNorm = (clavicleTopPx.toFloat() / evenH).coerceIn(0.01f, 0.95f)
+                            val torsoBottomNorm = (torsoBottomPx.toFloat() / evenH).coerceIn(torsoTopNorm + 0.05f, 0.99f)
+
+                            val torsoConf = (normalizedConf * 0.55f + 0.35f).coerceIn(0.50f, 0.95f)
+                            val candidate = NormalizedBox(
+                                trackId = i + 1,
+                                regionLabel = "UPPER TORSO",
+                                confidence = torsoConf,
+                                left = torsoLeftNorm,
+                                top = torsoTopNorm,
+                                right = torsoRightNorm,
+                                bottom = torsoBottomNorm,
+                                timestampMs = timestampMs,
+                                sourceWidth = srcW,
+                                sourceHeight = srcH
+                            )
+                            if (candidate.isValid()) {
+                                detectedTorsoBox = candidate
+                            }
+                        }
+                    }
+                }
+
+                // Stage A: Full-Frame Person Detection Bounding Box
+                val personLeft: Float
+                val personTop: Float
+                val personRight: Float
+                val personBottom: Float
+                if (detectedTorsoBox != null) {
+                    personLeft = minOf(faceLeft, detectedTorsoBox.left)
+                    personTop = (faceTop - (eyeDist * 0.30f / evenH)).coerceIn(0.01f, 0.95f)
+                    personRight = maxOf(faceRight, detectedTorsoBox.right)
+                    personBottom = detectedTorsoBox.bottom
+                } else {
+                    personLeft = faceLeft
+                    personTop = faceTop
+                    personRight = faceRight
+                    personBottom = faceBottom
+                }
+
+                val personBox = NormalizedBox(
+                    trackId = i + 1,
+                    regionLabel = "PERSON",
+                    confidence = normalizedConf,
+                    left = personLeft,
+                    top = personTop,
+                    right = personRight,
+                    bottom = personBottom,
+                    timestampMs = timestampMs,
+                    sourceWidth = srcW,
+                    sourceHeight = srcH
+                )
+
+                if (personBox.isValid() && detectedTorsoBox != null) {
+                    boxes.add(personBox)
+                }
+                if (detectedTorsoBox != null) {
+                    boxes.add(detectedTorsoBox)
+                }
+                if (faceBox.isValid()) {
+                    boxes.add(faceBox)
                 }
             }
+
+            scaled565.recycle()
 
             val durationMs = max(1L, (System.nanoTime() - startNs) / 1_000_000L)
 
@@ -769,11 +907,11 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
                 isSupportedVideoFeed = isSupportedFeed,
                 modelInitialized = true,
                 personDetectorAvailable = true,
-                // Explicitly report that no trained clothing/garment classifier is bundled
+                // Stage C: Explicitly report that no trained clothing/garment classifier is bundled
                 clothingClassifierAvailable = false,
                 analysisFailed = false,
                 failureReason = if (boxes.isNotEmpty()) {
-                    "Face detected via Android SDK; trained clothing classifier model not bundled"
+                    "Visible subject detected; trained clothing classifier model (TFLite) not bundled in assets"
                 } else {
                     null
                 },
