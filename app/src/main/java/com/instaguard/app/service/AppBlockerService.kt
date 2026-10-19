@@ -1704,7 +1704,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                                 status = decision.diagnosticStatus,
                                                 frameTimestampMs = features.frameTimestampMs,
                                                 contentItemId = itemIdSnapshot,
-                                                nowMs = SystemClock.elapsedRealtime()
+                                                nowMs = SystemClock.elapsedRealtime(),
+                                                landmarks = decision.activeLandmarks
                                             )
                                         }
                                     } else {

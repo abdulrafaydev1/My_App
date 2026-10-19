@@ -19,20 +19,7 @@ import kotlin.math.roundToInt
  */
 object CoordinateTransform {
 
-    data class MappedBox(
-        val trackId: Int = 1,
-        val regionLabel: String = "BOX",
-        val confidence: Float? = null,
-        val leftPx: Float,
-        val topPx: Float,
-        val rightPx: Float,
-        val bottomPx: Float
-    ) {
-        val left: Float get() = leftPx
-        val top: Float get() = topPx
-        val right: Float get() = rightPx
-        val bottom: Float get() = bottomPx
-    }
+    typealias MappedBox = DetectionCoordinateMapper.MappedBox
 
     fun mapNormalizedBoxToView(
         normLeft: Float,
@@ -45,27 +32,18 @@ object CoordinateTransform {
         sourceHeight: Int = 0,
         windowOffsetX: Int = 0,
         windowOffsetY: Int = 0
-    ): MappedBox? {
-        val tempBox = NormalizedBox(
-            trackId = 1,
-            regionLabel = "BOX",
-            confidence = null,
-            left = normLeft,
-            top = normTop,
-            right = normRight,
-            bottom = normBottom,
-            timestampMs = 1L,
-            sourceWidth = sourceWidth,
-            sourceHeight = sourceHeight
-        )
-        return mapNormalizedBoxToView(
-            box = tempBox,
-            viewWidth = viewWidth,
-            viewHeight = viewHeight,
-            windowOffsetX = windowOffsetX,
-            windowOffsetY = windowOffsetY
-        )
-    }
+    ): MappedBox? = DetectionCoordinateMapper.mapNormalizedBoxToView(
+        normLeft = normLeft,
+        normTop = normTop,
+        normRight = normRight,
+        normBottom = normBottom,
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        sourceWidth = sourceWidth,
+        sourceHeight = sourceHeight,
+        windowOffsetX = windowOffsetX,
+        windowOffsetY = windowOffsetY
+    )
 
     fun mapNormalizedBoxToView(
         box: NormalizedBox,
@@ -73,58 +51,13 @@ object CoordinateTransform {
         viewHeight: Int,
         windowOffsetX: Int = 0,
         windowOffsetY: Int = 0
-    ): MappedBox? {
-        if (!box.isValid() || viewWidth <= 0 || viewHeight <= 0) return null
-
-        val fullScreenW = (viewWidth + windowOffsetX).toFloat()
-        val fullScreenH = (viewHeight + windowOffsetY).toFloat()
-
-        val srcW = if (box.sourceWidth > 0) box.sourceWidth.toFloat() else fullScreenW
-        val srcH = if (box.sourceHeight > 0) box.sourceHeight.toFloat() else fullScreenH
-
-        val scaleX: Float
-        val scaleY: Float
-        val letterboxLeft: Float
-        val letterboxTop: Float
-
-        val srcAspect = srcW / srcH
-        val dstAspect = fullScreenW / fullScreenH
-        if (abs(srcAspect - dstAspect) < 0.03f) {
-            scaleX = fullScreenW
-            scaleY = fullScreenH
-            letterboxLeft = 0f
-            letterboxTop = 0f
-        } else if (srcAspect > dstAspect) {
-            // Source is wider than screen (letterboxed top/bottom)
-            scaleX = fullScreenW
-            scaleY = fullScreenW / srcAspect
-            letterboxLeft = 0f
-            letterboxTop = (fullScreenH - scaleY) * 0.5f
-        } else {
-            // Source is taller/narrower than screen (pillarboxed left/right)
-            scaleY = fullScreenH
-            scaleX = fullScreenH * srcAspect
-            letterboxLeft = (fullScreenW - scaleX) * 0.5f
-            letterboxTop = 0f
-        }
-
-        val left = (letterboxLeft + box.left * scaleX - windowOffsetX).coerceIn(0f, viewWidth.toFloat())
-        val top = (letterboxTop + box.top * scaleY - windowOffsetY).coerceIn(0f, viewHeight.toFloat())
-        val right = (letterboxLeft + box.right * scaleX - windowOffsetX).coerceIn(0f, viewWidth.toFloat())
-        val bottom = (letterboxTop + box.bottom * scaleY - windowOffsetY).coerceIn(0f, viewHeight.toFloat())
-
-        if (right - left < 4f || bottom - top < 4f) return null
-
-        return MappedBox(
-            trackId = box.trackId,
-            regionLabel = box.regionLabel,
-            confidence = box.confidence,
-            leftPx = left,
-            topPx = top,
-            rightPx = right,
-            bottomPx = bottom
-        )
-    }
+    ): MappedBox? = DetectionCoordinateMapper.mapNormalizedBoxToView(
+        box = box,
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        windowOffsetX = windowOffsetX,
+        windowOffsetY = windowOffsetY
+    )
 }
 
 /**
@@ -298,6 +231,7 @@ class ScannerOverlayStateController(
 class ScannerHudOverlayView(context: Context) : View(context) {
 
     val stateController = ScannerOverlayStateController(maxBoxAgeMs = 1400L)
+    val bodyTracker = BodyTrackingController(maxCoastingAgeMs = 850L)
 
     private val density = resources.displayMetrics.density
     private val scaledDensity = resources.displayMetrics.scaledDensity
@@ -372,13 +306,27 @@ class ScannerHudOverlayView(context: Context) : View(context) {
         status: DiagnosticStatus,
         frameTimestampMs: Long,
         contentItemId: String = stateController.currentContentItemId,
-        nowMs: Long = SystemClock.elapsedRealtime()
+        nowMs: Long = SystemClock.elapsedRealtime(),
+        landmarks: List<PoseLandmark> = emptyList()
     ) {
         stateController.updateOverlayState(
             contentItemId = contentItemId,
             boxes = boxes,
             status = status,
             frameTimestampMs = frameTimestampMs,
+            nowMs = nowMs
+        )
+        val pBox = boxes.firstOrNull { it.regionLabel == "PERSON" || it.regionLabel == "BODY" }
+        val fBox = boxes.firstOrNull { it.regionLabel == "FACE" }
+        val tBox = boxes.firstOrNull { it.regionLabel == "UPPER TORSO" }
+        bodyTracker.updateWithFrameDetection(
+            contentItemId = contentItemId,
+            timestampMs = frameTimestampMs,
+            personBox = pBox,
+            faceBox = fBox,
+            upperTorsoBox = tBox,
+            landmarks = landmarks,
+            detectionConfidence = fBox?.confidence ?: pBox?.confidence ?: 0.85f,
             nowMs = nowMs
         )
         if (boxes.isEmpty()) {
@@ -393,6 +341,7 @@ class ScannerHudOverlayView(context: Context) : View(context) {
 
     fun clearOverlay() {
         stateController.clearAll()
+        bodyTracker.clearTracking()
         smoothedBoxes.clear()
         postInvalidateOnAnimation()
     }
@@ -406,7 +355,8 @@ class ScannerHudOverlayView(context: Context) : View(context) {
         if (w <= 0 || h <= 0) return
 
         val nowElapsed = SystemClock.elapsedRealtime()
-        val activeTargets = stateController.getVisibleBoxes(nowElapsed)
+        val trackedBoxes = bodyTracker.getRenderableBoxes(nowElapsed)
+        val activeTargets = if (trackedBoxes.isNotEmpty()) trackedBoxes else stateController.getVisibleBoxes(nowElapsed)
 
         drawHudStatusBadge(canvas, nowElapsed)
 
@@ -447,10 +397,10 @@ class ScannerHudOverlayView(context: Context) : View(context) {
                 smoothedBoxes[key] = initRect
                 reusableRect.set(initRect)
             } else {
-                val nextLeft = lerp(current.left, mapped.leftPx, 0.35f)
-                val nextTop = lerp(current.top, mapped.topPx, 0.35f)
-                val nextRight = lerp(current.right, mapped.rightPx, 0.35f)
-                val nextBottom = lerp(current.bottom, mapped.bottomPx, 0.35f)
+                val nextLeft = lerp(current.left, mapped.leftPx, 0.70f)
+                val nextTop = lerp(current.top, mapped.topPx, 0.70f)
+                val nextRight = lerp(current.right, mapped.rightPx, 0.70f)
+                val nextBottom = lerp(current.bottom, mapped.bottomPx, 0.70f)
 
                 val deltaPx = maxOf(
                     abs(nextLeft - mapped.leftPx),
@@ -458,7 +408,7 @@ class ScannerHudOverlayView(context: Context) : View(context) {
                     abs(nextRight - mapped.rightPx),
                     abs(nextBottom - mapped.bottomPx)
                 )
-                if (deltaPx > 1.5f) {
+                if (deltaPx > 1.0f || bodyTracker.currentLifecycleState == TrackingLifecycleState.TRACKING_SUBJECT) {
                     needsNextAnimationFrame = true
                 }
                 current.set(nextLeft, nextTop, nextRight, nextBottom)

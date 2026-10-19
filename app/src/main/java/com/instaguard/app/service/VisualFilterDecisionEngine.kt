@@ -37,24 +37,34 @@ enum class SkipActionState {
  * Real-time scanner diagnostic statuses (Phase 9).
  */
 enum class DiagnosticStatus(val label: String) {
-    // Section 7 Primary Diagnostic Statuses:
+    // Phase 12 & Section 7 Primary Diagnostic Statuses:
+    WAITING_FOR_FRAME("WAITING FOR FRAME"),
     CAPTURING_FRAME("CAPTURING FRAME"),
     FRAME_RECEIVED("FRAME RECEIVED"),
     PERSON_DETECTED("PERSON DETECTED"),
+    POSE_INFERENCE_RUNNING("POSE INFERENCE RUNNING"),
+    LANDMARKS_UPDATED("LANDMARKS UPDATED"),
+    TRACKING_SUBJECT("TRACKING SUBJECT"),
+    TRACKING_CONFIDENCE_LOW("TRACKING CONFIDENCE LOW"),
+    COORDINATES_MAPPED("COORDINATES MAPPED"),
+    UPDATING_HUD("UPDATING HUD"),
     UPPER_TORSO_DETECTION_RUNNING("UPPER-TORSO DETECTION RUNNING"),
     UPPER_TORSO_DETECTED("UPPER TORSO DETECTED"),
     CLOTHING_ANALYSIS_RUNNING("CLOTHING ANALYSIS RUNNING"),
     CLOTHING_ANALYSIS_COMPLETE("CLOTHING ANALYSIS COMPLETE"),
     NO_MATCH_ALLOW("NO MATCH — ALLOW"),
+    NO_FILTER_MATCH_ALLOW("NO FILTER MATCH — ALLOW"),
     MATCH_CONFIRMED_SKIP("MATCH CONFIRMED — SKIP"),
     MODEL_UNAVAILABLE("MODEL UNAVAILABLE"),
+    TRACKING_LOST("TRACKING LOST"),
     ANALYSIS_FAILED("ANALYSIS FAILED"),
+    ANALYSIS_ERROR("ANALYSIS ERROR"),
 
     // Compatible / Existing Diagnostic Statuses:
     MONITORING_DISABLED("MONITORING DISABLED"),
     PERMISSION_REQUIRED("PERMISSION REQUIRED"),
     PERMISSION_UNAVAILABLE("PERMISSION REQUIRED"),
-    WAITING_FOR_FRAMES("WAITING FOR FRAMES"),
+    WAITING_FOR_FRAMES("WAITING FOR FRAME"),
     CAPTURE_IN_PROGRESS("CAPTURING FRAME"),
     MODEL_INITIALIZING("MODEL INITIALIZING"),
     MODEL_NOT_INITIALIZED("MODEL INITIALIZING"),
@@ -75,10 +85,8 @@ enum class DiagnosticStatus(val label: String) {
     SKIP_ACTION_REQUESTED("SKIP REQUESTED"),
     NAVIGATION_VERIFIED("NAVIGATION VERIFIED"),
     NAVIGATION_FAILED("NAVIGATION FAILED"),
-    TRACKING_LOST("TRACKING LOST"),
     OVERLAY_DISABLED("OVERLAY DISABLED"),
-    OVERLAY_UNAVAILABLE("OVERLAY UNAVAILABLE"),
-    ANALYSIS_ERROR("ANALYSIS FAILED")
+    OVERLAY_UNAVAILABLE("OVERLAY UNAVAILABLE")
 }
 
 enum class FilterRuleCategory {
@@ -173,6 +181,7 @@ data class FrameFeatures(
     val rearButtocksExposureConfidence: Float = 0f,
     val singleFrameMovementScore: Float = 0f,
     val detectedBoxes: List<NormalizedBox> = emptyList(),
+    val detectedLandmarks: List<PoseLandmark> = emptyList(),
     val sourceFrameWidth: Int = 0,
     val sourceFrameHeight: Int = 0
 )
@@ -201,6 +210,7 @@ data class DecisionOutput(
     val frameAgeMs: Long = 0L,
     val inferenceDurationMs: Long = 0L,
     val activeBoxes: List<NormalizedBox> = emptyList(),
+    val activeLandmarks: List<PoseLandmark> = emptyList(),
     val skipActionState: SkipActionState = SkipActionState.NO_SKIP_REQUESTED,
     val failureReason: String? = null
 )
@@ -467,6 +477,7 @@ class VisualFilterDecisionEngine(
                 frameAgeMs = frameAge,
                 inferenceDurationMs = features.inferenceDurationMs,
                 activeBoxes = validBoxes,
+                activeLandmarks = features.detectedLandmarks,
                 skipActionState = skipActionState
             )
         }
@@ -484,6 +495,7 @@ class VisualFilterDecisionEngine(
                 frameAgeMs = frameAge,
                 inferenceDurationMs = features.inferenceDurationMs,
                 activeBoxes = validBoxes,
+                activeLandmarks = features.detectedLandmarks,
                 skipActionState = skipActionState,
                 failureReason = features.failureReason ?: "Clothing classifier unavailable; skipping disabled"
             )
@@ -579,6 +591,7 @@ class VisualFilterDecisionEngine(
                         frameAgeMs = frameAge,
                         inferenceDurationMs = features.inferenceDurationMs,
                         activeBoxes = validBoxes,
+                        activeLandmarks = features.detectedLandmarks,
                         skipActionState = skipActionState
                     )
                 } else {
@@ -594,6 +607,7 @@ class VisualFilterDecisionEngine(
                         frameAgeMs = frameAge,
                         inferenceDurationMs = features.inferenceDurationMs,
                         activeBoxes = validBoxes,
+                        activeLandmarks = features.detectedLandmarks,
                         skipActionState = skipActionState
                     )
                 }
@@ -612,6 +626,7 @@ class VisualFilterDecisionEngine(
                     frameAgeMs = frameAge,
                     inferenceDurationMs = features.inferenceDurationMs,
                     activeBoxes = validBoxes,
+                    activeLandmarks = features.detectedLandmarks,
                     skipActionState = skipActionState
                 )
             }
@@ -629,6 +644,7 @@ class VisualFilterDecisionEngine(
                 frameAgeMs = frameAge,
                 inferenceDurationMs = features.inferenceDurationMs,
                 activeBoxes = validBoxes,
+                activeLandmarks = features.detectedLandmarks,
                 skipActionState = skipActionState
             )
         }
@@ -643,6 +659,7 @@ class VisualFilterDecisionEngine(
             frameAgeMs = frameAge,
             inferenceDurationMs = features.inferenceDurationMs,
             activeBoxes = validBoxes,
+            activeLandmarks = features.detectedLandmarks,
             skipActionState = skipActionState
         )
     }
@@ -728,6 +745,7 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
             val foundCount = detector.findFaces(scaled565, faces)
 
             val boxes = ArrayList<NormalizedBox>()
+            val landmarks = ArrayList<PoseLandmark>()
             var bestConfidence = 0f
             val midPoint = PointF()
 
@@ -895,6 +913,79 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
                 if (faceBox.isValid()) {
                     boxes.add(faceBox)
                 }
+
+                // Stage C: Anatomical Pose Landmarks Extraction for Temporal Tracking
+                val eyeDistNormX = (eyeDist * 0.5f) / evenW
+                val eyeDistNormY = (eyeDist * 0.35f) / evenH
+                val leftEye = PoseLandmark(
+                    type = LandmarkType.LEFT_EYE,
+                    x = (cxNorm - eyeDistNormX).coerceIn(0.01f, 0.99f),
+                    y = cyNorm,
+                    confidence = normalizedConf
+                )
+                val rightEye = PoseLandmark(
+                    type = LandmarkType.RIGHT_EYE,
+                    x = (cxNorm + eyeDistNormX).coerceIn(0.01f, 0.99f),
+                    y = cyNorm,
+                    confidence = normalizedConf
+                )
+                val nose = PoseLandmark(
+                    type = LandmarkType.NOSE,
+                    x = cxNorm,
+                    y = (cyNorm + eyeDistNormY).coerceIn(0.01f, 0.99f),
+                    confidence = normalizedConf
+                )
+                if (leftEye.isValid()) landmarks.add(leftEye)
+                if (rightEye.isValid()) landmarks.add(rightEye)
+                if (nose.isValid()) landmarks.add(nose)
+
+                if (detectedTorsoBox != null) {
+                    val shoulderLeft = PoseLandmark(
+                        type = LandmarkType.LEFT_SHOULDER,
+                        x = detectedTorsoBox.left,
+                        y = detectedTorsoBox.top,
+                        confidence = detectedTorsoBox.confidence
+                    )
+                    val shoulderRight = PoseLandmark(
+                        type = LandmarkType.RIGHT_SHOULDER,
+                        x = detectedTorsoBox.right,
+                        y = detectedTorsoBox.top,
+                        confidence = detectedTorsoBox.confidence
+                    )
+                    val hipLeft = PoseLandmark(
+                        type = LandmarkType.LEFT_HIP,
+                        x = (detectedTorsoBox.left + (detectedTorsoBox.right - detectedTorsoBox.left) * 0.15f).coerceIn(0.01f, 0.99f),
+                        y = detectedTorsoBox.bottom,
+                        confidence = detectedTorsoBox.confidence * 0.8f
+                    )
+                    val hipRight = PoseLandmark(
+                        type = LandmarkType.RIGHT_HIP,
+                        x = (detectedTorsoBox.right - (detectedTorsoBox.right - detectedTorsoBox.left) * 0.15f).coerceIn(0.01f, 0.99f),
+                        y = detectedTorsoBox.bottom,
+                        confidence = detectedTorsoBox.confidence * 0.8f
+                    )
+                    if (shoulderLeft.isValid()) landmarks.add(shoulderLeft)
+                    if (shoulderRight.isValid()) landmarks.add(shoulderRight)
+                    if (hipLeft.isValid()) landmarks.add(hipLeft)
+                    if (hipRight.isValid()) landmarks.add(hipRight)
+                } else {
+                    val shoulderHalfW = (eyeDist * 1.8f) / evenW
+                    val shoulderY = ((chinYPx + eyeDist * 0.35f) / evenH).coerceIn(0.01f, 0.99f)
+                    val shoulderLeft = PoseLandmark(
+                        type = LandmarkType.LEFT_SHOULDER,
+                        x = (cxNorm - shoulderHalfW).coerceIn(0.01f, 0.99f),
+                        y = shoulderY,
+                        confidence = normalizedConf * 0.65f
+                    )
+                    val shoulderRight = PoseLandmark(
+                        type = LandmarkType.RIGHT_SHOULDER,
+                        x = (cxNorm + shoulderHalfW).coerceIn(0.01f, 0.99f),
+                        y = shoulderY,
+                        confidence = normalizedConf * 0.65f
+                    )
+                    if (shoulderLeft.isValid()) landmarks.add(shoulderLeft)
+                    if (shoulderRight.isValid()) landmarks.add(shoulderRight)
+                }
             }
 
             scaled565.recycle()
@@ -922,6 +1013,7 @@ object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
                 isMalePresentingOnly = false,
                 clothingAnalysisComplete = true,
                 detectedBoxes = boxes,
+                detectedLandmarks = landmarks,
                 sourceFrameWidth = srcW,
                 sourceFrameHeight = srcH
             )
