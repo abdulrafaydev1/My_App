@@ -13,32 +13,299 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Tactical HUD Scanner Outline Overlay View (v10.0).
+ * Pure-Kotlin coordinate transformation utility that maps normalized source-frame
+ * coordinates [0f..1f] into overlay View coordinates, accounting for source frame
+ * aspect ratio, display dimensions, and window screen offsets (Phase 6.4).
+ */
+object CoordinateTransform {
+
+    data class MappedBox(
+        val trackId: Int = 1,
+        val regionLabel: String = "BOX",
+        val confidence: Float? = null,
+        val leftPx: Float,
+        val topPx: Float,
+        val rightPx: Float,
+        val bottomPx: Float
+    ) {
+        val left: Float get() = leftPx
+        val top: Float get() = topPx
+        val right: Float get() = rightPx
+        val bottom: Float get() = bottomPx
+    }
+
+    fun mapNormalizedBoxToView(
+        normLeft: Float,
+        normTop: Float,
+        normRight: Float,
+        normBottom: Float,
+        viewWidth: Int,
+        viewHeight: Int,
+        sourceWidth: Int = 0,
+        sourceHeight: Int = 0,
+        windowOffsetX: Int = 0,
+        windowOffsetY: Int = 0
+    ): MappedBox? {
+        val tempBox = NormalizedBox(
+            trackId = 1,
+            regionLabel = "BOX",
+            confidence = null,
+            left = normLeft,
+            top = normTop,
+            right = normRight,
+            bottom = normBottom,
+            timestampMs = 1L,
+            sourceWidth = sourceWidth,
+            sourceHeight = sourceHeight
+        )
+        return mapNormalizedBoxToView(
+            box = tempBox,
+            viewWidth = viewWidth,
+            viewHeight = viewHeight,
+            windowOffsetX = windowOffsetX,
+            windowOffsetY = windowOffsetY
+        )
+    }
+
+    fun mapNormalizedBoxToView(
+        box: NormalizedBox,
+        viewWidth: Int,
+        viewHeight: Int,
+        windowOffsetX: Int = 0,
+        windowOffsetY: Int = 0
+    ): MappedBox? {
+        if (!box.isValid() || viewWidth <= 0 || viewHeight <= 0) return null
+
+        val fullScreenW = (viewWidth + windowOffsetX).toFloat()
+        val fullScreenH = (viewHeight + windowOffsetY).toFloat()
+
+        val srcW = if (box.sourceWidth > 0) box.sourceWidth.toFloat() else fullScreenW
+        val srcH = if (box.sourceHeight > 0) box.sourceHeight.toFloat() else fullScreenH
+
+        val scaleX: Float
+        val scaleY: Float
+        val letterboxLeft: Float
+        val letterboxTop: Float
+
+        val srcAspect = srcW / srcH
+        val dstAspect = fullScreenW / fullScreenH
+        if (abs(srcAspect - dstAspect) < 0.03f) {
+            scaleX = fullScreenW
+            scaleY = fullScreenH
+            letterboxLeft = 0f
+            letterboxTop = 0f
+        } else if (srcAspect > dstAspect) {
+            // Source is wider than screen (letterboxed top/bottom)
+            scaleX = fullScreenW
+            scaleY = fullScreenW / srcAspect
+            letterboxLeft = 0f
+            letterboxTop = (fullScreenH - scaleY) * 0.5f
+        } else {
+            // Source is taller/narrower than screen (pillarboxed left/right)
+            scaleY = fullScreenH
+            scaleX = fullScreenH * srcAspect
+            letterboxLeft = (fullScreenW - scaleX) * 0.5f
+            letterboxTop = 0f
+        }
+
+        val left = (letterboxLeft + box.left * scaleX - windowOffsetX).coerceIn(0f, viewWidth.toFloat())
+        val top = (letterboxTop + box.top * scaleY - windowOffsetY).coerceIn(0f, viewHeight.toFloat())
+        val right = (letterboxLeft + box.right * scaleX - windowOffsetX).coerceIn(0f, viewWidth.toFloat())
+        val bottom = (letterboxTop + box.bottom * scaleY - windowOffsetY).coerceIn(0f, viewHeight.toFloat())
+
+        if (right - left < 4f || bottom - top < 4f) return null
+
+        return MappedBox(
+            trackId = box.trackId,
+            regionLabel = box.regionLabel,
+            confidence = box.confidence,
+            leftPx = left,
+            topPx = top,
+            rightPx = right,
+            bottomPx = bottom
+        )
+    }
+}
+
+/**
+ * Pure-Kotlin, unit-testable controller for the HUD Scanner Overlay (Phases 6 & 7).
  *
- * Strict Non-Blur Guarantee:
- * - Never blurs, darkens, or fills the interior of any face or body box (100% Color.TRANSPARENT inside).
- * - Renders thin red outer rectangle (#FF1744, 1.8dp), thick corner L-brackets (#FF1744, 3.2dp, 14dp arm),
- *   center reticle crosshair (+, 6dp), and top-left dark pill tag (#D9090D16 with #FF1744 border)
- *   showing monospace label + confidence percentage: e.g., FACE [98%], CHEST [95%], BACK [91%], BUTTOCKS [95%], FEET [92%].
- * - Smooth 60-FPS LERP interpolation (factor 0.35f) and automatic 1400ms stale box cleanup.
+ * Enforces:
+ * - Strict 0% interior fill / 0% blur guarantee ([interiorFillAlpha] == 0).
+ * - Independent ON/OFF toggle ([isOverlayEnabled]) that hides boxes without affecting decision logic.
+ * - Rejects invalid coordinates and removes stale detections older than [staleTimeoutMs].
+ * - Clears boxes immediately when contentItemId changes or tracking is lost.
+ */
+class ScannerOverlayStateController(
+    val maxBoxAgeMs: Long = 1400L,
+    val staleTimeoutMs: Long = maxBoxAgeMs
+) {
+    /** Interior fill alpha is strictly 0 (100% transparent interior, never blurs or fills faces/bodies). */
+    val interiorFillAlpha: Int = 0
+
+    @Volatile
+    var isOverlayEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value) {
+                activeBoxesInternal.clear()
+            }
+        }
+
+    @Volatile
+    var currentContentItemId: String = ""
+        private set
+
+    @Volatile
+    var currentDiagnosticStatus: DiagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES
+        private set
+
+    @Volatile
+    var lastFrameTimestampMs: Long = 0L
+        private set
+
+    private val activeBoxesInternal = ArrayList<NormalizedBox>()
+
+    @Synchronized
+    fun updateState(
+        boxes: List<NormalizedBox>,
+        status: DiagnosticStatus,
+        frameTimestampMs: Long,
+        contentItemId: String = currentContentItemId,
+        nowMs: Long = frameTimestampMs
+    ) {
+        updateOverlayState(
+            contentItemId = contentItemId,
+            boxes = boxes,
+            status = status,
+            frameTimestampMs = frameTimestampMs,
+            nowMs = nowMs
+        )
+    }
+
+    @Synchronized
+    fun updateOverlayState(
+        contentItemId: String,
+        boxes: List<NormalizedBox>,
+        status: DiagnosticStatus,
+        frameTimestampMs: Long,
+        nowMs: Long = frameTimestampMs
+    ) {
+        if (contentItemId != currentContentItemId) {
+            currentContentItemId = contentItemId
+            activeBoxesInternal.clear()
+        }
+
+        currentDiagnosticStatus = if (!isOverlayEnabled) {
+            DiagnosticStatus.OVERLAY_DISABLED
+        } else {
+            status
+        }
+        lastFrameTimestampMs = frameTimestampMs
+
+        if (!isOverlayEnabled) {
+            activeBoxesInternal.clear()
+            return
+        }
+
+        if (status == DiagnosticStatus.TRACKING_LOST) {
+            activeBoxesInternal.clear()
+            return
+        }
+
+        val validCurrentBoxes = boxes.filter { box ->
+            box.isValid() && (nowMs - box.timestampMs) in 0L..staleTimeoutMs
+        }
+        activeBoxesInternal.clear()
+        activeBoxesInternal.addAll(validCurrentBoxes)
+    }
+
+    @Synchronized
+    fun onContentItemChanged(newContentItemId: String) {
+        onNewContentItem(newContentItemId)
+    }
+
+    @Synchronized
+    fun onNewContentItem(newItemId: String) {
+        currentContentItemId = newItemId
+        activeBoxesInternal.clear()
+    }
+
+    @Synchronized
+    fun onTrackingLost() {
+        currentDiagnosticStatus = DiagnosticStatus.TRACKING_LOST
+        activeBoxesInternal.clear()
+    }
+
+    @Synchronized
+    fun clearBoxes() {
+        clearAll()
+    }
+
+    @Synchronized
+    fun clearOverlay() {
+        clearAll()
+    }
+
+    @Synchronized
+    fun clearAll() {
+        activeBoxesInternal.clear()
+    }
+
+    @Synchronized
+    fun getRenderableBoxes(nowMs: Long): List<NormalizedBox> {
+        return getVisibleBoxes(nowMs)
+    }
+
+    @Synchronized
+    fun getVisibleBoxes(nowMs: Long): List<NormalizedBox> {
+        if (!isOverlayEnabled) return emptyList()
+        val iterator = activeBoxesInternal.iterator()
+        while (iterator.hasNext()) {
+            val box = iterator.next()
+            if (!box.isValid() || (nowMs - box.timestampMs) > staleTimeoutMs) {
+                iterator.remove()
+            }
+        }
+        return ArrayList(activeBoxesInternal)
+    }
+
+    companion object {
+        fun formatBoxHeaderText(box: NormalizedBox): String {
+            val conf = box.confidence
+            return if (conf != null && !conf.isNaN() && conf > 0f && conf <= 1f) {
+                val pct = (conf * 100f).roundToInt().coerceIn(1, 100)
+                "${box.regionLabel} $pct%"
+            } else {
+                box.regionLabel
+            }
+        }
+
+        fun formatBoxLabel(box: NormalizedBox): String {
+            return formatBoxHeaderText(box)
+        }
+    }
+}
+
+/**
+ * Transparent Tactical HUD Scanner Overlay View (Phase 6).
+ *
+ * Strict Non-Blur & Non-Fill Guarantee:
+ * - Every bounding-box interior is 100% Color.TRANSPARENT (zero blur, zero fill, zero tint).
+ * - Renders only genuine, validated detections supplied by the inference pipeline.
+ * - Uses CoordinateTransform to align normalized source-frame coordinates with the display.
  */
 class ScannerHudOverlayView(context: Context) : View(context) {
+
+    val stateController = ScannerOverlayStateController(maxBoxAgeMs = 1400L)
 
     private val density = resources.displayMetrics.density
     private val scaledDensity = resources.displayMetrics.scaledDensity
 
-    @Volatile
-    private var targetBoxes: List<NormalizedBox> = emptyList()
-
-    @Volatile
-    private var currentDiagnosticStatus: DiagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES
-
-    @Volatile
-    private var lastFrameTimestampMs: Long = 0L
-
     private val smoothedBoxes = HashMap<String, RectF>()
     private val reusableRect = RectF()
     private val tagBgRect = RectF()
+    private val screenLocation = IntArray(2)
 
     private val outerBoxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -46,7 +313,7 @@ class ScannerHudOverlayView(context: Context) : View(context) {
         strokeWidth = 1.8f * density
     }
 
-    private val bodyOuterBoxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val secondaryOuterBoxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = Color.parseColor("#B3FF1744")
         strokeWidth = 1.3f * density
@@ -102,11 +369,17 @@ class ScannerHudOverlayView(context: Context) : View(context) {
     fun updateHudState(
         boxes: List<NormalizedBox>,
         status: DiagnosticStatus,
-        frameTimestampMs: Long
+        frameTimestampMs: Long,
+        contentItemId: String = stateController.currentContentItemId,
+        nowMs: Long = SystemClock.elapsedRealtime()
     ) {
-        this.targetBoxes = boxes
-        this.currentDiagnosticStatus = status
-        this.lastFrameTimestampMs = frameTimestampMs
+        stateController.updateOverlayState(
+            contentItemId = contentItemId,
+            boxes = boxes,
+            status = status,
+            frameTimestampMs = frameTimestampMs,
+            nowMs = nowMs
+        )
         if (boxes.isEmpty()) {
             smoothedBoxes.clear()
         }
@@ -118,21 +391,22 @@ class ScannerHudOverlayView(context: Context) : View(context) {
     }
 
     fun clearOverlay() {
-        targetBoxes = emptyList()
+        stateController.clearAll()
         smoothedBoxes.clear()
         postInvalidateOnAnimation()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val w = width.toFloat()
-        val h = height.toFloat()
-        if (w <= 0f || h <= 0f) return
+        if (!stateController.isOverlayEnabled) return
+
+        val w = width
+        val h = height
+        if (w <= 0 || h <= 0) return
 
         val nowElapsed = SystemClock.elapsedRealtime()
-        val activeTargets = targetBoxes.filter { (nowElapsed - it.timestampMs) <= 1400L }
+        val activeTargets = stateController.getVisibleBoxes(nowElapsed)
 
-        // Draw Top-Left HUD Status Badge (at y = 72dp below floating counter pill)
         drawHudStatusBadge(canvas, nowElapsed)
 
         if (activeTargets.isEmpty()) {
@@ -140,12 +414,14 @@ class ScannerHudOverlayView(context: Context) : View(context) {
             return
         }
 
-        // Remove stale keys no longer in activeTargets
+        getLocationOnScreen(screenLocation)
+        val winOffsetX = screenLocation[0]
+        val winOffsetY = screenLocation[1]
+
         val activeKeys = activeTargets.map { "${it.trackId}_${it.regionLabel}" }.toHashSet()
         val iterator = smoothedBoxes.entries.iterator()
         while (iterator.hasNext()) {
-            val entry = iterator.next()
-            if (entry.key !in activeKeys) {
+            if (iterator.next().key !in activeKeys) {
                 iterator.remove()
             }
         }
@@ -155,79 +431,78 @@ class ScannerHudOverlayView(context: Context) : View(context) {
         val reticleHalfPx = 6f * density
 
         for (box in activeTargets) {
+            val mapped = CoordinateTransform.mapNormalizedBoxToView(
+                box = box,
+                viewWidth = w,
+                viewHeight = h,
+                windowOffsetX = winOffsetX,
+                windowOffsetY = winOffsetY
+            ) ?: continue
+
             val key = "${box.trackId}_${box.regionLabel}"
             val current = smoothedBoxes[key]
-            val displayed: RectF
             if (current == null) {
-                displayed = RectF(box.left, box.top, box.right, box.bottom)
-                smoothedBoxes[key] = displayed
+                val initRect = RectF(mapped.leftPx, mapped.topPx, mapped.rightPx, mapped.bottomPx)
+                smoothedBoxes[key] = initRect
+                reusableRect.set(initRect)
             } else {
-                val nextLeft = lerp(current.left, box.left, 0.35f)
-                val nextTop = lerp(current.top, box.top, 0.35f)
-                val nextRight = lerp(current.right, box.right, 0.35f)
-                val nextBottom = lerp(current.bottom, box.bottom, 0.35f)
+                val nextLeft = lerp(current.left, mapped.leftPx, 0.35f)
+                val nextTop = lerp(current.top, mapped.topPx, 0.35f)
+                val nextRight = lerp(current.right, mapped.rightPx, 0.35f)
+                val nextBottom = lerp(current.bottom, mapped.bottomPx, 0.35f)
 
-                val delta = maxOf(
-                    abs(nextLeft - box.left),
-                    abs(nextTop - box.top),
-                    abs(nextRight - box.right),
-                    abs(nextBottom - box.bottom)
+                val deltaPx = maxOf(
+                    abs(nextLeft - mapped.leftPx),
+                    abs(nextTop - mapped.topPx),
+                    abs(nextRight - mapped.rightPx),
+                    abs(nextBottom - mapped.bottomPx)
                 )
-                if (delta > 0.002f) {
+                if (deltaPx > 1.5f) {
                     needsNextAnimationFrame = true
                 }
                 current.set(nextLeft, nextTop, nextRight, nextBottom)
-                displayed = current
+                reusableRect.set(current)
             }
 
-            reusableRect.set(
-                displayed.left * w,
-                displayed.top * h,
-                displayed.right * w,
-                displayed.bottom * h
-            )
+            val isFullBody = box.regionLabel == "BODY" || box.regionLabel == "PERSON"
 
-            val isBodyBox = box.regionLabel == "BODY"
-
-            // 1. Hollow Red Bounding Rectangle (NEVER fills or blurs interior)
+            // 1. Hollow Red Bounding Rectangle (interior is strictly transparent)
             canvas.drawRect(
                 reusableRect,
-                if (isBodyBox) bodyOuterBoxPaint else outerBoxPaint
+                if (isFullBody) secondaryOuterBoxPaint else outerBoxPaint
             )
 
-            // 2. Thick Tactical Corner L-Brackets at all 4 corners
+            // 2. Four L-Shaped Corner Brackets
             val arm = min(cornerArmPx, min(reusableRect.width() * 0.32f, reusableRect.height() * 0.32f))
-            // Top-Left corner
             canvas.drawLine(reusableRect.left, reusableRect.top, reusableRect.left + arm, reusableRect.top, cornerBracketPaint)
             canvas.drawLine(reusableRect.left, reusableRect.top, reusableRect.left, reusableRect.top + arm, cornerBracketPaint)
-            // Top-Right corner
+
             canvas.drawLine(reusableRect.right - arm, reusableRect.top, reusableRect.right, reusableRect.top, cornerBracketPaint)
             canvas.drawLine(reusableRect.right, reusableRect.top, reusableRect.right, reusableRect.top + arm, cornerBracketPaint)
-            // Bottom-Left corner
+
             canvas.drawLine(reusableRect.left, reusableRect.bottom - arm, reusableRect.left, reusableRect.bottom, cornerBracketPaint)
             canvas.drawLine(reusableRect.left, reusableRect.bottom, reusableRect.left + arm, reusableRect.bottom, cornerBracketPaint)
-            // Bottom-Right corner
+
             canvas.drawLine(reusableRect.right - arm, reusableRect.bottom, reusableRect.right, reusableRect.bottom, cornerBracketPaint)
             canvas.drawLine(reusableRect.right, reusableRect.bottom - arm, reusableRect.right, reusableRect.bottom, cornerBracketPaint)
 
-            // 3. Subtle Center Reticle Crosshair (+)
-            if (!isBodyBox) {
+            // 3. Center Crosshair Reticle
+            if (!isFullBody) {
                 val cx = reusableRect.centerX()
                 val cy = reusableRect.centerY()
                 canvas.drawLine(cx - reticleHalfPx, cy, cx + reticleHalfPx, cy, reticlePaint)
                 canvas.drawLine(cx, cy - reticleHalfPx, cx, cy + reticleHalfPx, reticlePaint)
             }
 
-            // 4. Top-Left (or Top-Right for BODY) Dark Pill Tag with Label + Confidence %
-            val pct = (box.confidence * 100f).roundToInt().coerceIn(1, 99)
-            val labelText = "${box.regionLabel} [$pct%]"
+            // 4. Compact Top Label (only displays confidence when genuinely provided by model)
+            val labelText = ScannerOverlayStateController.formatBoxLabel(box)
             val textWidth = tagTextPaint.measureText(labelText)
             val padH = 6f * density
             val padV = 3f * density
             val tagW = textWidth + padH * 2f
             val tagH = tagTextPaint.textSize + padV * 2f
 
-            val tagLeft = if (isBodyBox) {
+            val tagLeft = if (isFullBody) {
                 (reusableRect.right - tagW).coerceAtLeast(8f * density)
             } else {
                 reusableRect.left.coerceIn(8f * density, (w - tagW - 8f * density).coerceAtLeast(8f * density))
@@ -250,12 +525,13 @@ class ScannerHudOverlayView(context: Context) : View(context) {
     }
 
     private fun drawHudStatusBadge(canvas: Canvas, nowElapsed: Long) {
-        val ageMs = if (lastFrameTimestampMs > 0L) {
-            (nowElapsed - lastFrameTimestampMs).coerceIn(0L, 9999L)
+        val lastTs = stateController.lastFrameTimestampMs
+        val ageMs = if (lastTs > 0L) {
+            (nowElapsed - lastTs).coerceIn(0L, 9999L)
         } else {
             0L
         }
-        val statusText = "OBJECT DETECTION MODE • ${currentDiagnosticStatus.label} • ${ageMs}ms"
+        val statusText = "HUD SCANNER • ${stateController.currentDiagnosticStatus.label} • ${ageMs}ms"
         val textW = hudBannerTextPaint.measureText(statusText)
         val padH = 8f * density
         val padV = 4f * density

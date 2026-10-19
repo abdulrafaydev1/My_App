@@ -426,19 +426,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 }
             }
 
-            // 4b. Real-Time 4-Stage AI Vision Scanner & Auto-Skip on active social media apps (every 8 ticks = ~400ms)
+            // 4b. Real-Time Visual Scanner & Auto-Skip on active social media apps (every 8 ticks = ~400ms)
             if (activeKey != null && tickCounter % 8 == 0 && prefs.isAiVisualShieldEnabled) {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
                 val isYtHome = activeKey == "YOUTUBE" && isYoutubeHomePageActive(root)
-                if (!isYtHome) {
-                    if (hasStrictExplicitTags(root)) {
-                        triggerAutoSkipIfCooldownElapsed()
-                    } else if (hasVideoElementOnScreen(root)) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
-                            val now = SystemClock.elapsedRealtime()
-                            if (now - lastScreenshotCompletedElapsedMs >= 850L) {
-                                captureAndAnalyzeSocialFrame(activeKey)
-                            }
+                if (!isYtHome && hasVideoElementOnScreen(root)) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastScreenshotCompletedElapsedMs >= 850L) {
+                            captureAndAnalyzeSocialFrame(activeKey)
                         }
                     }
                 }
@@ -602,18 +598,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED
             ) {
                 checkBrowserForExplicitContent(packageName, event)
-            }
-        }
-
-        // v9.4 Strict UI Hashtag/Caption metadata check on content change
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            val activeKey = currentForegroundAppKey
-            if (activeKey != null && prefs.isAiVisualShieldEnabled) {
-                val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                val isYtHome = activeKey == "YOUTUBE" && isYoutubeHomePageActive(root)
-                if (!isYtHome && hasStrictExplicitTags(root)) {
-                    triggerAutoSkipIfCooldownElapsed()
-                }
             }
         }
 
@@ -1620,6 +1604,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 ensureScannerOverlayAttached()
             }
             val view = scannerHudOverlayView ?: return
+            view.stateController.isOverlayEnabled = true
             if (view.visibility != View.VISIBLE) {
                 view.visibility = View.VISIBLE
             }
@@ -1678,28 +1663,31 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
                                 val frameTs = SystemClock.elapsedRealtime()
-                                val (features, nextLumaGrid) = FramePixelExtractor.extractFeaturesFromBitmap(
+                                val features = AndroidSdkFaceInferenceProvider.analyzeBitmap(
                                     bitmap = swBitmap,
                                     contentItemId = itemIdSnapshot,
                                     timestampMs = frameTs,
-                                    isSupportedFeed = true,
-                                    prevLumaGrid = previousLumaGrid
+                                    isSupportedFeed = true
                                 )
                                 swBitmap.recycle()
-                                previousLumaGrid = nextLumaGrid
 
+                                val evalNowMs = SystemClock.elapsedRealtime()
                                 val filterConfig = FilterConfig(
                                     monitoringEnabled = prefs.isAiVisualShieldEnabled
                                 )
                                 val decision = decisionEngine.evaluateFrame(
                                     features = features,
                                     activeConfig = filterConfig,
-                                    nowMs = frameTs
+                                    nowMs = evalNowMs
                                 )
                                 currentScannerDiagnosticText = decision.diagnosticStatus.label
 
                                 // Update live tactical HUD overlay on MainThread if enabled
                                 tickerHandler.post {
+                                    if (currentContentItemId != itemIdSnapshot) {
+                                        // Stale async result after user scrolled to a new item
+                                        return@post
+                                    }
                                     if (currentForegroundAppKey == appKey &&
                                         !isOurAppScreenOpen &&
                                         prefs.isAiVisualShieldEnabled &&
@@ -1708,19 +1696,25 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                                         ensureScannerOverlayAttached()
                                         val view = scannerHudOverlayView
                                         if (view != null) {
+                                            view.stateController.isOverlayEnabled = true
                                             view.visibility = View.VISIBLE
                                             view.updateHudState(
                                                 boxes = decision.activeBoxes,
                                                 status = decision.diagnosticStatus,
-                                                frameTimestampMs = frameTs
+                                                frameTimestampMs = features.frameTimestampMs,
+                                                contentItemId = itemIdSnapshot,
+                                                nowMs = SystemClock.elapsedRealtime()
                                             )
                                         }
                                     } else {
                                         hideScannerBoundingBoxOverlay()
                                     }
 
-                                    if (decision.state == DecisionState.SKIP && prefs.isVisualAutoSkipEnabled) {
-                                        triggerAutoSkipIfCooldownElapsed()
+                                    if (decision.state == DecisionState.SKIP_CANDIDATE &&
+                                        prefs.isVisualAutoSkipEnabled &&
+                                        currentContentItemId == itemIdSnapshot
+                                    ) {
+                                        triggerAutoSkipIfCooldownElapsed(itemIdSnapshot)
                                     }
                                 }
                             }
@@ -1750,68 +1744,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Calibrated Skin Pixel Classifier (Combined RGB + YCbCr).
-     */
-    private fun isSkinPixel(p: Int): Boolean {
-        return isSkinPixel(Color.red(p), Color.green(p), Color.blue(p))
-    }
-
-    private fun isSkinPixel(r: Int, g: Int, b: Int): Boolean {
-        val y = 0.299 * r + 0.587 * g + 0.114 * b
-        val cb = 128.0 - 0.1687 * r - 0.3313 * g + 0.5 * b
-        val cr = 128.0 + 0.5 * r - 0.4187 * g - 0.0813 * b
-        return (r > 70 && g > 40 && b > 25 && r > g && r > b &&
-            (r - minOf(g, b)) >= 10 &&
-            cb in 77.0..126.0 && cr in 133.0..173.0 && y in 50.0..242.0)
-    }
-
-    /**
-     * STAGE 0: Metadata trigger limited to strictly explicit hashtags only.
-     * Whole-tag match so e.g. "#nudemakeup" / "#nudelipstick" never trigger.
-     */
-    private fun hasStrictExplicitTags(root: AccessibilityNodeInfo?): Boolean {
-        if (root == null) return false
-        try {
-            val textBuilder = StringBuilder()
-            collectNodeTexts(root, textBuilder, depth = 0, maxDepth = 40)
-            val match = STRICT_EXPLICIT_TAG_REGEX.find(textBuilder.toString().lowercase(Locale.ROOT))
-            if (match != null) {
-                Log.i(TAG, "Strict explicit tag detected in UI metadata: '${match.value}'")
-                return true
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return false
-    }
-
-    private fun collectNodeTexts(node: AccessibilityNodeInfo?, sb: StringBuilder, depth: Int, maxDepth: Int) {
-        if (node == null || depth > maxDepth) return
-        val t = node.text
-        if (!t.isNullOrEmpty()) {
-            sb.append(t).append(" ")
-        }
-        val cd = node.contentDescription
-        if (!cd.isNullOrEmpty()) {
-            sb.append(cd).append(" ")
-        }
-        for (i in 0 until node.childCount) {
-            val child = try { node.getChild(i) } catch (e: Exception) { null }
-            if (child != null) {
-                collectNodeTexts(child, sb, depth + 1, maxDepth)
-                try { child.recycle() } catch (e: Exception) {}
-            }
-        }
-    }
-
-    private fun triggerAutoSkipIfCooldownElapsed() {
+    private fun triggerAutoSkipIfCooldownElapsed(targetItemId: String = currentContentItemId) {
         if (!prefs.isVisualAutoSkipEnabled) return
+        if (targetItemId != currentContentItemId) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastAutoSkipElapsedMs < 2000L) return
+        if (!decisionEngine.markSkipExecuted(targetItemId, now)) return
         lastAutoSkipElapsedMs = now
 
-        val preSkipItemId = currentContentItemId
+        val preSkipItemId = targetItemId
         val preSkipRoot = try { rootInActiveWindow } catch (_: Exception) { null }
         val preSkipSignature = getScreenContentSignature(preSkipRoot)
 
@@ -1827,12 +1768,21 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 if (activeKey != null && !isOurAppScreenOpen) {
                     val postRoot = try { rootInActiveWindow } catch (_: Exception) { null }
                     val postSignature = getScreenContentSignature(postRoot)
-                    if (currentContentItemId == preSkipItemId &&
+                    val stillSameItem = currentContentItemId == preSkipItemId &&
                         preSkipSignature.isNotEmpty() &&
                         postSignature == preSkipSignature
-                    ) {
+
+                    val navState = decisionEngine.reportNavigationResult(
+                        contentItemId = preSkipItemId,
+                        navigationSucceeded = !stillSameItem
+                    )
+
+                    if (stillSameItem && navState == SkipActionState.BOUNDED_RETRY_AVAILABLE) {
                         Log.i(TAG, "Skip transition not observed after 600ms; executing 1 controlled retry swipe.")
-                        dispatchSwipeUpGestureOnly()
+                        if (decisionEngine.markSkipExecuted(preSkipItemId, SystemClock.elapsedRealtime())) {
+                            dispatchSwipeUpGestureOnly()
+                            decisionEngine.reportNavigationResult(preSkipItemId, navigationSucceeded = false)
+                        }
                     }
                     currentScrollSeq++
                     val nextId = "${activeKey}_skipped_${currentScrollSeq}"
@@ -1949,15 +1899,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     return
                 }
             }
-
-            // 3. Active Explicit Video Playback Check
-            if (root != null && hasActiveVideoPlayer(root)) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
-                    if (now - lastScreenshotCompletedElapsedMs >= 850L) {
-                        captureAndCheckBrowserFrame(browserPkg)
-                    }
-                }
-            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1984,108 +1925,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
     private fun containsExplicitKeyword(content: String, kw: String): Boolean {
         return content.contains(kw)
-    }
-
-    private fun hasActiveVideoPlayer(root: AccessibilityNodeInfo?): Boolean {
-        if (root == null) return false
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var count = 0
-        while (queue.isNotEmpty() && count < 60) {
-            val node = queue.removeFirst()
-            count++
-            val cls = node.className?.toString()?.lowercase(Locale.ROOT) ?: ""
-            if (cls.contains("surfaceview") || cls.contains("textureview") || cls.contains("videoview")) {
-                return true
-            }
-            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
-            if (desc.contains("video player") || desc.contains("html5 video")) {
-                return true
-            }
-            for (i in 0 until node.childCount) {
-                val child = try { node.getChild(i) } catch (e: Exception) { null }
-                if (child != null) queue.add(child)
-            }
-        }
-        return false
-    }
-
-    private fun captureAndCheckBrowserFrame(browserPkg: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastScreenshotCompletedElapsedMs < 850L) return
-
-        isScreenshotInFlight = true
-        try {
-            takeScreenshot(
-                Display.DEFAULT_DISPLAY,
-                visualAnalyzerExecutor,
-                object : AccessibilityService.TakeScreenshotCallback {
-                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
-                        val hwBuffer = screenshot.hardwareBuffer
-                        try {
-                            val hwBitmap = Bitmap.wrapHardwareBuffer(hwBuffer, screenshot.colorSpace)
-                            val swBitmap = hwBitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                            hwBuffer.close()
-                            hwBitmap?.recycle()
-                            if (swBitmap != null) {
-                                val scaled = Bitmap.createScaledBitmap(swBitmap, 80, 140, false)
-                                if (scaled != swBitmap) swBitmap.recycle()
-
-                                val skinRatio = computeOverallSkinRatio(scaled)
-                                scaled.recycle()
-
-                                if (skinRatio >= 0.32f) {
-                                    tickerHandler.post {
-                                        enforceBrowserBlock(browserPkg, "High Skin Video ($skinRatio)")
-                                    }
-                                }
-                            }
-                        } catch (e: Exception) {
-                            try { hwBuffer.close() } catch (_: Exception) {}
-                            e.printStackTrace()
-                        } finally {
-                            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
-                            isScreenshotInFlight = false
-                        }
-                    }
-
-                    override fun onFailure(errorCode: Int) {
-                        lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
-                        isScreenshotInFlight = false
-                    }
-                }
-            )
-        } catch (e: Exception) {
-            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
-            isScreenshotInFlight = false
-            e.printStackTrace()
-        }
-    }
-
-    private fun computeOverallSkinRatio(bitmap: Bitmap): Float {
-        val width = bitmap.width
-        val height = bitmap.height
-        if (width <= 0 || height <= 0) return 0f
-
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-
-        var skinCount = 0
-        val minY = (height * 0.12f).toInt()
-        val maxY = (height * 0.88f).toInt()
-        var inspectedTotal = 0
-
-        for (y in minY until maxY) {
-            val rowOffset = y * width
-            for (x in 0 until width) {
-                inspectedTotal++
-                if (isSkinPixel(pixels[rowOffset + x])) {
-                    skinCount++
-                }
-            }
-        }
-        return skinCount.toFloat() / maxOf(1, inspectedTotal)
     }
 
     private fun enforceBrowserBlock(browserPkg: String, reason: String) {

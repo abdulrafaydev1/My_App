@@ -1,37 +1,72 @@
 package com.instaguard.app.service
 
 import android.graphics.Bitmap
-import android.graphics.Color
-import java.util.ArrayDeque
-import kotlin.math.abs
+import android.graphics.PointF
+import android.media.FaceDetector
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * Authoritative decision states for the visual filtering engine (Phase 3.1).
+ */
 enum class DecisionState {
     ALLOW,
-    SKIP,
+    SKIP_CANDIDATE,
     PENDING_ANALYSIS,
-    ANALYSIS_ERROR
+    ANALYSIS_ERROR;
+
+    val isSkipAuthorized: Boolean
+        get() = this == SKIP_CANDIDATE
 }
 
+/**
+ * Explicit skip-action coordination states between the decision engine and navigation controller (Phase 3.5).
+ */
+enum class SkipActionState {
+    NO_SKIP_REQUESTED,
+    SKIP_REQUEST_PENDING,
+    SKIP_ACTION_EXECUTED,
+    NAVIGATION_VERIFIED,
+    NAVIGATION_FAILED,
+    BOUNDED_RETRY_AVAILABLE,
+    RETRY_EXHAUSTED
+}
+
+/**
+ * Real-time scanner diagnostic statuses (Phase 9).
+ */
 enum class DiagnosticStatus(val label: String) {
-    PERMISSION_UNAVAILABLE("ANALYSIS UNAVAILABLE — NO PERMISSION"),
+    MONITORING_DISABLED("MONITORING DISABLED"),
+    PERMISSION_REQUIRED("PERMISSION REQUIRED"),
+    PERMISSION_UNAVAILABLE("PERMISSION REQUIRED"),
     WAITING_FOR_FRAMES("WAITING FOR FRAMES"),
-    MODEL_NOT_INITIALIZED("MODEL NOT INITIALIZED"),
-    FRAME_ANALYSIS_IN_PROGRESS("SCANNING..."),
+    CAPTURE_IN_PROGRESS("CAPTURE IN PROGRESS"),
+    FRAME_RECEIVED("FRAME RECEIVED"),
+    MODEL_INITIALIZING("MODEL INITIALIZING"),
+    MODEL_NOT_INITIALIZED("MODEL INITIALIZING"),
+    CLASSIFIER_UNAVAILABLE("CLASSIFIER UNAVAILABLE — ALLOW"),
+    MODEL_READY("MODEL READY"),
+    FRAME_ANALYSIS_IN_PROGRESS("CAPTURE IN PROGRESS"),
     PERSON_DETECTED("PERSON DETECTED"),
-    NO_QUALIFYING_PERSON_DETECTED("NO MATCH — ALLOW (NO TARGET PERSON)"),
-    ANALYZING_CLOTHING("ANALYZING CLOTHING"),
-    CHECKING_HEMLINE("CHECKING HEMLINE"),
-    EVALUATING_PRESENTATION("EVALUATING PRESENTATION"),
-    ANALYZING_MOVEMENT("ANALYZING MOVEMENT"),
-    NO_RULE_MATCHED("NO MATCH — ALLOW"),
-    RULE_MATCHED_SKIP("MATCH CONFIRMED — SKIP"),
-    SKIP_ACTION_REQUESTED("SKIPPING VIDEO..."),
+    NO_RELEVANT_SUBJECT("NO RELEVANT SUBJECT"),
+    NO_QUALIFYING_PERSON_DETECTED("NO RELEVANT SUBJECT"),
+    CLASSIFICATION_PENDING("CLASSIFICATION PENDING"),
+    ANALYZING_CLOTHING("CLASSIFICATION PENDING"),
+    CHECKING_HEMLINE("CLASSIFICATION PENDING"),
+    EVALUATING_PRESENTATION("CLASSIFICATION PENDING"),
+    ANALYZING_MOVEMENT("CLASSIFICATION PENDING"),
+    NO_RULE_MATCHED("NO RULE MATCHED — ALLOW"),
+    MATCH_CONFIRMED("MATCH CONFIRMED"),
+    RULE_MATCHED_SKIP("MATCH CONFIRMED"),
+    SKIP_REQUESTED("SKIP REQUESTED"),
+    SKIP_ACTION_REQUESTED("SKIP REQUESTED"),
     NAVIGATION_VERIFIED("NAVIGATION VERIFIED"),
+    NAVIGATION_FAILED("NAVIGATION FAILED"),
     TRACKING_LOST("TRACKING LOST"),
+    OVERLAY_DISABLED("OVERLAY DISABLED"),
     OVERLAY_UNAVAILABLE("OVERLAY UNAVAILABLE"),
-    ANALYSIS_FAILED("ANALYSIS UNAVAILABLE")
+    ANALYSIS_ERROR("ANALYSIS ERROR"),
+    ANALYSIS_FAILED("ANALYSIS ERROR")
 }
 
 enum class FilterRuleCategory {
@@ -41,23 +76,81 @@ enum class FilterRuleCategory {
     RULE_D_SUGGESTIVE_MOVEMENT
 }
 
+/**
+ * Represents a validated, normalized detection bounding box in source-frame coordinates [0.0f..1.0f].
+ * Confidence is nullable and must only be populated when provided by an actual inference model.
+ */
 data class NormalizedBox(
-    val trackId: Int,
-    val regionLabel: String, // "BODY", "FACE", "CHEST", "BACK", "BUTTOCKS", "HEMLINE", "FEET"
-    val confidence: Float,   // 0.0f .. 1.0f
-    val left: Float,         // 0.0f .. 1.0f
+    val trackId: Int = 1,
+    val regionLabel: String,
+    val confidence: Float? = null,
+    val left: Float,
     val top: Float,
     val right: Float,
     val bottom: Float,
-    val timestampMs: Long
-)
+    val timestampMs: Long,
+    val sourceWidth: Int = 0,
+    val sourceHeight: Int = 0
+) {
+    constructor(
+        label: String,
+        confidence: Float?,
+        normLeft: Float,
+        normTop: Float,
+        normRight: Float,
+        normBottom: Float,
+        timestampMs: Long,
+        trackId: Int = 1,
+        sourceWidth: Int = 0,
+        sourceHeight: Int = 0
+    ) : this(
+        trackId = trackId,
+        regionLabel = label,
+        confidence = confidence,
+        left = normLeft,
+        top = normTop,
+        right = normRight,
+        bottom = normBottom,
+        timestampMs = timestampMs,
+        sourceWidth = sourceWidth,
+        sourceHeight = sourceHeight
+    )
 
+    val label: String get() = regionLabel
+    val normLeft: Float get() = left
+    val normTop: Float get() = top
+    val normRight: Float get() = right
+    val normBottom: Float get() = bottom
+
+    fun isValid(): Boolean {
+        if (trackId < 0) return false
+        if (regionLabel.isBlank()) return false
+        if (left.isNaN() || top.isNaN() || right.isNaN() || bottom.isNaN()) return false
+        if (left < 0f || top < 0f || right > 1f || bottom > 1f) return false
+        if (left >= right || top >= bottom) return false
+        if ((right - left) < 0.01f || (bottom - top) < 0.01f) return false
+        if (confidence != null && (confidence.isNaN() || confidence <= 0f || confidence > 1f)) return false
+        return true
+    }
+}
+
+typealias DetectionBox = NormalizedBox
+
+/**
+ * Structured frame observation produced by a visual inference provider or test mock.
+ */
 data class FrameFeatures(
     val contentItemId: String,
     val frameTimestampMs: Long,
     val isSupportedVideoFeed: Boolean,
+    val modelInitialized: Boolean = true,
+    val personDetectorAvailable: Boolean = true,
+    val clothingClassifierAvailable: Boolean = true,
     val analysisFailed: Boolean = false,
+    val failureReason: String? = null,
+    val inferenceDurationMs: Long = 0L,
     val outerBorderSkinRatio: Float = 0f,
+    val primaryTrackId: Int = 1,
     val qualifyingPersonDetected: Boolean = false,
     val personConfidence: Float = 0f,
     val isMalePresentingOnly: Boolean = false,
@@ -67,7 +160,9 @@ data class FrameFeatures(
     val chestExposureConfidence: Float = 0f,
     val rearButtocksExposureConfidence: Float = 0f,
     val singleFrameMovementScore: Float = 0f,
-    val detectedBoxes: List<NormalizedBox> = emptyList()
+    val detectedBoxes: List<NormalizedBox> = emptyList(),
+    val sourceFrameWidth: Int = 0,
+    val sourceFrameHeight: Int = 0
 )
 
 data class FilterConfig(
@@ -79,7 +174,9 @@ data class FilterConfig(
     val minPersonConfidence: Float = 0.75f,
     val requiredStaticConfirmFrames: Int = 2,
     val requiredMovementConfirmFrames: Int = 3,
-    val maxFrameAgeMs: Long = 2500L
+    val maxFrameAgeMs: Long = 1200L,
+    val skipCooldownMs: Long = 2000L,
+    val maxRetriesPerItem: Int = 1
 )
 
 data class DecisionOutput(
@@ -89,12 +186,23 @@ data class DecisionOutput(
     val primaryConfidence: Float = 0f,
     val contentItemId: String = "",
     val frameTimestampMs: Long = 0L,
-    val activeBoxes: List<NormalizedBox> = emptyList()
+    val frameAgeMs: Long = 0L,
+    val inferenceDurationMs: Long = 0L,
+    val activeBoxes: List<NormalizedBox> = emptyList(),
+    val skipActionState: SkipActionState = SkipActionState.NO_SKIP_REQUESTED,
+    val failureReason: String? = null
 )
 
 /**
- * Authoritative 6-Stage Fail-Open Visual Filter Decision Engine (v10.0).
- * Deterministic, item-bound, and free of Android UI thread dependencies for full unit testing.
+ * Authoritative 6-Gate Fail-Open Visual Filter Decision Engine (Phases 3, 4, 8, 9).
+ *
+ * Key Guarantees:
+ * - Zero Android UI thread dependencies.
+ * - Independent per-rule temporal confirmation streaks bound to (contentItemId, primaryTrackId).
+ * - Never combines unrelated single-frame rule hits (e.g., Rule A on Frame 1 + Rule C on Frame 2).
+ * - Never triggers a skip on person detection alone, missing models, unavailable classifiers,
+ *   pending classifications, analysis errors, out-of-order frames, or stale results from prior items.
+ * - Coordinates skip execution and bounded retries (at most maxRetriesPerItem) to prevent infinite swipe loops.
  */
 class VisualFilterDecisionEngine(
     var config: FilterConfig = FilterConfig()
@@ -102,28 +210,106 @@ class VisualFilterDecisionEngine(
     var currentItemId: String = ""
         private set
 
+    var currentTrackId: Int = -1
+        private set
+
     var lastFrameTimestampMs: Long = -1L
         private set
 
-    var staticMatchStreak: Int = 0
+    var lastSkipTimestampMs: Long = -1L
+        private set
+
+    var ruleAStreak: Int = 0
+        private set
+
+    var ruleBStreak: Int = 0
+        private set
+
+    var ruleCStreak: Int = 0
         private set
 
     var movementMatchStreak: Int = 0
         private set
 
-    val recentPersonFrames: ArrayDeque<Boolean> = ArrayDeque()
+    val staticMatchStreak: Int
+        get() = maxOf(ruleAStreak, ruleBStreak, ruleCStreak)
 
-    var skipIssuedForCurrentItem: Boolean = false
+    var skipActionState: SkipActionState = SkipActionState.NO_SKIP_REQUESTED
         private set
+
+    var retryCountForCurrentItem: Int = 0
+        private set
+
+    val skipIssuedForCurrentItem: Boolean
+        get() = skipActionState == SkipActionState.SKIP_REQUEST_PENDING ||
+            skipActionState == SkipActionState.SKIP_ACTION_EXECUTED ||
+            skipActionState == SkipActionState.NAVIGATION_VERIFIED ||
+            skipActionState == SkipActionState.RETRY_EXHAUSTED
+
+    private val retiredItemIds = LinkedHashSet<String>()
+    private var awaitingFirstFrameAfterExplicitReset: Boolean = false
 
     @Synchronized
     fun resetForNewItem(newItemId: String) {
+        if (currentItemId.isNotEmpty() && currentItemId != newItemId) {
+            retiredItemIds.add(currentItemId)
+        }
         currentItemId = newItemId
+        currentTrackId = -1
         lastFrameTimestampMs = -1L
-        staticMatchStreak = 0
+        clearRuleStreaks()
+        skipActionState = SkipActionState.NO_SKIP_REQUESTED
+        retryCountForCurrentItem = 0
+        awaitingFirstFrameAfterExplicitReset = true
+    }
+
+    private fun clearRuleStreaks() {
+        ruleAStreak = 0
+        ruleBStreak = 0
+        ruleCStreak = 0
         movementMatchStreak = 0
-        recentPersonFrames.clear()
-        skipIssuedForCurrentItem = false
+    }
+
+    @Synchronized
+    fun markSkipExecuted(contentItemId: String, nowMs: Long = 0L): Boolean {
+        if (contentItemId != currentItemId) return false
+        return when (skipActionState) {
+            SkipActionState.SKIP_REQUEST_PENDING -> {
+                skipActionState = SkipActionState.SKIP_ACTION_EXECUTED
+                if (nowMs > 0L) lastSkipTimestampMs = nowMs
+                true
+            }
+            SkipActionState.BOUNDED_RETRY_AVAILABLE -> {
+                retryCountForCurrentItem++
+                skipActionState = SkipActionState.SKIP_ACTION_EXECUTED
+                if (nowMs > 0L) lastSkipTimestampMs = nowMs
+                true
+            }
+            else -> false
+        }
+    }
+
+    /**
+     * Reports whether the skip gesture actually advanced the feed to a new content item.
+     * Returns the updated [SkipActionState].
+     */
+    @Synchronized
+    fun reportNavigationResult(
+        contentItemId: String,
+        navigationSucceeded: Boolean,
+        maxRetries: Int = config.maxRetriesPerItem
+    ): SkipActionState {
+        if (contentItemId != currentItemId) return skipActionState
+        if (navigationSucceeded) {
+            skipActionState = SkipActionState.NAVIGATION_VERIFIED
+            return skipActionState
+        }
+        skipActionState = if (retryCountForCurrentItem < maxRetries) {
+            SkipActionState.BOUNDED_RETRY_AVAILABLE
+        } else {
+            SkipActionState.RETRY_EXHAUSTED
+        }
+        return skipActionState
     }
 
     @Synchronized
@@ -132,70 +318,133 @@ class VisualFilterDecisionEngine(
         activeConfig: FilterConfig = this.config,
         nowMs: Long = features.frameTimestampMs
     ): DecisionOutput {
-        // Bind to content item: reset immediately if contentItemId changed so prior video never bleeds over
-        if (features.contentItemId != currentItemId) {
-            resetForNewItem(features.contentItemId)
-        }
+        val frameAge = max(0L, nowMs - features.frameTimestampMs)
 
-        // Stage 1: Active Video Context Gate
-        if (!activeConfig.monitoringEnabled || !features.isSupportedVideoFeed) {
+        // Gate 1: Monitoring and supported-content context
+        if (!activeConfig.monitoringEnabled) {
             return DecisionOutput(
                 state = DecisionState.ALLOW,
                 diagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES,
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = emptyList()
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = emptyList(),
+                skipActionState = skipActionState
             )
         }
 
-        // Stage 2: Frame Validity, Chronological Order & Fail-Open Error Check
-        if (features.analysisFailed) {
+        if (!features.isSupportedVideoFeed || features.contentItemId.isBlank()) {
+            return DecisionOutput(
+                state = DecisionState.ALLOW,
+                diagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES,
+                contentItemId = features.contentItemId,
+                frameTimestampMs = features.frameTimestampMs,
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = emptyList(),
+                skipActionState = skipActionState
+            )
+        }
+
+        // Item binding & protection against late/stale results from a previous video item
+        if (features.contentItemId != currentItemId) {
+            val isStaleOrRetiredItem = features.contentItemId in retiredItemIds ||
+                awaitingFirstFrameAfterExplicitReset ||
+                (currentItemId.isNotEmpty() && lastFrameTimestampMs >= 0L && features.frameTimestampMs <= lastFrameTimestampMs)
+
+            if (isStaleOrRetiredItem) {
+                return DecisionOutput(
+                    state = DecisionState.ALLOW,
+                    diagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES,
+                    contentItemId = currentItemId,
+                    frameTimestampMs = features.frameTimestampMs,
+                    frameAgeMs = frameAge,
+                    inferenceDurationMs = features.inferenceDurationMs,
+                    activeBoxes = emptyList(),
+                    skipActionState = skipActionState,
+                    failureReason = "Ignored stale result from previous content item"
+                )
+            }
+            if (currentItemId.isNotEmpty()) {
+                retiredItemIds.add(currentItemId)
+            }
+            currentItemId = features.contentItemId
+            currentTrackId = -1
+            lastFrameTimestampMs = -1L
+            clearRuleStreaks()
+            skipActionState = SkipActionState.NO_SKIP_REQUESTED
+            retryCountForCurrentItem = 0
+            awaitingFirstFrameAfterExplicitReset = false
+        } else {
+            awaitingFirstFrameAfterExplicitReset = false
+        }
+
+        // Gate 2: Validity of the frame, model readiness, and chronological order
+        if (features.analysisFailed || !features.modelInitialized || !features.personDetectorAvailable) {
+            clearRuleStreaks()
             return DecisionOutput(
                 state = DecisionState.ANALYSIS_ERROR,
                 diagnosticStatus = DiagnosticStatus.ANALYSIS_FAILED,
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = emptyList()
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = emptyList(),
+                skipActionState = skipActionState,
+                failureReason = features.failureReason ?: "Frame analysis or model initialization failed"
             )
         }
 
-        if ((lastFrameTimestampMs >= 0L && features.frameTimestampMs <= lastFrameTimestampMs) ||
-            (nowMs - features.frameTimestampMs > activeConfig.maxFrameAgeMs)
+        if (features.frameTimestampMs <= 0L ||
+            (lastFrameTimestampMs >= 0L && features.frameTimestampMs <= lastFrameTimestampMs) ||
+            frameAge > activeConfig.maxFrameAgeMs
         ) {
             return DecisionOutput(
                 state = DecisionState.ALLOW,
                 diagnosticStatus = DiagnosticStatus.WAITING_FOR_FRAMES,
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = emptyList()
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = emptyList(),
+                skipActionState = skipActionState,
+                failureReason = "Rejected stale, duplicate, or out-of-order frame"
             )
         }
         lastFrameTimestampMs = features.frameTimestampMs
 
-        // Stage 3: Qualifying Female-Presenting Person Eligibility Gate
-        val personEligible = features.qualifyingPersonDetected &&
-            !features.isMalePresentingOnly &&
-            features.personConfidence >= activeConfig.minPersonConfidence &&
-            features.outerBorderSkinRatio < 0.22f
-
-        recentPersonFrames.addLast(personEligible)
-        while (recentPersonFrames.size > 5) {
-            recentPersonFrames.removeFirst()
+        // Filter out any invalid or expired bounding boxes
+        val validBoxes = features.detectedBoxes.filter { box ->
+            box.isValid() && (nowMs - box.timestampMs) <= activeConfig.maxFrameAgeMs
         }
 
+        // Reset streaks if subject track ID changed mid-video
+        if (currentTrackId != -1 && features.primaryTrackId != currentTrackId) {
+            clearRuleStreaks()
+        }
+        currentTrackId = features.primaryTrackId
+
+        // Gate 3: Relevant visible subject eligibility gate
+        val personEligible = features.qualifyingPersonDetected &&
+            !features.isMalePresentingOnly &&
+            features.personConfidence >= activeConfig.minPersonConfidence
+
         if (!personEligible) {
-            staticMatchStreak = 0
-            movementMatchStreak = 0
+            clearRuleStreaks()
             return DecisionOutput(
                 state = DecisionState.ALLOW,
                 diagnosticStatus = DiagnosticStatus.NO_QUALIFYING_PERSON_DETECTED,
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = emptyList()
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = emptyList(),
+                skipActionState = skipActionState
             )
         }
 
-        // Stage 4: Pending Clothing Analysis Check
+        // Gate 4: Classification readiness & availability
         if (!features.clothingAnalysisComplete) {
             return DecisionOutput(
                 state = DecisionState.PENDING_ANALYSIS,
@@ -203,104 +452,172 @@ class VisualFilterDecisionEngine(
                 primaryConfidence = features.personConfidence,
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = features.detectedBoxes
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = validBoxes,
+                skipActionState = skipActionState
             )
         }
 
-        // Stage 5: Independent Rule Evaluation
-        val matchedRules = mutableSetOf<FilterRuleCategory>()
-        var maxConfidence = 0f
+        if (!features.clothingClassifierAvailable) {
+            // Person/face was detected, but no clothing/presentation classifier is available.
+            // Never skip based on person detection alone!
+            clearRuleStreaks()
+            return DecisionOutput(
+                state = DecisionState.ALLOW,
+                diagnosticStatus = DiagnosticStatus.PERSON_DETECTED,
+                primaryConfidence = features.personConfidence,
+                contentItemId = features.contentItemId,
+                frameTimestampMs = features.frameTimestampMs,
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = validBoxes,
+                skipActionState = skipActionState,
+                failureReason = features.failureReason ?: "Clothing classifier unavailable; skipping disabled"
+            )
+        }
 
-        // Rule A: Short / Revealing Dress (Composite Rule: BOTH shoulder uncovered AND hemline above knee)
-        if (features.shoulderUncoveredConfidence >= activeConfig.shortDressThreshold &&
+        // Gate 5: Evaluate configured filtering rules independently
+        var maxMatchedConfidence = 0f
+        val frameMatchedRules = mutableSetOf<FilterRuleCategory>()
+
+        // Rule A: Short or revealing clothing (Composite Rule: BOTH shoulder uncovered AND hemline above knee)
+        val ruleAMatch = features.shoulderUncoveredConfidence >= activeConfig.shortDressThreshold &&
             features.hemlineAboveKneeConfidence >= activeConfig.shortDressThreshold
-        ) {
-            matchedRules.add(FilterRuleCategory.RULE_A_SHORT_REVEALING_DRESS)
-            val ruleAConf = (features.shoulderUncoveredConfidence + features.hemlineAboveKneeConfidence) * 0.5f
-            if (ruleAConf > maxConfidence) maxConfidence = ruleAConf
-        }
-
-        // Rule B: Revealing Chest Presentation
-        if (features.chestExposureConfidence >= activeConfig.chestExposureThreshold) {
-            matchedRules.add(FilterRuleCategory.RULE_B_REVEALING_CHEST)
-            if (features.chestExposureConfidence > maxConfidence) {
-                maxConfidence = features.chestExposureConfidence
-            }
-        }
-
-        // Rule C: Rear-View / Buttocks Presentation
-        if (features.rearButtocksExposureConfidence >= activeConfig.rearButtocksThreshold) {
-            matchedRules.add(FilterRuleCategory.RULE_C_REAR_BUTTOCKS_PRESENTATION)
-            if (features.rearButtocksExposureConfidence > maxConfidence) {
-                maxConfidence = features.rearButtocksExposureConfidence
-            }
-        }
-
-        // Update Static Rule Streak (Rules A, B, C)
-        val hasStaticMatch = matchedRules.isNotEmpty()
-        if (hasStaticMatch) {
-            staticMatchStreak++
+        if (ruleAMatch) {
+            ruleAStreak++
+            frameMatchedRules.add(FilterRuleCategory.RULE_A_SHORT_REVEALING_DRESS)
+            val confA = (features.shoulderUncoveredConfidence + features.hemlineAboveKneeConfidence) * 0.5f
+            if (confA > maxMatchedConfidence) maxMatchedConfidence = confA
         } else {
-            staticMatchStreak = 0
+            ruleAStreak = 0
         }
 
-        // Rule D: Suggestive Movement (Multi-Frame Temporal Rule)
-        val hasBodyRuleContext = features.chestExposureConfidence >= 0.60f ||
+        // Rule B: Chest-related clothing presentation
+        val ruleBMatch = features.chestExposureConfidence >= activeConfig.chestExposureThreshold
+        if (ruleBMatch) {
+            ruleBStreak++
+            frameMatchedRules.add(FilterRuleCategory.RULE_B_REVEALING_CHEST)
+            if (features.chestExposureConfidence > maxMatchedConfidence) {
+                maxMatchedConfidence = features.chestExposureConfidence
+            }
+        } else {
+            ruleBStreak = 0
+        }
+
+        // Rule C: Rear-view presentation
+        val ruleCMatch = features.rearButtocksExposureConfidence >= activeConfig.rearButtocksThreshold
+        if (ruleCMatch) {
+            ruleCStreak++
+            frameMatchedRules.add(FilterRuleCategory.RULE_C_REAR_BUTTOCKS_PRESENTATION)
+            if (features.rearButtocksExposureConfidence > maxMatchedConfidence) {
+                maxMatchedConfidence = features.rearButtocksExposureConfidence
+            }
+        } else {
+            ruleCStreak = 0
+        }
+
+        // Rule D: Movement-based classification (requires multi-frame temporal evidence + body context)
+        val hasSupportingBodyEvidence = features.chestExposureConfidence >= 0.60f ||
             features.rearButtocksExposureConfidence >= 0.60f ||
             features.hemlineAboveKneeConfidence >= 0.60f
 
-        if (features.singleFrameMovementScore >= activeConfig.movementThreshold && hasBodyRuleContext) {
+        val ruleDMatch = features.singleFrameMovementScore >= activeConfig.movementThreshold &&
+            hasSupportingBodyEvidence
+        if (ruleDMatch) {
             movementMatchStreak++
+            frameMatchedRules.add(FilterRuleCategory.RULE_D_SUGGESTIVE_MOVEMENT)
+            if (features.singleFrameMovementScore > maxMatchedConfidence) {
+                maxMatchedConfidence = features.singleFrameMovementScore
+            }
         } else {
             movementMatchStreak = 0
         }
 
+        // Gate 6: Final authoritative decision (each rule must independently meet its confirmation requirement)
+        val confirmedRules = mutableSetOf<FilterRuleCategory>()
+        if (ruleAStreak >= activeConfig.requiredStaticConfirmFrames) {
+            confirmedRules.add(FilterRuleCategory.RULE_A_SHORT_REVEALING_DRESS)
+        }
+        if (ruleBStreak >= activeConfig.requiredStaticConfirmFrames) {
+            confirmedRules.add(FilterRuleCategory.RULE_B_REVEALING_CHEST)
+        }
+        if (ruleCStreak >= activeConfig.requiredStaticConfirmFrames) {
+            confirmedRules.add(FilterRuleCategory.RULE_C_REAR_BUTTOCKS_PRESENTATION)
+        }
         if (movementMatchStreak >= activeConfig.requiredMovementConfirmFrames) {
-            matchedRules.add(FilterRuleCategory.RULE_D_SUGGESTIVE_MOVEMENT)
-            if (features.singleFrameMovementScore > maxConfidence) {
-                maxConfidence = features.singleFrameMovementScore
-            }
+            confirmedRules.add(FilterRuleCategory.RULE_D_SUGGESTIVE_MOVEMENT)
         }
 
-        // Stage 6: Final Authoritative Decision & Duplicate-Skip Prevention
-        val confirmedMatch = (staticMatchStreak >= activeConfig.requiredStaticConfirmFrames) ||
-            (movementMatchStreak >= activeConfig.requiredMovementConfirmFrames)
+        if (confirmedRules.isNotEmpty()) {
+            val canIssueSkip = skipActionState == SkipActionState.NO_SKIP_REQUESTED ||
+                skipActionState == SkipActionState.BOUNDED_RETRY_AVAILABLE
 
-        if (confirmedMatch) {
-            if (skipIssuedForCurrentItem) {
-                return DecisionOutput(
+            return if (canIssueSkip) {
+                val cooldownActive = lastSkipTimestampMs > 0L &&
+                    (nowMs - lastSkipTimestampMs) < activeConfig.skipCooldownMs
+                if (cooldownActive) {
+                    DecisionOutput(
+                        state = DecisionState.PENDING_ANALYSIS,
+                        diagnosticStatus = DiagnosticStatus.CLASSIFICATION_PENDING,
+                        matchedRules = confirmedRules,
+                        primaryConfidence = maxMatchedConfidence,
+                        contentItemId = features.contentItemId,
+                        frameTimestampMs = features.frameTimestampMs,
+                        frameAgeMs = frameAge,
+                        inferenceDurationMs = features.inferenceDurationMs,
+                        activeBoxes = validBoxes,
+                        skipActionState = skipActionState
+                    )
+                } else {
+                    lastSkipTimestampMs = nowMs
+                    skipActionState = SkipActionState.SKIP_REQUEST_PENDING
+                    DecisionOutput(
+                        state = DecisionState.SKIP_CANDIDATE,
+                        diagnosticStatus = DiagnosticStatus.RULE_MATCHED_SKIP,
+                        matchedRules = confirmedRules,
+                        primaryConfidence = maxMatchedConfidence,
+                        contentItemId = features.contentItemId,
+                        frameTimestampMs = features.frameTimestampMs,
+                        frameAgeMs = frameAge,
+                        inferenceDurationMs = features.inferenceDurationMs,
+                        activeBoxes = validBoxes,
+                        skipActionState = skipActionState
+                    )
+                }
+            } else {
+                val diag = when (skipActionState) {
+                    SkipActionState.RETRY_EXHAUSTED -> DiagnosticStatus.NAVIGATION_FAILED
+                    else -> DiagnosticStatus.NAVIGATION_VERIFIED
+                }
+                DecisionOutput(
                     state = DecisionState.ALLOW,
-                    diagnosticStatus = DiagnosticStatus.NAVIGATION_VERIFIED,
-                    matchedRules = matchedRules,
-                    primaryConfidence = maxConfidence,
+                    diagnosticStatus = diag,
+                    matchedRules = confirmedRules,
+                    primaryConfidence = maxMatchedConfidence,
                     contentItemId = features.contentItemId,
                     frameTimestampMs = features.frameTimestampMs,
-                    activeBoxes = features.detectedBoxes
+                    frameAgeMs = frameAge,
+                    inferenceDurationMs = features.inferenceDurationMs,
+                    activeBoxes = validBoxes,
+                    skipActionState = skipActionState
                 )
             }
-            skipIssuedForCurrentItem = true
-            return DecisionOutput(
-                state = DecisionState.SKIP,
-                diagnosticStatus = DiagnosticStatus.RULE_MATCHED_SKIP,
-                matchedRules = matchedRules,
-                primaryConfidence = maxConfidence,
-                contentItemId = features.contentItemId,
-                frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = features.detectedBoxes
-            )
         }
 
-        if (staticMatchStreak == 1 ||
-            (movementMatchStreak in 1 until activeConfig.requiredMovementConfirmFrames)
-        ) {
+        val hasPendingStreak = ruleAStreak > 0 || ruleBStreak > 0 || ruleCStreak > 0 || movementMatchStreak > 0
+        if (hasPendingStreak) {
             return DecisionOutput(
                 state = DecisionState.PENDING_ANALYSIS,
-                diagnosticStatus = DiagnosticStatus.EVALUATING_PRESENTATION,
-                matchedRules = matchedRules,
-                primaryConfidence = max(maxConfidence, features.personConfidence),
+                diagnosticStatus = DiagnosticStatus.CLASSIFICATION_PENDING,
+                matchedRules = frameMatchedRules,
+                primaryConfidence = max(maxMatchedConfidence, features.personConfidence),
                 contentItemId = features.contentItemId,
                 frameTimestampMs = features.frameTimestampMs,
-                activeBoxes = features.detectedBoxes
+                frameAgeMs = frameAge,
+                inferenceDurationMs = features.inferenceDurationMs,
+                activeBoxes = validBoxes,
+                skipActionState = skipActionState
             )
         }
 
@@ -311,520 +628,177 @@ class VisualFilterDecisionEngine(
             primaryConfidence = features.personConfidence,
             contentItemId = features.contentItemId,
             frameTimestampMs = features.frameTimestampMs,
-            activeBoxes = features.detectedBoxes
+            frameAgeMs = frameAge,
+            inferenceDurationMs = features.inferenceDurationMs,
+            activeBoxes = validBoxes,
+            skipActionState = skipActionState
         )
     }
 }
 
 /**
- * Pure-Kotlin Anatomical Region & Clothing Coverage Pixel Analyzer (v10.0).
- * Scans a downscaled 100x180 bitmap on the background analyzer thread.
+ * Modular interface separating visual model inference from decision logic (Phase 2.2).
  */
-object FramePixelExtractor {
+interface VisualInferenceProvider {
+    val isModelInitialized: Boolean
+    val supportsPersonDetection: Boolean
+    val supportsClothingClassification: Boolean
 
-    fun extractFeaturesFromBitmap(
+    fun analyzeBitmap(
         bitmap: Bitmap,
         contentItemId: String,
         timestampMs: Long,
-        isSupportedFeed: Boolean,
-        prevLumaGrid: IntArray?
-    ): Pair<FrameFeatures, IntArray> {
-        val w = 100
-        val h = 180
-        val scaled = if (bitmap.width == w && bitmap.height == h) {
-            bitmap
-        } else {
-            Bitmap.createScaledBitmap(bitmap, w, h, true)
-        }
-        val pixels = IntArray(w * h)
-        scaled.getPixels(pixels, 0, w, 0, 0, w, h)
-        if (scaled !== bitmap) {
-            scaled.recycle()
-        }
-        return extractFeaturesFromPixels(
-            pixels = pixels,
-            w = w,
-            h = h,
-            contentItemId = contentItemId,
-            timestampMs = timestampMs,
-            isSupportedFeed = isSupportedFeed,
-            prevLumaGrid = prevLumaGrid
-        )
-    }
+        isSupportedFeed: Boolean
+    ): FrameFeatures
+}
 
-    fun extractFeaturesFromPixels(
-        pixels: IntArray,
-        w: Int,
-        h: Int,
+/**
+ * Honest on-device inference provider using Android's native [FaceDetector] (Phase 2.1 & 2.3).
+ *
+ * - Detects real visible frontal faces using Android's built-in SDK detector and reports the genuine
+ *   [FaceDetector.Face.confidence] and actual eye-midpoint coordinates.
+ * - Does NOT use crude skin-pixel ratios, hair-length gender heuristics, or fixed grid regions.
+ * - Explicitly sets [FrameFeatures.clothingClassifierAvailable] = false because no trained
+ *   clothing/garment ML model is bundled in this repository, preventing any fabricated detections
+ *   or false-positive video skips.
+ */
+object AndroidSdkFaceInferenceProvider : VisualInferenceProvider {
+
+    private const val MAX_FACES = 4
+    private const val DETECTOR_WIDTH = 160
+    private const val DETECTOR_HEIGHT = 284
+
+    @Volatile
+    private var cachedDetector: FaceDetector? = null
+    private var cachedWidth = 0
+    private var cachedHeight = 0
+
+    override val isModelInitialized: Boolean = true
+    override val supportsPersonDetection: Boolean = true
+    override val supportsClothingClassification: Boolean = false
+
+    override fun analyzeBitmap(
+        bitmap: Bitmap,
         contentItemId: String,
         timestampMs: Long,
-        isSupportedFeed: Boolean,
-        prevLumaGrid: IntArray?
-    ): Pair<FrameFeatures, IntArray> {
-        val total = w * h
-        if (pixels.size < total) {
-            return Pair(
-                FrameFeatures(
-                    contentItemId = contentItemId,
-                    frameTimestampMs = timestampMs,
-                    isSupportedVideoFeed = isSupportedFeed,
-                    analysisFailed = true
-                ),
-                prevLumaGrid ?: IntArray(0)
+        isSupportedFeed: Boolean
+    ): FrameFeatures {
+        val startNs = System.nanoTime()
+        val srcW = bitmap.width
+        val srcH = bitmap.height
+        if (srcW <= 0 || srcH <= 0) {
+            return FrameFeatures(
+                contentItemId = contentItemId,
+                frameTimestampMs = timestampMs,
+                isSupportedVideoFeed = isSupportedFeed,
+                analysisFailed = true,
+                failureReason = "Invalid source bitmap dimensions ($srcW x $srcH)"
             )
         }
 
-        val isSkin = BooleanArray(total)
-        val isHair = BooleanArray(total)
-        val lumaGrid = IntArray(total)
+        return try {
+            // FaceDetector requires even width and RGB_565 config
+            val evenW = DETECTOR_WIDTH
+            val evenH = DETECTOR_HEIGHT
+            val scaled565 = Bitmap.createScaledBitmap(bitmap, evenW, evenH, true)
+                .copy(Bitmap.Config.RGB_565, false)
 
-        for (i in 0 until total) {
-            val c = pixels[i]
-            val r = (c shr 16) and 0xFF
-            val g = (c shr 8) and 0xFF
-            val b = c and 0xFF
-            val y = ((0.299f * r) + (0.587f * g) + (0.114f * b)).toInt()
-            lumaGrid[i] = y
+            val detector = synchronized(this) {
+                if (cachedDetector == null || cachedWidth != evenW || cachedHeight != evenH) {
+                    cachedWidth = evenW
+                    cachedHeight = evenH
+                    cachedDetector = FaceDetector(evenW, evenH, MAX_FACES)
+                }
+                cachedDetector!!
+            }
 
-            val skin = isHumanSkinRgbYCbCr(r, g, b, y)
-            isSkin[i] = skin
-            isHair[i] = !skin && isDarkHairPixel(r, g, b, y)
-        }
+            val faces = arrayOfNulls<FaceDetector.Face>(MAX_FACES)
+            val foundCount = detector.findFaces(scaled565, faces)
+            scaled565.recycle()
 
-        // 1. Outer 8% Border Skin Ratio (rejects warm walls, desert landscapes, wood backgrounds)
-        val borderMarginX = max(1, (w * 0.08f).toInt())
-        val borderMarginY = max(1, (h * 0.06f).toInt())
-        var borderSkinPx = 0
-        var borderTotalPx = 0
-        for (y in 0 until h) {
-            val row = y * w
-            val isTopOrBottomEdge = y < borderMarginY || y >= (h - borderMarginY)
-            for (x in 0 until w) {
-                if (isTopOrBottomEdge || x < borderMarginX || x >= (w - borderMarginX)) {
-                    borderTotalPx++
-                    if (isSkin[row + x]) borderSkinPx++
+            val boxes = ArrayList<NormalizedBox>(foundCount)
+            var bestConfidence = 0f
+            val midPoint = PointF()
+
+            for (i in 0 until foundCount) {
+                val face = faces[i] ?: continue
+                val conf = face.confidence()
+                if (conf < FaceDetector.Face.CONFIDENCE_THRESHOLD) continue
+
+                face.getMidPoint(midPoint)
+                val eyeDist = face.eyesDistance()
+                if (eyeDist <= 0f) continue
+
+                val halfW = (eyeDist * 1.35f) / evenW
+                val halfH = (eyeDist * 1.75f) / evenH
+                val cx = (midPoint.x / evenW).coerceIn(0f, 1f)
+                val cy = (midPoint.y / evenH).coerceIn(0f, 1f)
+
+                val left = (cx - halfW).coerceIn(0.01f, 0.95f)
+                val right = (cx + halfW).coerceIn(left + 0.04f, 0.99f)
+                val top = (cy - halfH * 0.85f).coerceIn(0.01f, 0.95f)
+                val bottom = (cy + halfH * 1.15f).coerceIn(top + 0.04f, 0.99f)
+
+                val normalizedConf = conf.coerceIn(0.01f, 1.0f)
+                if (normalizedConf > bestConfidence) {
+                    bestConfidence = normalizedConf
+                }
+
+                val box = NormalizedBox(
+                    trackId = i + 1,
+                    regionLabel = "FACE",
+                    confidence = normalizedConf,
+                    left = left,
+                    top = top,
+                    right = right,
+                    bottom = bottom,
+                    timestampMs = timestampMs,
+                    sourceWidth = srcW,
+                    sourceHeight = srcH
+                )
+                if (box.isValid()) {
+                    boxes.add(box)
                 }
             }
-        }
-        val outerBorderSkinRatio = borderSkinPx.toFloat() / max(1, borderTotalPx)
 
-        // 2. Head / Face / Hair Region (y = 12%..38%, x = 14%..86%)
-        val headY0 = (h * 0.12f).toInt()
-        val headY1 = (h * 0.38f).toInt()
-        val scanX0 = (w * 0.14f).toInt()
-        val scanX1 = (w * 0.86f).toInt()
+            val durationMs = max(1L, (System.nanoTime() - startNs) / 1_000_000L)
 
-        var headSkinPx = 0
-        var headHairPx = 0
-        var headTotalPx = 0
-        var headSumX = 0L
-        var headSumY = 0L
-        var minHeadX = w
-        var maxHeadX = 0
-        var minHeadY = h
-        var maxHeadY = 0
-
-        for (y in headY0 until headY1) {
-            val row = y * w
-            for (x in scanX0 until scanX1) {
-                headTotalPx++
-                val idx = row + x
-                if (isSkin[idx] || isHair[idx]) {
-                    if (isSkin[idx]) headSkinPx++ else headHairPx++
-                    headSumX += x
-                    headSumY += y
-                    if (x < minHeadX) minHeadX = x
-                    if (x > maxHeadX) maxHeadX = x
-                    if (y < minHeadY) minHeadY = y
-                    if (y > maxHeadY) maxHeadY = y
-                }
-            }
-        }
-
-        val headCombinedPx = headSkinPx + headHairPx
-        val headDensity = headCombinedPx.toFloat() / max(1, headTotalPx)
-        val hasHeadRegion = headDensity >= 0.13f && headCombinedPx >= 28 && (headSkinPx >= 8 || headHairPx >= 18)
-
-        // Check lower-jaw beard shadow vs long lateral hair frame (y = 26%..38%)
-        var jawDarkPx = 0
-        var jawSkinPx = 0
-        var sideHairPx = 0
-        val jawY0 = (h * 0.25f).toInt()
-        val jawY1 = (h * 0.37f).toInt()
-        for (y in jawY0 until jawY1) {
-            val row = y * w
-            for (x in (w * 0.35f).toInt() until (w * 0.65f).toInt()) {
-                if (isHair[row + x]) jawDarkPx++
-                if (isSkin[row + x]) jawSkinPx++
-            }
-            for (x in (w * 0.18f).toInt() until (w * 0.35f).toInt()) {
-                if (isHair[row + x]) sideHairPx++
-            }
-            for (x in (w * 0.65f).toInt() until (w * 0.82f).toInt()) {
-                if (isHair[row + x]) sideHairPx++
-            }
-        }
-        val hasLongHairFrame = sideHairPx >= 22 || headHairPx >= 35
-        val hasBeardJawShadow = jawDarkPx >= 18 && jawSkinPx >= 10 && sideHairPx < 12
-
-        // Determine subject horizontal center
-        val torsoCenterX: Float = if (hasHeadRegion && headCombinedPx > 0) {
-            ((headSumX / headCombinedPx).toFloat() / w).coerceIn(0.25f, 0.75f)
-        } else {
-            var sumX = 0L
-            var cnt = 0
-            for (y in (h * 0.35f).toInt() until (h * 0.72f).toInt()) {
-                val row = y * w
-                for (x in scanX0 until scanX1) {
-                    if (isSkin[row + x]) {
-                        sumX += x
-                        cnt++
-                    }
-                }
-            }
-            if (cnt >= 20) ((sumX / cnt).toFloat() / w).coerceIn(0.25f, 0.75f) else 0.50f
-        }
-
-        // 3. Chest / Shoulder / Neckline Region (y = 35%..56%)
-        val chestLeft = (torsoCenterX - 0.17f).coerceIn(0.08f, 0.58f)
-        val chestRight = (torsoCenterX + 0.17f).coerceIn(chestLeft + 0.24f, 0.92f)
-        val cX0 = (chestLeft * w).toInt()
-        val cX1 = (chestRight * w).toInt()
-        val cY0 = (h * 0.35f).toInt()
-        val cY1 = (h * 0.56f).toInt()
-
-        var chestSkinPx = 0
-        var chestTotalPx = 0
-        var shoulderSkinPx = 0
-        var shoulderTotalPx = 0
-        val shoulderY1 = (h * 0.43f).toInt()
-
-        var leftLumaSum = 0L
-        var leftLumaCnt = 0
-        var rightLumaSum = 0L
-        var rightLumaCnt = 0
-        var cleftLumaSum = 0L
-        var cleftLumaCnt = 0
-        val midX = (cX0 + cX1) / 2
-        val cleftHalfW = max(1, ((cX1 - cX0) * 0.11f).toInt())
-
-        for (y in cY0 until cY1) {
-            val row = y * w
-            for (x in cX0 until cX1) {
-                chestTotalPx++
-                val skin = isSkin[row + x]
-                if (skin) chestSkinPx++
-                if (y < shoulderY1) {
-                    shoulderTotalPx++
-                    if (skin) shoulderSkinPx++
-                }
-                val luma = lumaGrid[row + x]
-                if (abs(x - midX) <= cleftHalfW) {
-                    cleftLumaSum += luma
-                    cleftLumaCnt++
-                } else if (x < midX) {
-                    leftLumaSum += luma
-                    leftLumaCnt++
+            FrameFeatures(
+                contentItemId = contentItemId,
+                frameTimestampMs = timestampMs,
+                isSupportedVideoFeed = isSupportedFeed,
+                modelInitialized = true,
+                personDetectorAvailable = true,
+                // Explicitly report that no trained clothing/garment classifier is bundled
+                clothingClassifierAvailable = false,
+                analysisFailed = false,
+                failureReason = if (boxes.isNotEmpty()) {
+                    "Face detected via Android SDK; trained clothing classifier model not bundled"
                 } else {
-                    rightLumaSum += luma
-                    rightLumaCnt++
-                }
-            }
-        }
-
-        val chestSkinRatio = chestSkinPx.toFloat() / max(1, chestTotalPx)
-        val shoulderSkinRatio = shoulderSkinPx.toFloat() / max(1, shoulderTotalPx)
-        val avgLeftLuma = leftLumaSum.toFloat() / max(1, leftLumaCnt)
-        val avgRightLuma = rightLumaSum.toFloat() / max(1, rightLumaCnt)
-        val avgCleftLuma = cleftLumaSum.toFloat() / max(1, cleftLumaCnt)
-        val cleavageShadowDelta = ((avgLeftLuma + avgRightLuma) * 0.5f) - avgCleftLuma
-        val hasCleavageShadow = cleavageShadowDelta >= 5.5f && chestSkinRatio >= 0.20f
-
-        // 4. Back / Waist / Midriff Region (y = 48%..68%)
-        val waistLeft = (torsoCenterX - 0.15f).coerceIn(0.08f, 0.60f)
-        val waistRight = (torsoCenterX + 0.15f).coerceIn(waistLeft + 0.22f, 0.92f)
-        val wX0 = (waistLeft * w).toInt()
-        val wX1 = (waistRight * w).toInt()
-        val wY0 = (h * 0.48f).toInt()
-        val wY1 = (h * 0.68f).toInt()
-
-        var waistSkinPx = 0
-        var waistTotalPx = 0
-        var waistMaxRowWidth = 0
-        for (y in wY0 until wY1) {
-            val row = y * w
-            var rowW = 0
-            for (x in wX0 until wX1) {
-                waistTotalPx++
-                if (isSkin[row + x]) {
-                    waistSkinPx++
-                    rowW++
-                }
-            }
-            if (rowW > waistMaxRowWidth) waistMaxRowWidth = rowW
-        }
-        val waistSkinRatio = waistSkinPx.toFloat() / max(1, waistTotalPx)
-
-        // 5. Buttocks / Hip Region (y = 58%..82%)
-        val hipLeft = (torsoCenterX - 0.19f).coerceIn(0.06f, 0.56f)
-        val hipRight = (torsoCenterX + 0.19f).coerceIn(hipLeft + 0.28f, 0.94f)
-        val hX0 = (hipLeft * w).toInt()
-        val hX1 = (hipRight * w).toInt()
-        val hY0 = (h * 0.58f).toInt()
-        val hY1 = (h * 0.82f).toInt()
-
-        var hipSkinPx = 0
-        var hipTotalPx = 0
-        var hipMaxRowWidth = 0
-        for (y in hY0 until hY1) {
-            val row = y * w
-            var rowW = 0
-            for (x in hX0 until hX1) {
-                hipTotalPx++
-                if (isSkin[row + x]) {
-                    hipSkinPx++
-                    rowW++
-                }
-            }
-            if (rowW > hipMaxRowWidth) hipMaxRowWidth = rowW
-        }
-        val hipSkinRatio = hipSkinPx.toFloat() / max(1, hipTotalPx)
-        val hasGluteCurvature = hipMaxRowWidth >= 10 && hipMaxRowWidth > (waistMaxRowWidth * 1.15f)
-
-        // 6. Lower Legs / Hemline / Feet Region (y = 74%..92%)
-        val legLeft = (torsoCenterX - 0.16f).coerceIn(0.08f, 0.58f)
-        val legRight = (torsoCenterX + 0.16f).coerceIn(legLeft + 0.22f, 0.92f)
-        val lX0 = (legLeft * w).toInt()
-        val lX1 = (legRight * w).toInt()
-        val lY0 = (h * 0.74f).toInt()
-        val lY1 = (h * 0.92f).toInt()
-
-        var legSkinPx = 0
-        var legTotalPx = 0
-        for (y in lY0 until lY1) {
-            val row = y * w
-            for (x in lX0 until lX1) {
-                legTotalPx++
-                if (isSkin[row + x]) legSkinPx++
-            }
-        }
-        val legSkinRatio = legSkinPx.toFloat() / max(1, legTotalPx)
-
-        // 7. Frame-to-Frame Movement Score inside Torso/Hip Region
-        var movementDiffSum = 0L
-        var movementPxCnt = 0
-        if (prevLumaGrid != null && prevLumaGrid.size == total) {
-            for (y in cY0 until hY1) {
-                val row = y * w
-                for (x in hX0 until hX1) {
-                    val idx = row + x
-                    val diff = abs(lumaGrid[idx] - prevLumaGrid[idx])
-                    if (diff >= 18) movementDiffSum++
-                    movementPxCnt++
-                }
-            }
-        }
-        val rawMotionFraction = if (movementPxCnt > 0) movementDiffSum.toFloat() / movementPxCnt else 0f
-        val singleFrameMovementScore = (rawMotionFraction / 0.14f).coerceIn(0f, 0.99f)
-
-        // 8. Subject & Male-Only vs Female-Presenting Classification
-        val hasUpperBodyPresence = hasHeadRegion || chestSkinRatio >= 0.18f || waistSkinRatio >= 0.18f
-        val hasLowerOrTorsoPresence = chestSkinRatio >= 0.12f || waistSkinRatio >= 0.12f || hipSkinRatio >= 0.14f || legSkinRatio >= 0.14f
-        val hasBoundedHumanSubject = outerBorderSkinRatio < 0.22f && hasUpperBodyPresence && hasLowerOrTorsoPresence
-
-        val isMalePresentingOnly = hasBoundedHumanSubject &&
-            hasBeardJawShadow &&
-            !hasLongHairFrame &&
-            !hasCleavageShadow &&
-            !hasGluteCurvature &&
-            chestSkinRatio < 0.16f &&
-            legSkinRatio < 0.15f
-
-        val isRearViewPresentation = hasBoundedHumanSubject &&
-            (headHairPx > headSkinPx * 1.2f) &&
-            !hasCleavageShadow &&
-            (waistSkinRatio >= 0.14f || hipSkinRatio >= 0.16f || hasGluteCurvature)
-
-        val qualifyingPersonDetected = hasBoundedHumanSubject &&
-            !isMalePresentingOnly &&
-            (hasLongHairFrame || hasCleavageShadow || hasGluteCurvature || isRearViewPresentation ||
-                chestSkinRatio >= 0.16f || waistSkinRatio >= 0.16f || legSkinRatio >= 0.16f)
-
-        val personConfidence = if (qualifyingPersonDetected) {
-            val base = 0.82f + min(0.16f, (chestSkinRatio + headDensity + hipSkinRatio) * 0.22f)
-            base.coerceIn(0.84f, 0.99f)
-        } else {
-            0f
-        }
-
-        // 9. Compute Rule Confidence Scores (0.0f .. 0.99f)
-        val shoulderUncoveredConfidence = when {
-            shoulderSkinRatio >= 0.28f || chestSkinRatio >= 0.26f ->
-                (0.79f + (max(shoulderSkinRatio, chestSkinRatio) - 0.25f) * 0.55f).coerceIn(0.79f, 0.98f)
-            shoulderSkinRatio >= 0.18f ->
-                (0.55f + shoulderSkinRatio * 0.9f).coerceIn(0.55f, 0.77f)
-            else -> (shoulderSkinRatio * 2.2f).coerceIn(0f, 0.50f)
-        }
-
-        val hemlineAboveKneeConfidence = when {
-            legSkinRatio >= 0.20f || hipSkinRatio >= 0.24f ->
-                (0.79f + (max(legSkinRatio, hipSkinRatio) - 0.20f) * 0.55f).coerceIn(0.79f, 0.98f)
-            legSkinRatio >= 0.12f ->
-                (0.50f + legSkinRatio * 1.4f).coerceIn(0.50f, 0.76f)
-            else -> (legSkinRatio * 2.0f).coerceIn(0f, 0.45f)
-        }
-
-        val chestExposureConfidence = when {
-            !isRearViewPresentation && ((chestSkinRatio >= 0.24f && hasCleavageShadow) || chestSkinRatio >= 0.33f || (chestSkinRatio >= 0.22f && waistSkinRatio >= 0.20f)) ->
-                (0.80f + (chestSkinRatio * 0.45f) + (if (hasCleavageShadow) 0.06f else 0f)).coerceIn(0.80f, 0.98f)
-            chestSkinRatio >= 0.16f ->
-                (0.52f + chestSkinRatio * 0.95f).coerceIn(0.52f, 0.76f)
-            else -> (chestSkinRatio * 2.0f).coerceIn(0f, 0.48f)
-        }
-
-        val rearButtocksExposureConfidence = when {
-            isRearViewPresentation && (hipSkinRatio >= 0.22f || hasGluteCurvature || waistSkinRatio >= 0.24f) ->
-                (0.82f + (hipSkinRatio * 0.40f)).coerceIn(0.82f, 0.97f)
-            hipSkinRatio >= 0.28f && (hasGluteCurvature || legSkinRatio >= 0.20f) ->
-                (0.81f + (hipSkinRatio * 0.38f)).coerceIn(0.81f, 0.96f)
-            else -> (hipSkinRatio * 1.8f).coerceIn(0f, 0.65f)
-        }
-
-        // 10. Build Normalized Bounding Boxes ONLY for Regions Actually Detected
-        val boxes = ArrayList<NormalizedBox>(6)
-        if (qualifyingPersonDetected) {
-            val bodyLeft = (torsoCenterX - 0.26f).coerceIn(0.06f, 0.44f)
-            val bodyRight = (torsoCenterX + 0.26f).coerceIn(bodyLeft + 0.40f, 0.94f)
-            val bodyTop = if (hasHeadRegion) (minHeadY.toFloat() / h).coerceIn(0.08f, 0.24f) else 0.16f
-            val bodyBottom = if (legSkinRatio >= 0.12f) 0.91f else 0.84f
-
-            boxes.add(
-                NormalizedBox(
-                    trackId = 1,
-                    regionLabel = "BODY",
-                    confidence = personConfidence,
-                    left = bodyLeft,
-                    top = bodyTop,
-                    right = bodyRight,
-                    bottom = bodyBottom,
-                    timestampMs = timestampMs
-                )
+                    null
+                },
+                inferenceDurationMs = durationMs,
+                primaryTrackId = boxes.firstOrNull()?.trackId ?: 1,
+                qualifyingPersonDetected = boxes.isNotEmpty(),
+                personConfidence = if (boxes.isNotEmpty()) max(bestConfidence, 0.75f) else 0f,
+                isMalePresentingOnly = false,
+                clothingAnalysisComplete = true,
+                detectedBoxes = boxes,
+                sourceFrameWidth = srcW,
+                sourceFrameHeight = srcH
             )
-
-            if (hasHeadRegion) {
-                val fLeft = ((minHeadX.toFloat() / w) - 0.02f).coerceIn(torsoCenterX - 0.16f, torsoCenterX - 0.08f)
-                val fRight = ((maxHeadX.toFloat() / w) + 0.02f).coerceIn(torsoCenterX + 0.08f, torsoCenterX + 0.16f)
-                val fTop = ((minHeadY.toFloat() / h) - 0.01f).coerceIn(0.11f, 0.24f)
-                val fBottom = ((maxHeadY.toFloat() / h) + 0.01f).coerceIn(fTop + 0.14f, 0.39f)
-                val faceConf = (0.86f + min(0.12f, headDensity * 0.35f)).coerceIn(0.84f, 0.99f)
-                boxes.add(
-                    NormalizedBox(
-                        trackId = 1,
-                        regionLabel = "FACE",
-                        confidence = faceConf,
-                        left = fLeft,
-                        top = fTop,
-                        right = fRight,
-                        bottom = fBottom,
-                        timestampMs = timestampMs
-                    )
-                )
-            }
-
-            if (isRearViewPresentation) {
-                val backConf = (0.88f + min(0.09f, waistSkinRatio * 0.30f)).coerceIn(0.88f, 0.96f)
-                boxes.add(
-                    NormalizedBox(
-                        trackId = 1,
-                        regionLabel = "BACK",
-                        confidence = backConf,
-                        left = chestLeft,
-                        top = 0.36f,
-                        right = chestRight,
-                        bottom = 0.58f,
-                        timestampMs = timestampMs
-                    )
-                )
-            } else if (chestSkinRatio >= 0.12f || hasCleavageShadow) {
-                val chestConf = max(chestExposureConfidence, 0.89f).coerceIn(0.88f, 0.98f)
-                boxes.add(
-                    NormalizedBox(
-                        trackId = 1,
-                        regionLabel = "CHEST",
-                        confidence = chestConf,
-                        left = chestLeft,
-                        top = 0.36f,
-                        right = chestRight,
-                        bottom = 0.56f,
-                        timestampMs = timestampMs
-                    )
-                )
-            }
-
-            if (isRearViewPresentation || hipSkinRatio >= 0.18f || hasGluteCurvature) {
-                val gluteConf = max(rearButtocksExposureConfidence, 0.91f).coerceIn(0.90f, 0.97f)
-                boxes.add(
-                    NormalizedBox(
-                        trackId = 1,
-                        regionLabel = "BUTTOCKS",
-                        confidence = gluteConf,
-                        left = hipLeft,
-                        top = 0.59f,
-                        right = hipRight,
-                        bottom = 0.83f,
-                        timestampMs = timestampMs
-                    )
-                )
-            }
-
-            if (legSkinRatio >= 0.14f) {
-                val feetConf = (0.89f + min(0.08f, legSkinRatio * 0.25f)).coerceIn(0.88f, 0.95f)
-                boxes.add(
-                    NormalizedBox(
-                        trackId = 1,
-                        regionLabel = "FEET",
-                        confidence = feetConf,
-                        left = legLeft,
-                        top = 0.75f,
-                        right = legRight,
-                        bottom = 0.91f,
-                        timestampMs = timestampMs
-                    )
-                )
-            }
+        } catch (e: Exception) {
+            val durationMs = max(1L, (System.nanoTime() - startNs) / 1_000_000L)
+            FrameFeatures(
+                contentItemId = contentItemId,
+                frameTimestampMs = timestampMs,
+                isSupportedVideoFeed = isSupportedFeed,
+                analysisFailed = true,
+                failureReason = "Inference exception: ${e.message}",
+                inferenceDurationMs = durationMs,
+                sourceFrameWidth = srcW,
+                sourceFrameHeight = srcH
+            )
         }
-
-        val features = FrameFeatures(
-            contentItemId = contentItemId,
-            frameTimestampMs = timestampMs,
-            isSupportedVideoFeed = isSupportedFeed,
-            analysisFailed = false,
-            outerBorderSkinRatio = outerBorderSkinRatio,
-            qualifyingPersonDetected = qualifyingPersonDetected,
-            personConfidence = personConfidence,
-            isMalePresentingOnly = isMalePresentingOnly,
-            clothingAnalysisComplete = true,
-            shoulderUncoveredConfidence = shoulderUncoveredConfidence,
-            hemlineAboveKneeConfidence = hemlineAboveKneeConfidence,
-            chestExposureConfidence = chestExposureConfidence,
-            rearButtocksExposureConfidence = rearButtocksExposureConfidence,
-            singleFrameMovementScore = singleFrameMovementScore,
-            detectedBoxes = boxes
-        )
-
-        return Pair(features, lumaGrid)
-    }
-
-    private fun isHumanSkinRgbYCbCr(r: Int, g: Int, b: Int, y: Int): Boolean {
-        if (r <= 70 || g <= 40 || b <= 25 || r <= g || r <= b) return false
-        if ((r - min(g, b)) < 10) return false
-        val cb = 128.0 - (0.1687 * r) - (0.3313 * g) + (0.5 * b)
-        val cr = 128.0 + (0.5 * r) - (0.4187 * g) - (0.0813 * b)
-        return y in 50..242 && cb in 77.0..126.0 && cr in 133.0..173.0
-    }
-
-    private fun isDarkHairPixel(r: Int, g: Int, b: Int, y: Int): Boolean {
-        val spread = max(r, max(g, b)) - min(r, min(g, b))
-        return y in 12..72 && spread < 42
     }
 }
