@@ -11,8 +11,8 @@ android {
         applicationId "com.instaguard.app"
         minSdk 26
         targetSdk 34
-        versionCode 30
-        versionName "10.0"
+        versionCode 31
+        versionName "10.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -50,8 +50,10 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.activity:activity-ktx:1.8.2'
 
-    // Google ML Kit Pose Detection (STREAM_MODE for real-time video tracking)
+    // Google ML Kit Pose and Face Detection
     implementation 'com.google.mlkit:pose-detection:18.0.0-beta5'
+    implementation 'com.google.mlkit:pose-detection-accurate:18.0.0-beta5'
+    implementation 'com.google.mlkit:face-detection:16.1.7'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
