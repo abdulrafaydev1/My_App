@@ -192,7 +192,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             currentContentItemId = newItemId
             decisionEngine.resetForNewItem(newItemId)
             previousLumaGrid = null
-            scannerHudOverlayView?.clearBoxes()
 
             incrementScrollCount(activeKey)
             pulseFloatingPill(activeKey)
@@ -383,7 +382,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
                     updateFloatingPill(activeKey, remainingAllowance)
                     updateDopamineTintOverlay(activeKey, remainingAllowance)
-                    updateScannerOverlayVisibility(activeKey)
 
                     // Smart Warning Notifications + Voice Alerts (10-Min, 5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
@@ -392,7 +390,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                         Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
                         removeFloatingPill()
                         hideDopamineTintOverlay()
-                        hideScannerBoundingBoxOverlay()
                         val cooldownMs = prefs.getCooldownDurationMs()
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
@@ -428,14 +425,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 }
             }
 
-            // 4b. Real-Time Visual Scanner & Auto-Skip on active social media apps (every 8 ticks = ~400ms)
-            if (activeKey != null && tickCounter % 8 == 0 && prefs.isAiVisualShieldEnabled) {
+            // 4b. Real-Time Visual Scanner & Auto-Skip on active social media apps (every 4 ticks = ~200ms check, 750ms cadence)
+            if (activeKey != null && tickCounter % 4 == 0 && prefs.isAiVisualShieldEnabled) {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
                 val isYtHome = activeKey == "YOUTUBE" && isYoutubeHomePageActive(root)
                 if (!isYtHome && hasVideoElementOnScreen(root)) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
                         val now = SystemClock.elapsedRealtime()
-                        if (now - lastScreenshotCompletedElapsedMs >= 850L) {
+                        if (now - lastScreenshotCompletedElapsedMs >= 750L) {
                             captureAndAnalyzeSocialFrame(activeKey)
                         }
                     }
@@ -654,7 +651,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             decisionEngine.resetForNewItem(scrollItemId)
             consecutiveConfirmedMatchFrames = 0
             previousLumaGrid = null
-            scannerHudOverlayView?.clearBoxes()
 
             // 1. Debounce between counted gestures (750ms minimum between counts)
             if (now - lastScrollCountElapsedMs < 750L) {
@@ -726,7 +722,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 val remainingAllowance = maxOf(0L, limitMs - usedMs)
                 showFloatingScrollCounterPill(detectedKey, remainingAllowance)
                 updateDopamineTintOverlay(detectedKey, remainingAllowance)
-                updateScannerOverlayVisibility(detectedKey)
             }
         } else {
             // User switched to another real application or Home Launcher
@@ -736,7 +731,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 lastValidTrackedAppKey = null
                 removeFloatingPill()
                 hideDopamineTintOverlay()
-                hideScannerBoundingBoxOverlay()
             }
         }
     }
@@ -1559,95 +1553,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v10.0 FEATURE: Tactical HUD Scanner Outline Overlay & 6-Stage Decision Engine
+    // v10.3 Direct Single-Frame Confirmed Visual Auto-Skip Engine (No HUD Overlay)
     // =========================================================================
 
-    private fun createScannerOverlayLayoutParams(): WindowManager.LayoutParams {
-        return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        )
-    }
-
-    private fun ensureScannerOverlayAttached() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
-        if (isScannerOverlayAttached && scannerHudOverlayView != null) return
-
-        val hudView = ScannerHudOverlayView(this).apply {
-            visibility = View.GONE
-        }
-        try {
-            val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            if (wm != null) {
-                wm.addView(hudView, createScannerOverlayLayoutParams())
-                scannerHudOverlayView = hudView
-                isScannerOverlayAttached = true
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to attach tactical HUD scanner overlay: ${e.message}")
-            scannerHudOverlayView = null
-            isScannerOverlayAttached = false
-        }
-    }
-
-    private fun updateScannerOverlayVisibility(activeKey: String?) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            hideScannerBoundingBoxOverlay()
-            return
-        }
-        val isTrackedVideoApp = activeKey in listOf("INSTAGRAM", "TIKTOK", "FACEBOOK", "YOUTUBE")
-        val isEnabled = prefs.isAiVisualShieldEnabled && prefs.isScannerBorderOverlayEnabled
-        if (isTrackedVideoApp && !isOurAppScreenOpen && isEnabled) {
-            if (!isScannerOverlayAttached || scannerHudOverlayView == null) {
-                ensureScannerOverlayAttached()
-            }
-            val view = scannerHudOverlayView ?: return
-            view.stateController.isOverlayEnabled = true
-            if (view.visibility != View.VISIBLE) {
-                view.visibility = View.VISIBLE
-            }
-        } else {
-            hideScannerBoundingBoxOverlay()
-        }
-    }
-
-    private fun hideScannerBoundingBoxOverlay() {
-        val view = scannerHudOverlayView
-        if (view != null) {
-            view.clearOverlay()
-            if (view.visibility == View.VISIBLE) {
-                view.visibility = View.GONE
-            }
-        }
-    }
-
-    private fun clearScannerBoundingBoxes() {
-        scannerHudOverlayView?.clearBoxes()
-    }
-
-    private fun removeScannerOverlayCompletely() {
-        val view = scannerHudOverlayView
-        if (isScannerOverlayAttached && view != null) {
-            try {
-                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                wm?.removeView(view)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error removing scanner overlay: ${e.message}")
-            }
-            isScannerOverlayAttached = false
-            scannerHudOverlayView = null
-        }
-    }
+    private var gluteLumaGrid: FloatArray? = null
 
     private fun captureAndAnalyzeSocialFrame(appKey: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastScreenshotCompletedElapsedMs < 250L) return
+        if (now - lastScreenshotCompletedElapsedMs < 750L) return
 
         isScreenshotInFlight = true
         currentScannerDiagnosticText = DiagnosticStatus.CAPTURING_FRAME.label
@@ -1666,76 +1580,44 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBuffer.close()
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
-                                val frameTs = SystemClock.elapsedRealtime()
-                                val features = MlKitPoseInferenceProvider.analyzeBitmap(
-                                    bitmap = swBitmap,
-                                    contentItemId = itemIdSnapshot,
-                                    timestampMs = frameTs,
-                                    isSupportedFeed = true
+                                val scaledBitmap = Bitmap.createScaledBitmap(
+                                    swBitmap,
+                                    VisualSkipAnalyzer.TARGET_WIDTH,
+                                    VisualSkipAnalyzer.TARGET_HEIGHT,
+                                    true
                                 )
                                 swBitmap.recycle()
 
-                                val evalNowMs = SystemClock.elapsedRealtime()
-                                val filterConfig = FilterConfig(
-                                    monitoringEnabled = prefs.isAiVisualShieldEnabled,
-                                    requiredStaticConfirmFrames = 3
+                                val analysisResult = VisualSkipAnalyzer.analyzeVideoFrame(
+                                    bitmap = scaledBitmap,
+                                    prevGluteLumaGrid = gluteLumaGrid
                                 )
-                                val decision = decisionEngine.evaluateFrame(
-                                    features = features,
-                                    activeConfig = filterConfig,
-                                    nowMs = evalNowMs
-                                )
-                                currentScannerDiagnosticText = decision.diagnosticStatus.label
+                                gluteLumaGrid = analysisResult.newGluteLumaGrid
+                                scaledBitmap.recycle()
 
-                                val anyRuleMatched = features.shortDressRuleMatched ||
-                                    features.boobsBreastVisibleMatched ||
-                                    features.backOrButtocksAssMatched ||
-                                    decision.matchedRules.isNotEmpty()
-
-                                if (features.isFemaleConfirmed && anyRuleMatched) {
-                                    consecutiveConfirmedMatchFrames++
-                                } else {
-                                    consecutiveConfirmedMatchFrames = 0
-                                }
-
-                                // Update live tactical HUD overlay on MainThread if enabled
-                                tickerHandler.post {
-                                    if (currentContentItemId != itemIdSnapshot) {
-                                        // Stale async result after user scrolled to a new item
-                                        return@post
-                                    }
-                                    if (currentForegroundAppKey == appKey &&
-                                        !isOurAppScreenOpen &&
-                                        prefs.isAiVisualShieldEnabled &&
-                                        prefs.isScannerBorderOverlayEnabled
-                                    ) {
-                                        ensureScannerOverlayAttached()
-                                        val view = scannerHudOverlayView
-                                        if (view != null) {
-                                            view.stateController.isOverlayEnabled = true
-                                            view.visibility = View.VISIBLE
-                                            view.updateHudState(
-                                                boxes = decision.activeBoxes,
-                                                status = decision.diagnosticStatus,
-                                                frameTimestampMs = features.frameTimestampMs,
-                                                contentItemId = itemIdSnapshot,
-                                                nowMs = SystemClock.elapsedRealtime(),
-                                                landmarks = decision.activeLandmarks
-                                            )
+                                if (analysisResult.shouldSkip) {
+                                    currentScannerDiagnosticText = DiagnosticStatus.MATCH_CONFIRMED_SKIP.label
+                                    tickerHandler.post {
+                                        if (currentContentItemId == itemIdSnapshot &&
+                                            currentForegroundAppKey == appKey &&
+                                            !isOurAppScreenOpen &&
+                                            prefs.isVisualAutoSkipEnabled
+                                        ) {
+                                            val skipNow = SystemClock.elapsedRealtime()
+                                            if (skipNow - lastAutoSkipElapsedMs >= 1600L) {
+                                                lastAutoSkipElapsedMs = skipNow
+                                                Log.i(TAG, "v10.3 Visual Auto-Skip Triggered: ${analysisResult.skipReason}")
+                                                autoSkipCurrentReelOrVideo()
+                                                currentScrollSeq++
+                                                val nextId = "${appKey}_skipped_${currentScrollSeq}"
+                                                currentContentItemId = nextId
+                                                decisionEngine.resetForNewItem(nextId)
+                                                previousLumaGrid = null
+                                            }
                                         }
-                                    } else {
-                                        hideScannerBoundingBoxOverlay()
                                     }
-
-                                    // Gate 6: Multi-Frame Confirmation (3 Consecutive Frames) & Live Red Scanner Outlines
-                                    if (decision.state == DecisionState.SKIP_CANDIDATE &&
-                                        prefs.isVisualAutoSkipEnabled &&
-                                        currentContentItemId == itemIdSnapshot &&
-                                        features.isFemaleConfirmed &&
-                                        consecutiveConfirmedMatchFrames >= 3
-                                    ) {
-                                        triggerAutoSkipIfCooldownElapsed(itemIdSnapshot)
-                                    }
+                                } else {
+                                    currentScannerDiagnosticText = DiagnosticStatus.NO_MATCH_ALLOW.label
                                 }
                             }
                         } catch (e: Exception) {
@@ -1762,60 +1644,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             currentScannerDiagnosticText = DiagnosticStatus.ANALYSIS_FAILED.label
             e.printStackTrace()
         }
-    }
-
-    private fun triggerAutoSkipIfCooldownElapsed(targetItemId: String = currentContentItemId) {
-        if (!prefs.isVisualAutoSkipEnabled) return
-        if (targetItemId != currentContentItemId) return
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastAutoSkipElapsedMs < 2000L) return
-        if (!decisionEngine.markSkipExecuted(targetItemId, now)) return
-        lastAutoSkipElapsedMs = now
-
-        val preSkipItemId = targetItemId
-        val preSkipRoot = try { rootInActiveWindow } catch (_: Exception) { null }
-        val preSkipSignature = getScreenContentSignature(preSkipRoot)
-
-        currentScannerDiagnosticText = DiagnosticStatus.SKIP_ACTION_REQUESTED.label
-        scannerHudOverlayView?.clearBoxes()
-
-        autoSkipCurrentReelOrVideo()
-        consecutiveConfirmedMatchFrames = 0
-
-        // Verify navigation transition after 600ms (with at most 1 controlled retry)
-        tickerHandler.postDelayed({
-            try {
-                val activeKey = currentForegroundAppKey
-                if (activeKey != null && !isOurAppScreenOpen) {
-                    val postRoot = try { rootInActiveWindow } catch (_: Exception) { null }
-                    val postSignature = getScreenContentSignature(postRoot)
-                    val stillSameItem = currentContentItemId == preSkipItemId &&
-                        preSkipSignature.isNotEmpty() &&
-                        postSignature == preSkipSignature
-
-                    val navState = decisionEngine.reportNavigationResult(
-                        contentItemId = preSkipItemId,
-                        navigationSucceeded = !stillSameItem
-                    )
-
-                    if (stillSameItem && navState == SkipActionState.BOUNDED_RETRY_AVAILABLE) {
-                        Log.i(TAG, "Skip transition not observed after 600ms; executing 1 controlled retry swipe.")
-                        if (decisionEngine.markSkipExecuted(preSkipItemId, SystemClock.elapsedRealtime())) {
-                            dispatchSwipeUpGestureOnly()
-                            decisionEngine.reportNavigationResult(preSkipItemId, navigationSucceeded = false)
-                        }
-                    }
-                    currentScrollSeq++
-                    val nextId = "${activeKey}_skipped_${currentScrollSeq}"
-                    currentContentItemId = nextId
-                    decisionEngine.resetForNewItem(nextId)
-                    previousLumaGrid = null
-                    currentScannerDiagnosticText = DiagnosticStatus.NAVIGATION_VERIFIED.label
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }, 600L)
     }
 
     private fun dispatchSwipeUpGestureOnly() {
@@ -2403,7 +2231,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     override fun onInterrupt() {
         removeFloatingPill()
         hideDopamineTintOverlay()
-        hideScannerBoundingBoxOverlay()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
     }
@@ -2431,7 +2258,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
         removeFloatingPillCompletely()
         removeDopamineTintOverlayCompletely()
-        removeScannerOverlayCompletely()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -2553,12 +2379,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         @Volatile
         var isDopamineTintAttached: Boolean = false
-
-        @Volatile
-        var scannerHudOverlayView: ScannerHudOverlayView? = null
-
-        @Volatile
-        var isScannerOverlayAttached: Boolean = false
 
         @Volatile
         var currentScannerDiagnosticText: String = DiagnosticStatus.WAITING_FOR_FRAMES.label

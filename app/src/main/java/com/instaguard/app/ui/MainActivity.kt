@@ -354,6 +354,7 @@ class MainActivity : AppCompatActivity() {
      * - Live Red Bounding-Box Scanner Overlay & Auto-Skip Toggles
      */
     private fun setupV90FeatureControls() {
+        binding.tvHeaderTitle.text = "InstaGuard Pro v10.3 (AI Visual & Focus Shield)"
         refreshAiVisualShieldDisplay()
 
         binding.switchAiVisualShield.setOnCheckedChangeListener(null)
@@ -366,20 +367,6 @@ class MainActivity : AppCompatActivity() {
                 refreshAiVisualShieldDisplay()
                 Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
-        }
-
-        binding.switchScannerBorderOverlay.setOnCheckedChangeListener(null)
-        binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
-        binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
-            guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
-            if (!isChecked) {
-                AppBlockerService.scannerHudOverlayView?.let {
-                    it.clearOverlay()
-                    it.visibility = View.GONE
-                }
-            }
-            val msg = if (isChecked) "🎯 Scanner Outlines Enabled" else "🎯 Scanner Outlines Disabled (Auto-Skip Remains Active)"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
         binding.switchAutoSkipVisual.setOnCheckedChangeListener(null)
@@ -407,20 +394,6 @@ class MainActivity : AppCompatActivity() {
                 refreshAiVisualShieldDisplay()
                 Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
-        }
-
-        binding.switchScannerBorderOverlay.setOnCheckedChangeListener(null)
-        binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
-        binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
-            guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
-            if (!isChecked) {
-                AppBlockerService.scannerHudOverlayView?.let {
-                    it.clearOverlay()
-                    it.visibility = View.GONE
-                }
-            }
-            val msg = if (isChecked) "🎯 Scanner Outlines Enabled" else "🎯 Scanner Outlines Disabled (Auto-Skip Remains Active)"
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
         binding.switchAutoSkipVisual.setOnCheckedChangeListener(null)

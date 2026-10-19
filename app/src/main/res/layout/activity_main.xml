@@ -54,7 +54,7 @@
                         android:id="@+id/tvHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="InstaGuard Pro v10.0 (AI HUD Vision Suite)"
+                        android:text="InstaGuard Pro v10.3 (AI Visual &amp; Focus Shield)"
                         android:textColor="@color/cyber_text_primary"
                         android:textSize="18sp"
                         android:textStyle="bold"
@@ -633,42 +633,6 @@
                         android:layout_marginBottom="12dp"
                         android:background="#1E293B" />
 
-                    <!-- Live Red Scanner Bounding Box Overlay Toggle -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="🎯 Show Scanner Outlines (ON / OFF)"
-                                android:textColor="@color/cyber_text_primary"
-                                android:textSize="13sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="Draws tactical HUD red corner brackets &amp; confidence badges (FACE, CHEST, BACK, BUTTOCKS, FEET) with zero face blur"
-                                android:textColor="#94A3B8"
-                                android:textSize="11sp" />
-                        </LinearLayout>
-
-                        <androidx.appcompat.widget.SwitchCompat
-                            android:id="@+id/switchScannerBorderOverlay"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp" />
-                    </LinearLayout>
 
                     <!-- Auto-Skip Suggestive Female Videos Toggle -->
                     <LinearLayout
