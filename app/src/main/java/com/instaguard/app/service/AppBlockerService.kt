@@ -1551,28 +1551,124 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     // =========================================================================
-    // v9.4 FEATURE 2: Strict 4-Stage Frame-by-Frame Female & Body-Zone Analyzer
-    // ALL bitmap copying, scaling, face detection and pixel loops run on
-    // visualAnalyzerExecutor. The Main Thread only receives the final verdict.
+    // v9.5 FEATURE 1 & 4: Live Red Bounding-Box Overlay View & Zone Scanner
     // =========================================================================
 
-    private class DetectedFace(val x: Float, val y: Float, val eyeDist: Float)
+    class ScannerBoundingBoxView(context: Context) : View(context) {
+        @Volatile
+        var detectedBoxes: List<RectF> = emptyList()
+            set(value) {
+                field = value
+                postInvalidate()
+            }
 
-    private class FrameAnalysis(
-        val w: Int,
-        val h: Int,
-        val skin: BooleanArray,
-        val hair: BooleanArray,
-        val subject: BooleanArray,
-        val lum: FloatArray,
-        val faces: List<DetectedFace>
-    )
+        private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.parseColor("#FF1744")
+            strokeWidth = 2.5f * resources.displayMetrics.density
+            isAntiAlias = true
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val boxes = detectedBoxes
+            if (boxes.isEmpty()) return
+            val w = width.toFloat()
+            val h = height.toFloat()
+            for (r in boxes) {
+                // Hollow red rectangular border outline (NO blur, NO fill)
+                canvas.drawRect(r.left * w, r.top * h, r.right * w, r.bottom * h, boxPaint)
+            }
+        }
+    }
+
+    private fun createScannerOverlayLayoutParams(): WindowManager.LayoutParams {
+        return WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        )
+    }
+
+    private fun ensureScannerOverlayAttached() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
+        if (isScannerOverlayAttached && scannerBoundingBoxView != null) return
+
+        val boxView = ScannerBoundingBoxView(this).apply {
+            visibility = View.GONE
+        }
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            if (wm != null) {
+                wm.addView(boxView, createScannerOverlayLayoutParams())
+                scannerBoundingBoxView = boxView
+                isScannerOverlayAttached = true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to attach scanner bounding box overlay: ${e.message}")
+            scannerBoundingBoxView = null
+            isScannerOverlayAttached = false
+        }
+    }
+
+    private fun updateScannerOverlayVisibility(activeKey: String?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            hideScannerBoundingBoxOverlay()
+            return
+        }
+        val isTrackedVideoApp = activeKey in listOf("INSTAGRAM", "TIKTOK", "FACEBOOK", "YOUTUBE")
+        val isEnabled = prefs.isAiVisualShieldEnabled && prefs.isScannerBorderOverlayEnabled
+        if (isTrackedVideoApp && !isOurAppScreenOpen && isEnabled) {
+            if (!isScannerOverlayAttached || scannerBoundingBoxView == null) {
+                ensureScannerOverlayAttached()
+            }
+            val view = scannerBoundingBoxView ?: return
+            if (view.visibility != View.VISIBLE) {
+                view.visibility = View.VISIBLE
+            }
+        } else {
+            hideScannerBoundingBoxOverlay()
+        }
+    }
+
+    private fun hideScannerBoundingBoxOverlay() {
+        val view = scannerBoundingBoxView
+        if (view != null) {
+            view.detectedBoxes = emptyList()
+            if (view.visibility == View.VISIBLE) {
+                view.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun clearScannerBoundingBoxes() {
+        scannerBoundingBoxView?.detectedBoxes = emptyList()
+    }
+
+    private fun removeScannerOverlayCompletely() {
+        val view = scannerBoundingBoxView
+        if (isScannerOverlayAttached && view != null) {
+            try {
+                val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                wm?.removeView(view)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing scanner overlay: ${e.message}")
+            }
+            isScannerOverlayAttached = false
+            scannerBoundingBoxView = null
+        }
+    }
 
     private fun captureAndAnalyzeSocialFrame(appKey: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInProgress) return
-        isScreenshotInProgress = true
-        lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastScreenshotCompletedElapsedMs < 850L) return
 
+        isScreenshotInFlight = true
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -1586,8 +1682,23 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             hwBuffer.close()
                             hwBitmap?.recycle()
                             if (swBitmap != null) {
-                                val shouldSkip = runFourStagePipeline(swBitmap, appKey)
+                                val (boxes, shouldSkip) = scanFrameAndDetectZones(swBitmap)
                                 swBitmap.recycle()
+
+                                // Update live red bounding boxes on screen
+                                tickerHandler.post {
+                                    if (currentForegroundAppKey == appKey && !isOurAppScreenOpen && prefs.isScannerBorderOverlayEnabled) {
+                                        ensureScannerOverlayAttached()
+                                        val view = scannerBoundingBoxView
+                                        if (view != null) {
+                                            view.visibility = View.VISIBLE
+                                            view.detectedBoxes = boxes
+                                        }
+                                    } else {
+                                        clearScannerBoundingBoxes()
+                                    }
+                                }
+
                                 if (shouldSkip) {
                                     tickerHandler.post { triggerAutoSkipIfCooldownElapsed() }
                                 }
@@ -1596,446 +1707,339 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             try { hwBuffer.close() } catch (_: Exception) {}
                             e.printStackTrace()
                         } finally {
-                            isScreenshotInProgress = false
+                            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+                            isScreenshotInFlight = false
                         }
                     }
 
                     override fun onFailure(errorCode: Int) {
-                        isScreenshotInProgress = false
+                        lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+                        isScreenshotInFlight = false
+                        Log.d(TAG, "takeScreenshot failed with errorCode=$errorCode")
                     }
                 }
             )
         } catch (e: Exception) {
-            isScreenshotInProgress = false
+            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+            isScreenshotInFlight = false
             e.printStackTrace()
         }
     }
 
     /**
-     * STAGE 5 orchestrator (runs on visualAnalyzerExecutor).
-     * Stage 1 gate first; Stages 2/3/4 only when a female is confirmed.
-     * Returns true ONLY after REQUIRED_POSITIVE_FRAMES consecutive positive frames.
+     * Real-time Body-Part Bounding Box Localization & Skip Detection (v9.5).
+     * Runs on visualAnalyzerExecutor with scaled 100x180 bitmap.
      */
-    private fun runFourStagePipeline(full: Bitmap, appKey: String): Boolean {
-        if (analyzerAppKey != appKey) {
-            analyzerAppKey = appKey
-            previousSkinGrid = null
-            consecutivePositiveFrames = 0
-        }
+    private fun scanFrameAndDetectZones(source: Bitmap): Pair<List<RectF>, Boolean> {
+        val w = 100
+        val h = 180
+        val scaled = Bitmap.createScaledBitmap(source, w, h, true)
+        val pixels = IntArray(w * h)
+        scaled.getPixels(pixels, 0, w, 0, 0, w, h)
+        if (scaled != source) scaled.recycle()
 
-        val faces = detectFaces(full)
-        val scaled = Bitmap.createScaledBitmap(full, ANALYZER_W, ANALYZER_H, true)
-        val frame = buildFrameAnalysis(scaled, faces)
-        if (scaled != full) scaled.recycle()
+        val isSkin = BooleanArray(pixels.size)
+        val isHair = BooleanArray(pixels.size)
+        val lum = FloatArray(pixels.size)
 
-        val gluteMotionDelta = computeGluteMotionDelta(frame)
-        previousSkinGrid = frame.skin
-
-        // STAGE 1: No female in frame -> never skip.
-        if (!isFemaleHumanPresentInFrame(frame)) {
-            consecutivePositiveFrames = 0
-            return false
-        }
-
-        val stage2 = isWearingShortRevealingDress(frame)
-        val stage3 = isFemaleBreastOrCleavageVisible(frame)
-        val stage4 = isFemaleBackOrButtocksAssVisible(frame, gluteMotionDelta)
-
-        if (!(stage2 || stage3 || stage4)) {
-            consecutivePositiveFrames = 0
-            return false
-        }
-
-        consecutivePositiveFrames++
-        Log.d(TAG, "4-Stage positive frame ($consecutivePositiveFrames/$REQUIRED_POSITIVE_FRAMES) " +
-            "dress=$stage2 bust=$stage3 back=$stage4")
-        if (consecutivePositiveFrames >= REQUIRED_POSITIVE_FRAMES) {
-            consecutivePositiveFrames = 0
-            return true
-        }
-        return false
-    }
-
-    /** Android SDK face detector on an RGB_565 copy; coordinates mapped to analyzer scale. */
-    private fun detectFaces(source: Bitmap): List<DetectedFace> {
-        var argb: Bitmap? = null
-        var rgb565: Bitmap? = null
-        return try {
-            val scaledFace = Bitmap.createScaledBitmap(source, FACE_W, FACE_H, true)
-            argb = scaledFace
-            val face565 = scaledFace.copy(Bitmap.Config.RGB_565, false) ?: return emptyList()
-            rgb565 = face565
-            val detector = faceDetector ?: FaceDetector(FACE_W, FACE_H, MAX_FACES).also { faceDetector = it }
-            val found = arrayOfNulls<FaceDetector.Face>(MAX_FACES)
-            val count = detector.findFaces(face565, found)
-            val sx = ANALYZER_W.toFloat() / FACE_W
-            val sy = ANALYZER_H.toFloat() / FACE_H
-            val mid = PointF()
-            val result = ArrayList<DetectedFace>(maxOf(0, count))
-            for (i in 0 until count) {
-                val face = found[i] ?: continue
-                if (face.confidence() < FaceDetector.Face.CONFIDENCE_THRESHOLD) continue
-                face.getMidPoint(mid)
-                result.add(DetectedFace(mid.x * sx, mid.y * sy, face.eyesDistance() * sx))
-            }
-            result
-        } catch (e: Exception) {
-            emptyList()
-        } finally {
-            val a = argb
-            if (a != null && a != source) a.recycle()
-            rgb565?.recycle()
-        }
-    }
-
-    private fun buildFrameAnalysis(bmp: Bitmap, faces: List<DetectedFace>): FrameAnalysis {
-        val w = bmp.width
-        val h = bmp.height
-        val px = IntArray(w * h)
-        bmp.getPixels(px, 0, w, 0, 0, w, h)
-
-        // Mean background colour from the outer border (left/right 10%, top 8%).
-        val bxL = (w * 0.10f).toInt()
-        val bxR = (w * 0.90f).toInt()
-        val byT = (h * 0.08f).toInt()
-        var sr = 0L
-        var sg = 0L
-        var sb = 0L
-        var n = 0
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                if (x < bxL || x >= bxR || y < byT) {
-                    val p = px[row + x]
-                    sr += Color.red(p)
-                    sg += Color.green(p)
-                    sb += Color.blue(p)
-                    n++
-                }
-            }
-        }
-        val mr = (sr / maxOf(1, n)).toInt()
-        val mg = (sg / maxOf(1, n)).toInt()
-        val mb = (sb / maxOf(1, n)).toInt()
-
-        val skin = BooleanArray(px.size)
-        val hair = BooleanArray(px.size)
-        val subject = BooleanArray(px.size)
-        val lum = FloatArray(px.size)
-        for (i in px.indices) {
-            val p = px[i]
+        for (i in pixels.indices) {
+            val p = pixels[i]
             val r = Color.red(p)
             val g = Color.green(p)
             val b = Color.blue(p)
-            val isSkin = isSkinPixel(p)
-            val isHair = !isSkin && isHairPixel(r, g, b)
-            val bgDist = Math.abs(r - mr) + Math.abs(g - mg) + Math.abs(b - mb)
-            skin[i] = isSkin
-            hair[i] = isHair
-            subject[i] = isSkin || isHair || bgDist > 90
+
+            val skin = isSkinPixel(r, g, b)
+            isSkin[i] = skin
+            isHair[i] = !skin && isHairPixel(r, g, b)
             lum[i] = 0.299f * r + 0.587f * g + 0.114f * b
         }
-        return FrameAnalysis(w, h, skin, hair, subject, lum, faces)
+
+        // 1. Edge skin ratio (x < 8% or x > 92%)
+        val edgeSkinCount = run {
+            var count = 0
+            val totalEdgeCols = (w * 0.08f).toInt()
+            val rightColStart = (w * 0.92f).toInt()
+            for (y in 0 until h) {
+                val row = y * w
+                for (x in 0 until totalEdgeCols) {
+                    if (isSkin[row + x]) count++
+                }
+                for (x in rightColStart until w) {
+                    if (isSkin[row + x]) count++
+                }
+            }
+            count
+        }
+        val edgeTotal = (2 * (w * 0.08f).toInt() * h)
+        val edgeSkinRatio = edgeSkinCount.toFloat() / maxOf(1, edgeTotal)
+
+        // 2. Motion Delta calculation
+        val prev = previousSkinGrid
+        var frameMotionDelta = 0f
+        if (prev != null && prev.size == isSkin.size) {
+            var diff = 0
+            for (i in isSkin.indices) {
+                if (prev[i] != isSkin[i]) diff++
+            }
+            frameMotionDelta = diff.toFloat() / isSkin.size
+        }
+        previousSkinGrid = isSkin
+
+        // 3. Locate Subject & Compute Normalized Bounding Boxes
+        val detectedBoxes = ArrayList<RectF>(4)
+
+        // Box 1 — Head / Face & Hair Box (y = 14% to 44%, x = 12% to 88%)
+        val headY0 = (0.14f * h).toInt()
+        val headY1 = (0.44f * h).toInt()
+        val scanX0 = (0.12f * w).toInt()
+        val scanX1 = (0.88f * w).toInt()
+
+        var headSkinAndHair = 0
+        var headTotalPx = 0
+        var minHeadX = w
+        var maxHeadX = 0
+        var minHeadY = h
+        var maxHeadY = 0
+        var headSumX = 0L
+        var headSumY = 0L
+
+        for (y in headY0 until headY1) {
+            val row = y * w
+            for (x in scanX0 until scanX1) {
+                headTotalPx++
+                if (isSkin[row + x] || isHair[row + x]) {
+                    headSkinAndHair++
+                    headSumX += x
+                    headSumY += y
+                    if (x < minHeadX) minHeadX = x
+                    if (x > maxHeadX) maxHeadX = x
+                    if (y < minHeadY) minHeadY = y
+                    if (y > maxHeadY) maxHeadY = y
+                }
+            }
+        }
+
+        var headBox: RectF? = null
+        val headDensity = headSkinAndHair.toFloat() / maxOf(1, headTotalPx)
+        val hasHeadCluster = headDensity >= 0.14f && headSkinAndHair >= 30
+
+        if (hasHeadCluster) {
+            val avgX = (headSumX / headSkinAndHair).toFloat() / w
+            val avgY = (headSumY / headSkinAndHair).toFloat() / h
+            val halfW = ((maxHeadX - minHeadX).toFloat() / w / 2f).coerceIn(0.14f, 0.21f)
+            val halfH = ((maxHeadY - minHeadY).toFloat() / h / 2f).coerceIn(0.09f, 0.13f)
+            val left = (avgX - halfW).coerceIn(0.05f, 0.65f)
+            val right = (left + halfW * 2f).coerceIn(left + 0.28f, 0.95f)
+            val top = (avgY - halfH).coerceIn(0.10f, 0.35f)
+            val bottom = (top + halfH * 2f).coerceIn(top + 0.18f, 0.46f)
+            val box = RectF(left, top, right, bottom)
+            headBox = box
+            detectedBoxes.add(box)
+        }
+
+        // Centroid for torso alignment
+        val torsoCenterX = headBox?.centerX() ?: run {
+            var torsoSumX = 0L
+            var torsoCount = 0
+            val tY0 = (0.36f * h).toInt()
+            val tY1 = (0.68f * h).toInt()
+            for (y in tY0 until tY1) {
+                val row = y * w
+                for (x in scanX0 until scanX1) {
+                    if (isSkin[row + x]) {
+                        torsoSumX += x
+                        torsoCount++
+                    }
+                }
+            }
+            if (torsoCount >= 15) (torsoSumX / torsoCount).toFloat() / w else 0.50f
+        }
+
+        // Box 2 — Chest / Breast / Cleavage Box (y = 36% to 58%)
+        val chestTop = 0.36f
+        val chestBottom = 0.58f
+        val chestHalfW = 0.16f // width 32%
+        val chestLeft = (torsoCenterX - chestHalfW).coerceIn(0.06f, 0.62f)
+        val chestRight = chestLeft + (chestHalfW * 2f)
+
+        val cX0 = (chestLeft * w).toInt().coerceIn(0, w - 1)
+        val cX1 = (chestRight * w).toInt().coerceIn(cX0 + 1, w)
+        val cY0 = (chestTop * h).toInt().coerceIn(0, h - 1)
+        val cY1 = (chestBottom * h).toInt().coerceIn(cY0 + 1, h)
+
+        var chestSkinCount = 0
+        var chestTotalPx = 0
+        var leftLumSum = 0f
+        var leftLumCount = 0
+        var rightLumSum = 0f
+        var rightLumCount = 0
+        var centerLumSum = 0f
+        var centerLumCount = 0
+
+        val midX = (cX0 + cX1) / 2
+        val cleftRadius = maxOf(1, ((cX1 - cX0) * 0.12f).toInt())
+
+        for (y in cY0 until cY1) {
+            val row = y * w
+            for (x in cX0 until cX1) {
+                chestTotalPx++
+                if (isSkin[row + x]) chestSkinCount++
+                val l = lum[row + x]
+                if (Math.abs(x - midX) <= cleftRadius) {
+                    centerLumSum += l
+                    centerLumCount++
+                } else if (x < midX) {
+                    leftLumSum += l
+                    leftLumCount++
+                } else {
+                    rightLumSum += l
+                    rightLumCount++
+                }
+            }
+        }
+
+        val chestSkinRatio = chestSkinCount.toFloat() / maxOf(1, chestTotalPx)
+        val avgLeftLum = leftLumSum / maxOf(1, leftLumCount)
+        val avgRightLum = rightLumSum / maxOf(1, rightLumCount)
+        val avgCenterLum = centerLumSum / maxOf(1, centerLumCount)
+        val chestCleavageShadow = avgCenterLum < (((avgLeftLum + avgRightLum) / 2f) - 6f)
+
+        var chestBox: RectF? = null
+        if (chestSkinRatio >= 0.10f || headBox != null) {
+            val box = RectF(chestLeft, chestTop, chestRight, chestBottom)
+            chestBox = box
+            detectedBoxes.add(box)
+        }
+
+        // Box 3 — Waist / Midriff / Belly / Crop-Top Box (y = 52% to 68%)
+        val waistTop = 0.52f
+        val waistBottom = 0.68f
+        val waistHalfW = 0.15f // width 30%
+        val waistLeft = (torsoCenterX - waistHalfW).coerceIn(0.06f, 0.64f)
+        val waistRight = waistLeft + (waistHalfW * 2f)
+
+        val wX0 = (waistLeft * w).toInt().coerceIn(0, w - 1)
+        val wX1 = (waistRight * w).toInt().coerceIn(wX0 + 1, w)
+        val wY0 = (waistTop * h).toInt().coerceIn(0, h - 1)
+        val wY1 = (waistBottom * h).toInt().coerceIn(wY0 + 1, h)
+
+        var waistSkinCount = 0
+        var waistTotalPx = 0
+        for (y in wY0 until wY1) {
+            val row = y * w
+            for (x in wX0 until wX1) {
+                waistTotalPx++
+                if (isSkin[row + x]) waistSkinCount++
+            }
+        }
+        val midriffSkinRatio = waistSkinCount.toFloat() / maxOf(1, waistTotalPx)
+
+        if (midriffSkinRatio >= 0.12f) {
+            val waistBox = RectF(waistLeft, waistTop, waistRight, waistBottom)
+            detectedBoxes.add(waistBox)
+        }
+
+        // Box 4 — Hip / Buttocks (Ass) / Short Dress / Thighs Box (y = 60% to 86%)
+        val hipTop = 0.60f
+        val hipBottom = 0.86f
+        val hipHalfW = 0.19f // width 38%
+        val hipLeft = (torsoCenterX - hipHalfW).coerceIn(0.04f, 0.58f)
+        val hipRight = hipLeft + (hipHalfW * 2f)
+
+        val hX0 = (hipLeft * w).toInt().coerceIn(0, w - 1)
+        val hX1 = (hipRight * w).toInt().coerceIn(hX0 + 1, w)
+        val hY0 = (hipTop * h).toInt().coerceIn(0, h - 1)
+        val hY1 = (hipBottom * h).toInt().coerceIn(hY0 + 1, h)
+
+        var lowerSkinCount = 0
+        var lowerTotalPx = 0
+        var hipSubjectWidth = 0
+        var waistSubjectWidth = 0
+
+        for (y in hY0 until hY1) {
+            val row = y * w
+            var rowSubject = 0
+            for (x in hX0 until hX1) {
+                lowerTotalPx++
+                if (isSkin[row + x]) {
+                    lowerSkinCount++
+                    rowSubject++
+                }
+            }
+            if (rowSubject > hipSubjectWidth) hipSubjectWidth = rowSubject
+        }
+
+        for (y in wY0 until wY1) {
+            val row = y * w
+            var rowSubject = 0
+            for (x in wX0 until wX1) {
+                if (isSkin[row + x]) rowSubject++
+            }
+            if (rowSubject > waistSubjectWidth) waistSubjectWidth = rowSubject
+        }
+
+        val lowerSkinRatio = lowerSkinCount.toFloat() / maxOf(1, lowerTotalPx)
+        val gluteContourProminence = hipSubjectWidth > (waistSubjectWidth * 1.15f) && hipSubjectWidth >= 12
+
+        var gluteHipBox: RectF? = null
+        if (lowerSkinRatio >= 0.18f || gluteContourProminence) {
+            val box = RectF(hipLeft, hipTop, hipRight, hipBottom)
+            gluteHipBox = box
+            detectedBoxes.add(box)
+        }
+
+        // Back skin ratio (without cleavage shadow or face, y = 36%..56%)
+        val backSkinRatio = if (headBox == null && !chestCleavageShadow) chestSkinRatio else 0f
+
+        // 4. Decide Whether to Auto-Skip
+        val isHumanPresent = detectedBoxes.size >= 2 && edgeSkinRatio < 0.35f
+        var shouldSkipVideo = false
+
+        if (isHumanPresent) {
+            // Condition 1 (Visible Boobs / Breasts / Cleavage or Low-Cut Top)
+            val cond1 = chestSkinRatio >= 0.24f &&
+                (chestCleavageShadow || midriffSkinRatio >= 0.16f || chestSkinRatio >= 0.34f)
+
+            // Condition 2 (Short Dress — Shoulder se Niche + Ghutne se Upar / Midriff Exposed)
+            val cond2 = (chestSkinRatio >= 0.20f || midriffSkinRatio >= 0.22f) && lowerSkinRatio >= 0.22f
+
+            // Condition 3 (Back / Buttocks / Ass / Tight Booty Shorts Pose or Movement)
+            val cond3 = (lowerSkinRatio >= 0.28f) ||
+                (gluteHipBox != null && chestBox != null &&
+                    (frameMotionDelta >= 0.09f || backSkinRatio >= 0.28f || gluteContourProminence))
+
+            shouldSkipVideo = cond1 || cond2 || cond3
+            if (shouldSkipVideo) {
+                Log.i(TAG, "Visual skip triggered: cond1=$cond1 cond2=$cond2 cond3=$cond3 " +
+                    "chestSkin=$chestSkinRatio cleavage=$chestCleavageShadow midriff=$midriffSkinRatio lowerSkin=$lowerSkinRatio delta=$frameMotionDelta")
+            }
+        }
+
+        return Pair(detectedBoxes, shouldSkipVideo)
     }
 
     /**
      * Calibrated Skin Pixel Classifier (Combined RGB + YCbCr).
-     * Also used by the browser explicit-video frame check.
      */
     private fun isSkinPixel(p: Int): Boolean {
-        val r = Color.red(p)
-        val g = Color.green(p)
-        val b = Color.blue(p)
+        return isSkinPixel(Color.red(p), Color.green(p), Color.blue(p))
+    }
+
+    private fun isSkinPixel(r: Int, g: Int, b: Int): Boolean {
         val y = 0.299 * r + 0.587 * g + 0.114 * b
         val cb = 128.0 - 0.1687 * r - 0.3313 * g + 0.5 * b
         val cr = 128.0 + 0.5 * r - 0.4187 * g - 0.0813 * b
-        return (r > 80 && g > 45 && b > 30 && r > g && r > b &&
-                (r - minOf(g, b)) > 12 &&
-                cb in 80.0..124.0 && cr in 135.0..172.0 && y in 60.0..240.0)
+        return (r > 70 && g > 40 && b > 25 && r > g && r > b &&
+            (r - minOf(g, b)) >= 10 &&
+            cb in 77.0..126.0 && cr in 133.0..173.0 && y in 50.0..242.0)
     }
 
-    /** Dark / brown low-saturation pixels typical of hair (pure-black letterbox bars excluded). */
+    /** Dark / brown / black low-saturation pixels typical of hair. */
     private fun isHairPixel(r: Int, g: Int, b: Int): Boolean {
         val y = 0.299f * r + 0.587f * g + 0.114f * b
         val spread = maxOf(r, maxOf(g, b)) - minOf(r, minOf(g, b))
-        return y >= 14f && y <= 85f && spread < 70
+        return y in 12.0..75.0 && spread < 45
     }
-
-    // ---- Zone measurement helpers (fractions of frame width/height) ----
-
-    private fun zoneRatio(map: BooleanArray, f: FrameAnalysis, x0: Float, x1: Float, y0: Float, y1: Float): Float =
-        zoneRatioPx(map, f, (x0 * f.w).toInt(), (x1 * f.w).toInt(), (y0 * f.h).toInt(), (y1 * f.h).toInt())
-
-    private fun zoneRatioPx(map: BooleanArray, f: FrameAnalysis, x0: Int, x1: Int, y0: Int, y1: Int): Float {
-        val ax = x0.coerceIn(0, f.w - 1)
-        val bx = x1.coerceIn(ax + 1, f.w)
-        val ay = y0.coerceIn(0, f.h - 1)
-        val by = y1.coerceIn(ay + 1, f.h)
-        var hit = 0
-        var total = 0
-        for (y in ay until by) {
-            val row = y * f.w
-            for (x in ax until bx) {
-                total++
-                if (map[row + x]) hit++
-            }
-        }
-        return hit.toFloat() / maxOf(1, total)
-    }
-
-    private fun zoneLumPx(f: FrameAnalysis, x0: Int, x1: Int, y0: Int, y1: Int): Float {
-        val ax = x0.coerceIn(0, f.w - 1)
-        val bx = x1.coerceIn(ax + 1, f.w)
-        val ay = y0.coerceIn(0, f.h - 1)
-        val by = y1.coerceIn(ay + 1, f.h)
-        var sum = 0f
-        var total = 0
-        for (y in ay until by) {
-            val row = y * f.w
-            for (x in ax until bx) {
-                sum += f.lum[row + x]
-                total++
-            }
-        }
-        return sum / maxOf(1, total)
-    }
-
-    private fun zoneLum(f: FrameAnalysis, x0: Float, x1: Float, y0: Float, y1: Float): Float =
-        zoneLumPx(f, (x0 * f.w).toInt(), (x1 * f.w).toInt(), (y0 * f.h).toInt(), (y1 * f.h).toInt())
-
-    /** Garment fabric = foreground subject pixels that are not bare skin. */
-    private fun zoneFabric(f: FrameAnalysis, x0: Float, x1: Float, y0: Float, y1: Float): Float {
-        val ax = (x0 * f.w).toInt().coerceIn(0, f.w - 1)
-        val bx = (x1 * f.w).toInt().coerceIn(ax + 1, f.w)
-        val ay = (y0 * f.h).toInt().coerceIn(0, f.h - 1)
-        val by = (y1 * f.h).toInt().coerceIn(ay + 1, f.h)
-        var hit = 0
-        var total = 0
-        for (y in ay until by) {
-            val row = y * f.w
-            for (x in ax until bx) {
-                total++
-                if (f.subject[row + x] && !f.skin[row + x]) hit++
-            }
-        }
-        return hit.toFloat() / maxOf(1, total)
-    }
-
-    /** Average foreground-subject width (fraction of frame) across a horizontal band. */
-    private fun subjectBandWidth(f: FrameAnalysis, y0: Float, y1: Float): Float =
-        zoneRatio(f.subject, f, 0.10f, 0.90f, y0, y1) * 0.80f
-
-    private fun outerBorderSkinRatio(f: FrameAnalysis): Float {
-        val bxL = (f.w * 0.10f).toInt()
-        val bxR = (f.w * 0.90f).toInt()
-        val byT = (f.h * 0.08f).toInt()
-        var hit = 0
-        var total = 0
-        for (y in 0 until f.h) {
-            val row = y * f.w
-            for (x in 0 until f.w) {
-                if (x < bxL || x >= bxR || y < byT) {
-                    total++
-                    if (f.skin[row + x]) hit++
-                }
-            }
-        }
-        return hit.toFloat() / maxOf(1, total)
-    }
-
-    /** First row (fraction of height) below the waist where bare legs begin; 1f if none. */
-    private fun findHemlineY(f: FrameAnalysis): Float {
-        val startY = (f.h * 0.53f).toInt()
-        val endY = (f.h * 0.92f).toInt()
-        val x0 = (f.w * 0.24f).toInt()
-        val x1 = (f.w * 0.76f).toInt()
-        for (y in startY until endY - 3) {
-            if (zoneRatioPx(f.skin, f, x0, x1, y, y + 1) >= 0.30f &&
-                zoneRatioPx(f.skin, f, x0, x1, y + 1, y + 4) >= 0.25f
-            ) {
-                return y.toFloat() / f.h
-            }
-        }
-        return 1f
-    }
-
-    private fun computeGluteMotionDelta(f: FrameAnalysis): Float {
-        val prev = previousSkinGrid ?: return 0f
-        if (prev.size != f.skin.size) return 0f
-        val ax = (f.w * 0.25f).toInt()
-        val bx = (f.w * 0.75f).toInt()
-        val ay = (f.h * 0.54f).toInt()
-        val by = (f.h * 0.84f).toInt()
-        var diff = 0
-        var total = 0
-        for (y in ay until by) {
-            val row = y * f.w
-            for (x in ax until bx) {
-                total++
-                if (prev[row + x] != f.skin[row + x]) diff++
-            }
-        }
-        return diff.toFloat() / maxOf(1, total)
-    }
-
-    /** Dark beard/stubble band on chin vs. bare cheeks (face coords in analyzer pixels). */
-    private fun hasBeardBand(f: FrameAnalysis, face: DetectedFace): Boolean {
-        val ed = maxOf(2f, face.eyeDist)
-        val mx = face.x
-        val my = face.y
-        val chinX0 = (mx - 0.7f * ed).toInt()
-        val chinX1 = (mx + 0.7f * ed).toInt()
-        val chinY0 = (my + 0.9f * ed).toInt()
-        val chinY1 = (my + 1.6f * ed).toInt()
-        val cheekY0 = (my + 0.2f * ed).toInt()
-        val cheekY1 = (my + 0.7f * ed).toInt()
-        val lCheekX0 = (mx - 1.0f * ed).toInt()
-        val lCheekX1 = (mx - 0.4f * ed).toInt()
-        val rCheekX0 = (mx + 0.4f * ed).toInt()
-        val rCheekX1 = (mx + 1.0f * ed).toInt()
-
-        val cheekSkin = (zoneRatioPx(f.skin, f, lCheekX0, lCheekX1, cheekY0, cheekY1) +
-            zoneRatioPx(f.skin, f, rCheekX0, rCheekX1, cheekY0, cheekY1)) / 2f
-        if (cheekSkin < 0.35f) return false
-        val cheekLum = (zoneLumPx(f, lCheekX0, lCheekX1, cheekY0, cheekY1) +
-            zoneLumPx(f, rCheekX0, rCheekX1, cheekY0, cheekY1)) / 2f
-        val chinSkin = zoneRatioPx(f.skin, f, chinX0, chinX1, chinY0, chinY1)
-        val chinLum = zoneLumPx(f, chinX0, chinX1, chinY0, chinY1)
-        return chinLum < cheekLum - 28f && chinSkin < cheekSkin - 0.25f
-    }
-
-    /** Hair on top of the head AND hair falling past the neck towards the shoulders. */
-    private fun hasLongHairFraming(f: FrameAnalysis, face: DetectedFace): Boolean {
-        val ed = maxOf(2f, face.eyeDist)
-        val mx = face.x
-        val my = face.y
-        val topHair = zoneRatioPx(
-            f.hair, f,
-            (mx - ed).toInt(), (mx + ed).toInt(), (my - 1.6f * ed).toInt(), (my - 0.6f * ed).toInt()
-        )
-        val y0 = maxOf(my + 0.8f * ed, f.h * 0.22f).toInt()
-        val y1 = maxOf(f.h * 0.42f, my + 3.0f * ed).toInt()
-        val leftHair = zoneRatioPx(f.hair, f, (mx - 2.0f * ed).toInt(), (mx - 0.8f * ed).toInt(), y0, y1)
-        val rightHair = zoneRatioPx(f.hair, f, (mx + 0.8f * ed).toInt(), (mx + 2.0f * ed).toInt(), y0, y1)
-        return topHair >= 0.25f && (leftHair >= 0.30f || rightHair >= 0.30f) && (leftHair + rightHair) / 2f >= 0.22f
-    }
-
-    /**
-     * STAGE 1: Female Presence Gate. Returns false (NEVER skip) for walls, objects,
-     * text screens, male / bearded talking heads, or frames with no confirmed female.
-     */
-    private fun isFemaleHumanPresentInFrame(f: FrameAnalysis): Boolean {
-        // 1. Non-human background / warm wall / full-screen lighting rejection
-        val border = outerBorderSkinRatio(f)
-        val totalSkin = zoneRatio(f.skin, f, 0f, 1f, 0f, 1f)
-        if (border >= 0.16f || totalSkin > 0.52f || totalSkin < 0.05f) return false
-
-        val chestSkin = zoneRatio(f.skin, f, 0.18f, 0.82f, 0.36f, 0.55f)
-        val legSkin = zoneRatio(f.skin, f, 0.18f, 0.82f, 0.68f, 0.90f)
-        val waistW = subjectBandWidth(f, 0.52f, 0.62f)
-        val hipW = subjectBandWidth(f, 0.64f, 0.78f)
-        val curvedHip = waistW > 0.05f && hipW > waistW * 1.12f
-
-        if (f.faces.isNotEmpty()) {
-            val upperFaces = f.faces.filter { it.y >= f.h * 0.10f && it.y <= f.h * 0.36f }
-            // A face outside the upper body-pose zone = close-up / talking head -> do not skip.
-            if (upperFaces.isEmpty()) return false
-            val face = upperFaces.maxByOrNull { it.eyeDist } ?: return false
-            val beard = hasBeardBand(f, face)
-            val longHair = hasLongHairFraming(f, face)
-
-            // Check A: male / bearded / normally clothed talking head
-            if (beard && !longHair && chestSkin < 0.15f && legSkin < 0.15f) return false
-
-            // Check B (front/side): long hair, or beardless face with a curved female silhouette
-            return longHair || (!beard && curvedHip)
-        }
-
-        // Check B (close-up / rear body, no face visible)
-        val boundedTorso = border < 0.12f && zoneRatio(f.skin, f, 0.22f, 0.78f, 0.28f, 0.88f) >= 0.22f
-        val chestL = zoneRatio(f.skin, f, 0.28f, 0.46f, 0.35f, 0.56f)
-        val chestR = zoneRatio(f.skin, f, 0.54f, 0.72f, 0.35f, 0.56f)
-        val gluteL = zoneRatio(f.skin, f, 0.28f, 0.47f, 0.58f, 0.84f)
-        val gluteR = zoneRatio(f.skin, f, 0.53f, 0.72f, 0.58f, 0.84f)
-        val symChest = chestL >= 0.30f && chestR >= 0.30f && Math.abs(chestL - chestR) < 0.15f
-        val symGlute = gluteL >= 0.30f && gluteR >= 0.30f && Math.abs(gluteL - gluteR) < 0.15f
-        return boundedTorso && (curvedHip || symChest || symGlute)
-    }
-
-    /** STAGE 2: Dress starts below the shoulders AND ends above the knees with bare legs/feet. */
-    private fun isWearingShortRevealingDress(f: FrameAnalysis): Boolean {
-        val shoulderBare = zoneRatio(f.skin, f, 0.24f, 0.76f, 0.26f, 0.37f)
-        val bustBare = zoneRatio(f.skin, f, 0.24f, 0.76f, 0.37f, 0.53f)
-        val bustFabric = zoneFabric(f, 0.24f, 0.76f, 0.37f, 0.53f)
-        val waistFabric = zoneFabric(f, 0.24f, 0.76f, 0.53f, 0.67f)
-        val upperLegBare = zoneRatio(f.skin, f, 0.24f, 0.76f, 0.67f, 0.79f)
-        val lowerLegBare = zoneRatio(f.skin, f, 0.24f, 0.76f, 0.79f, 0.92f)
-
-        // Normal modest dress protection
-        if (shoulderBare < 0.18f && bustBare < 0.20f && upperLegBare < 0.20f) return false
-
-        val shoulderSeNiche = shoulderBare >= 0.30f
-        val ghutneSeUpar = (bustFabric >= 0.30f || waistFabric >= 0.35f) &&
-            findHemlineY(f) < 0.70f &&
-            upperLegBare >= 0.30f &&
-            lowerLegBare >= 0.24f
-        return shoulderSeNiche && ghutneSeUpar
-    }
-
-    /** STAGE 3: Visible breasts / cleavage (partial, half or more) framed by dress fabric. */
-    private fun isFemaleBreastOrCleavageVisible(f: FrameAnalysis): Boolean {
-        // If a face/chin reaches into the bust box this is a close-up; bust analysis is unreliable.
-        if (f.faces.any { it.y + 1.6f * it.eyeDist > f.h * 0.35f }) return false
-
-        val leftBreast = zoneRatio(f.skin, f, 0.28f, 0.46f, 0.35f, 0.56f)
-        val rightBreast = zoneRatio(f.skin, f, 0.54f, 0.72f, 0.35f, 0.56f)
-        val waistFabric = zoneFabric(f, 0.24f, 0.76f, 0.53f, 0.67f)
-        val strapFabric = (zoneFabric(f, 0.22f, 0.28f, 0.35f, 0.56f) + zoneFabric(f, 0.72f, 0.78f, 0.35f, 0.56f)) / 2f
-
-        val check1 = leftBreast >= 0.32f && rightBreast >= 0.32f && (waistFabric >= 0.32f || strapFabric >= 0.35f)
-        if (!check1) return false
-
-        val leftLum = zoneLum(f, 0.28f, 0.46f, 0.35f, 0.56f)
-        val centerLum = zoneLum(f, 0.46f, 0.54f, 0.35f, 0.56f)
-        val rightLum = zoneLum(f, 0.54f, 0.72f, 0.35f, 0.56f)
-        val cleftShadow = centerLum < ((leftLum + rightLum) / 2f) - 8f
-
-        val upperChestSkin = zoneRatio(f.skin, f, 0.28f, 0.72f, 0.36f, 0.55f)
-        val neckSides = (zoneRatio(f.skin, f, 0.24f, 0.40f, 0.28f, 0.34f) + zoneRatio(f.skin, f, 0.60f, 0.76f, 0.28f, 0.34f)) / 2f
-        val dressBelow = zoneFabric(f, 0.28f, 0.72f, 0.55f, 0.68f)
-        val boundedContour = upperChestSkin >= 0.36f && neckSides < 0.25f && dressBelow >= 0.30f
-
-        return cleftShadow || boundedContour
-    }
-
-    /** STAGE 4: Bare back / exposed hips / buttocks, or curved hips with shaking motion. */
-    private fun isFemaleBackOrButtocksAssVisible(f: FrameAnalysis, gluteMotionDelta: Float): Boolean {
-        val frontFaceCount = f.faces.size
-        val rearHairMass = zoneRatio(f.hair, f, 0.35f, 0.65f, 0.12f, 0.34f) >= 0.45f
-
-        // Case 1: exposed buttocks / micro shorts / bikini / high-cut dress (rear view)
-        val leftGlute = zoneRatio(f.skin, f, 0.28f, 0.47f, 0.58f, 0.84f)
-        val rightGlute = zoneRatio(f.skin, f, 0.53f, 0.72f, 0.58f, 0.84f)
-        if (leftGlute >= 0.34f && rightGlute >= 0.34f && (frontFaceCount == 0 || rearHairMass)) {
-            val lLum = zoneLum(f, 0.28f, 0.47f, 0.58f, 0.84f)
-            val cLum = zoneLum(f, 0.47f, 0.53f, 0.58f, 0.84f)
-            val rLum = zoneLum(f, 0.53f, 0.72f, 0.58f, 0.84f)
-            val gluteCleft = cLum < ((lLum + rLum) / 2f) - 8f
-            if (gluteCleft || findHemlineY(f) < 0.66f) return true
-        }
-
-        // Case 2a: bare back with rear hair above and tight dress/hips below
-        val backSkin = zoneRatio(f.skin, f, 0.30f, 0.70f, 0.32f, 0.56f)
-        val coveredBelow = zoneFabric(f, 0.25f, 0.75f, 0.56f, 0.84f) >= 0.30f
-        if (backSkin >= 0.40f && rearHairMass && frontFaceCount == 0 && coveredBelow) return true
-
-        // Case 2b: curved hip silhouette + shaking/twerking motion (with real skin exposure)
-        val waistW = subjectBandWidth(f, 0.52f, 0.62f)
-        val hipW = subjectBandWidth(f, 0.64f, 0.78f)
-        val hipZoneSkin = zoneRatio(f.skin, f, 0.25f, 0.75f, 0.54f, 0.84f)
-        return waistW > 0.05f && hipW > waistW * 1.15f && gluteMotionDelta >= 0.12f && hipZoneSkin >= 0.20f
-    }
-
     /**
      * STAGE 0: Metadata trigger limited to strictly explicit hashtags only.
      * Whole-tag match so e.g. "#nudemakeup" / "#nudelipstick" never trigger.
@@ -2076,8 +2080,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     private fun triggerAutoSkipIfCooldownElapsed() {
+        if (!prefs.isVisualAutoSkipEnabled) return
         val now = SystemClock.elapsedRealtime()
-        if (now - lastAutoSkipElapsedMs < 2200L) return
+        if (now - lastAutoSkipElapsedMs < 1800L) return
         lastAutoSkipElapsedMs = now
 
         autoSkipCurrentReelOrVideo()
@@ -2088,7 +2093,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             val metrics = resources.displayMetrics
             val centerX = metrics.widthPixels * 0.5f
             val startY = metrics.heightPixels * 0.82f
-            val endY = metrics.heightPixels * 0.15f
+            val endY = metrics.heightPixels * 0.16f
             val path = Path().apply {
                 moveTo(centerX, startY)
                 lineTo(centerX, endY)
@@ -2243,10 +2248,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     }
 
     private fun captureAndCheckBrowserFrame(browserPkg: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInProgress) return
-        isScreenshotInProgress = true
-        lastScreenshotElapsedMs = SystemClock.elapsedRealtime()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || isScreenshotInFlight) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastScreenshotCompletedElapsedMs < 850L) return
 
+        isScreenshotInFlight = true
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -2276,17 +2282,20 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                             try { hwBuffer.close() } catch (_: Exception) {}
                             e.printStackTrace()
                         } finally {
-                            isScreenshotInProgress = false
+                            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+                            isScreenshotInFlight = false
                         }
                     }
 
                     override fun onFailure(errorCode: Int) {
-                        isScreenshotInProgress = false
+                        lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+                        isScreenshotInFlight = false
                     }
                 }
             )
         } catch (e: Exception) {
-            isScreenshotInProgress = false
+            lastScreenshotCompletedElapsedMs = SystemClock.elapsedRealtime()
+            isScreenshotInFlight = false
             e.printStackTrace()
         }
     }
@@ -2771,6 +2780,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     override fun onInterrupt() {
         removeFloatingPill()
         hideDopamineTintOverlay()
+        hideScannerBoundingBoxOverlay()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
     }
@@ -2793,6 +2803,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
         removeFloatingPillCompletely()
         removeDopamineTintOverlayCompletely()
+        removeScannerOverlayCompletely()
         stopStopwatchTicker()
         currentForegroundAppKey?.let { saveStateToPrefs(it) }
         currentForegroundAppKey = null
@@ -2817,13 +2828,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         @Volatile
         var isOurAppScreenOpen: Boolean = false
 
-        // v9.4 4-Stage AI Vision & Face Detector Constants
-        private const val ANALYZER_W = 120
-        private const val ANALYZER_H = 214
-        private const val FACE_W = 120
-        private const val FACE_H = 214
-        private const val MAX_FACES = 2
-        private const val REQUIRED_POSITIVE_FRAMES = 2
         val STRICT_EXPLICIT_TAG_REGEX = Regex("""(?i)#(nsfw|onlyfans|nude|18plus|uncensored)\b""")
 
         val APP_KEYS = listOf("INSTAGRAM", "YOUTUBE", "FACEBOOK", "TIKTOK")
@@ -2936,6 +2940,12 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         @Volatile
         var isDopamineTintAttached: Boolean = false
+
+        @Volatile
+        var scannerBoundingBoxView: ScannerBoundingBoxView? = null
+
+        @Volatile
+        var isScannerOverlayAttached: Boolean = false
 
         fun getTodayDateStr(): String {
             return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())

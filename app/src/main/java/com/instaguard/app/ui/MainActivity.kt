@@ -349,8 +349,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * v9.0 Feature Controls:
+     * v9.0 / v9.5 Feature Controls:
      * - AI Visual Shield & Safe Browser Guard (toggle, PIN protection & live stats)
+     * - Live Red Bounding-Box Scanner Overlay & Auto-Skip Toggles
      */
     private fun setupV90FeatureControls() {
         refreshAiVisualShieldDisplay()
@@ -365,6 +366,22 @@ class MainActivity : AppCompatActivity() {
                 refreshAiVisualShieldDisplay()
                 Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        binding.switchScannerBorderOverlay.setOnCheckedChangeListener(null)
+        binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
+        binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
+            val msg = if (isChecked) "🎯 Scanner Red Border Outlines Enabled" else "🎯 Scanner Red Border Outlines Disabled"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        binding.switchAutoSkipVisual.setOnCheckedChangeListener(null)
+        binding.switchAutoSkipVisual.isChecked = guardManager.prefs.isVisualAutoSkipEnabled
+        binding.switchAutoSkipVisual.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isVisualAutoSkipEnabled = isChecked
+            val msg = if (isChecked) "⏭️ Auto-Skip Suggestive Videos Enabled" else "⏭️ Auto-Skip Suggestive Videos Disabled"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -384,6 +401,22 @@ class MainActivity : AppCompatActivity() {
                 refreshAiVisualShieldDisplay()
                 Toast.makeText(this, "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        binding.switchScannerBorderOverlay.setOnCheckedChangeListener(null)
+        binding.switchScannerBorderOverlay.isChecked = guardManager.prefs.isScannerBorderOverlayEnabled
+        binding.switchScannerBorderOverlay.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isScannerBorderOverlayEnabled = isChecked
+            val msg = if (isChecked) "🎯 Scanner Red Border Outlines Enabled" else "🎯 Scanner Red Border Outlines Disabled"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        binding.switchAutoSkipVisual.setOnCheckedChangeListener(null)
+        binding.switchAutoSkipVisual.isChecked = guardManager.prefs.isVisualAutoSkipEnabled
+        binding.switchAutoSkipVisual.setOnCheckedChangeListener { _, isChecked ->
+            guardManager.prefs.isVisualAutoSkipEnabled = isChecked
+            val msg = if (isChecked) "⏭️ Auto-Skip Suggestive Videos Enabled" else "⏭️ Auto-Skip Suggestive Videos Disabled"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
         if (isEnabled) {

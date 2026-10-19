@@ -61,8 +61,10 @@ class GuardPreferences(context: Context) {
         fun blockedAttemptsTotalKey(appKey: String): String = "blocked_attempts_total_${appKey.uppercase()}"
         fun blockedAttemptsLogKey(dateStr: String): String = "blocked_attempts_log_${dateStr}"
 
-        // v9.0 Keys
+        // v9.0 / v9.5 Keys
         const val KEY_AI_VISUAL_SHIELD_ENABLED = "ai_visual_shield_enabled"
+        const val KEY_SCANNER_BORDER_OVERLAY_ENABLED = "scanner_border_overlay_enabled"
+        const val KEY_VISUAL_AUTOSKIP_ENABLED = "visual_autoskip_enabled"
         fun autoSkippedTodayKey(dateStr: String): String = "nsfw_autoskipped_today_${dateStr}"
         fun browserBlockedTodayKey(dateStr: String): String = "nsfw_browser_blocked_today_${dateStr}"
     }
@@ -269,6 +271,14 @@ class GuardPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_AI_VISUAL_SHIELD_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_AI_VISUAL_SHIELD_ENABLED, value).apply()
 
+    var isScannerBorderOverlayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SCANNER_BORDER_OVERLAY_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SCANNER_BORDER_OVERLAY_ENABLED, value).apply()
+
+    var isVisualAutoSkipEnabled: Boolean
+        get() = prefs.getBoolean(KEY_VISUAL_AUTOSKIP_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_VISUAL_AUTOSKIP_ENABLED, value).apply()
+
     fun getAutoSkippedToday(dateStr: String): Int {
         return prefs.getInt(autoSkippedTodayKey(dateStr), 0)
     }
@@ -280,6 +290,7 @@ class GuardPreferences(context: Context) {
     fun incrementAutoSkippedToday(dateStr: String): Int {
         val next = getAutoSkippedToday(dateStr) + 1
         setAutoSkippedToday(dateStr, next)
+        prefs.edit().putInt("nsfw_autoskipped_today", next).apply()
         return next
     }
 
