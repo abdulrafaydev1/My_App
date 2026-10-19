@@ -16,8 +16,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.PointF
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Display
@@ -26,7 +26,6 @@ import java.util.concurrent.Executor
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
-import android.media.FaceDetector
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -99,18 +98,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastDopamineTintColor = 0
     private var lastDopamineTintUpdateElapsedMs = 0L
 
-    // v9.4 Real-Time 4-Stage AI Vision & Face Detector State
+    // v9.6 Real-Time Visual Scanner & Live Bounding-Box Overlay State
     private val visualAnalyzerExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     @Volatile
-    private var isScreenshotInProgress = false
-    private var lastScreenshotElapsedMs = 0L
+    private var isScreenshotInFlight = false
+    @Volatile
+    private var lastScreenshotCompletedElapsedMs = 0L
     private var lastAutoSkipElapsedMs = 0L
     private var lastBrowserBlockElapsedMs = 0L
     private var previousSkinGrid: BooleanArray? = null
-    private var lastAnalyzedAppKey: String? = null
-    private var faceDetector: FaceDetector? = null
-    private var analyzerAppKey: String? = null
-    private var consecutivePositiveFrames = 0
 
     // Protected Foreground App State (Zero-Flicker & Resilience)
     @Volatile
@@ -372,6 +368,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     val remainingAllowance = maxOf(0L, limitMs - updatedUsage)
                     updateFloatingPill(activeKey, remainingAllowance)
                     updateDopamineTintOverlay(activeKey, remainingAllowance)
+                    updateScannerOverlayVisibility(activeKey)
 
                     // Smart Warning Notifications + Voice Alerts (10-Min, 5-Min & 1-Min)
                     checkAndTriggerWarningNotifications(activeKey, updatedUsage, limitMs)
@@ -380,6 +377,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                         Log.w(TAG, "[$activeKey] Limit reached ($updatedUsage >= $limitMs). Locking for 5 hours.")
                         removeFloatingPill()
                         hideDopamineTintOverlay()
+                        hideScannerBoundingBoxOverlay()
                         val cooldownMs = prefs.getCooldownDurationMs()
                         unlockTimestampMap[activeKey] = System.currentTimeMillis() + cooldownMs
                         accumulatedUsageMap[activeKey] = 0L
@@ -423,9 +421,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     if (hasStrictExplicitTags(root)) {
                         triggerAutoSkipIfCooldownElapsed()
                     } else if (hasVideoElementOnScreen(root)) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInProgress) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
                             val now = SystemClock.elapsedRealtime()
-                            if (now - lastScreenshotElapsedMs >= 400L) {
+                            if (now - lastScreenshotCompletedElapsedMs >= 850L) {
                                 captureAndAnalyzeSocialFrame(activeKey)
                             }
                         }
@@ -720,6 +718,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 val remainingAllowance = maxOf(0L, limitMs - usedMs)
                 showFloatingScrollCounterPill(detectedKey, remainingAllowance)
                 updateDopamineTintOverlay(detectedKey, remainingAllowance)
+                updateScannerOverlayVisibility(detectedKey)
             }
         } else {
             // User switched to another real application or Home Launcher
@@ -729,6 +728,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 lastValidTrackedAppKey = null
                 removeFloatingPill()
                 hideDopamineTintOverlay()
+                hideScannerBoundingBoxOverlay()
             }
         }
     }
@@ -2189,8 +2189,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
             // 3. Active Explicit Video Playback Check
             if (root != null && hasActiveVideoPlayer(root)) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInProgress) {
-                    if (now - lastScreenshotElapsedMs >= 1000L) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isScreenshotInFlight) {
+                    if (now - lastScreenshotCompletedElapsedMs >= 850L) {
                         captureAndCheckBrowserFrame(browserPkg)
                     }
                 }
