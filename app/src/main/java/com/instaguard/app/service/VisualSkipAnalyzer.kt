@@ -220,6 +220,28 @@ object VisualSkipAnalyzer {
         // STAGE 2: EVALUATE 3 SKIP CONDITIONS
         // =========================================================================
 
+        val isBackPose = (upperHairCount >= 20 && upperFaceSkin < 0.10f)
+
+        // -------------------------------------------------------------------------
+        // CONDITION 3 (Evaluated first when subject is facing away / back view):
+        // -------------------------------------------------------------------------
+        val backY1 = (height * 0.25f).toInt()
+        val backY2 = (height * 0.60f).toInt()
+        val backSkinRatio = getSkinRatio((width * 0.25f).toInt(), backY1, (width * 0.75f).toInt(), backY2)
+
+        val glutesY1 = (height * 0.48f).toInt()
+        val glutesY2 = (height * 0.75f).toInt()
+        val gluteSkinRatio = getSkinRatio((width * 0.25f).toInt(), glutesY1, (width * 0.75f).toInt(), glutesY2)
+
+        if (isBackPose) {
+            if (backSkinRatio >= 0.30f) {
+                return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
+            }
+            if (gluteSkinRatio >= 0.28f) {
+                return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
+            }
+        }
+
         // -------------------------------------------------------------------------
         // CONDITION 1: Female Boobs / Breasts / Cleavage Visible
         // -------------------------------------------------------------------------
@@ -294,20 +316,12 @@ object VisualSkipAnalyzer {
         }
 
         // -------------------------------------------------------------------------
-        // CONDITION 3: Back Body — Female Showing Back / ASS / Hip / Buttocks
+        // CONDITION 3 (Catch-all for bare back or exposed glutes in any orientation):
         // -------------------------------------------------------------------------
-        // (a) Bare Back
-        val backY1 = (height * 0.25f).toInt()
-        val backY2 = (height * 0.60f).toInt()
-        val backSkinRatio = getSkinRatio((width * 0.25f).toInt(), backY1, (width * 0.75f).toInt(), backY2)
         if (backSkinRatio >= 0.30f && (upperHairCount >= 20 || upperFaceSkin < 0.10f)) {
             return VisualSkipResult(true, "SKIP_CONDITION_3_BARE_BACK", null)
         }
 
-        // (b) Exposed Glutes / Buttocks / ASS
-        val glutesY1 = (height * 0.48f).toInt()
-        val glutesY2 = (height * 0.75f).toInt()
-        val gluteSkinRatio = getSkinRatio((width * 0.25f).toInt(), glutesY1, (width * 0.75f).toInt(), glutesY2)
         if (gluteSkinRatio >= 0.28f) {
             return VisualSkipResult(true, "SKIP_CONDITION_3_EXPOSED_GLUTES_BUTTOCKS", null)
         }

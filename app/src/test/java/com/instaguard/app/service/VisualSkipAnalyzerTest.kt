@@ -198,14 +198,14 @@ class VisualSkipAnalyzerTest {
     @Test
     fun exposedGlutesButtocks_triggersSkip() {
         val grid = createGrid()
-        // Hair at top
+        // Hair at top (no face)
         fillZone(grid, 35, 10, 65, 30, blackHair)
 
-        // Upper body
-        fillZone(grid, 30, 35, 70, 75, darkBlueFabric)
+        // Upper body covered by shirt down past middle back
+        fillZone(grid, 28, 35, 72, 90, darkBlueFabric)
 
-        // Exposed glutes / buttocks bare skin (y: 86..130)
-        fillZone(grid, 28, 86, 72, 130, darkSkin)
+        // Exposed glutes / buttocks bare skin (y: 92..135)
+        fillZone(grid, 28, 92, 72, 135, darkSkin)
 
         val result = VisualSkipAnalyzer.analyzePixelGrid(grid, width, height)
         assertTrue("Exposed glutes should trigger skip", result.shouldSkip)
