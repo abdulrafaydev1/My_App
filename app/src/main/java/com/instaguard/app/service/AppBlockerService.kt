@@ -50,6 +50,7 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
+import com.instaguard.app.alarm.AlarmRingingActivity
 import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.model.TrackedApp
 import com.instaguard.app.ui.LockScreenActivity
@@ -97,6 +98,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     private var lastBlockedAttemptLogElapsedMs = 0L
     private var lastDopamineTintColor = 0
     private var lastDopamineTintUpdateElapsedMs = 0L
+
+    // v13.1 Anti-Cheat Calculator & Browser Lock State
+    private var lastCalculatorBlockToastElapsedMs = 0L
+    private var lastCalculatorSearchBlockToastElapsedMs = 0L
+    private val MATH_EQUATION_REGEX = Regex("""\b\d+\s*[\*\×\+\-\/]\s*\d+\b""")
+    private val CALCULATOR_KEYWORDS = listOf(
+        "calculator", "calculater", "calc ", "google calculator",
+        "online calculator", "scientific calculator", "math solver", "solve math"
+    )
 
     // v10.0 6-Stage Visual Decision Engine & Tactical HUD Scanner State
     private val visualAnalyzerExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -237,6 +247,19 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 null
             }
             if (rootPkg != null) {
+                // v13.1 Anti-Cheat Guard: Calculator App Lock & Browser Math/Calculator Search Blocker
+                if (isAlarmAntiCheatGuardActive(this@AppBlockerService)) {
+                    if (isCalculatorAppPackage(rootPkg)) {
+                        enforceCalculatorAppBlock(rootPkg)
+                    } else if (isAntiCheatBrowserPackage(rootPkg)) {
+                        if (tickCounter % 6 == 0) {
+                            val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                            if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                                enforceBrowserCalculatorBlock()
+                            }
+                        }
+                    }
+                }
                 if (!IGNORED_SYSTEM_PACKAGES.contains(rootPkg)) {
                     val mapped = mapPackageToAppKey(rootPkg)
                     if (mapped != null) {
@@ -580,6 +603,21 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         val packageName = event.packageName?.toString() ?: ""
+
+        // v13.1 Anti-Cheat Guard: Calculator App Lock & Browser Math/Calculator Search Blocker
+        if (isAlarmAntiCheatGuardActive(this)) {
+            if (isCalculatorAppPackage(packageName)) {
+                enforceCalculatorAppBlock(packageName)
+                return
+            }
+            if (isAntiCheatBrowserPackage(packageName)) {
+                val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                    enforceBrowserCalculatorBlock()
+                    return
+                }
+            }
+        }
 
         // 2. LAYER 2: Anti-Uninstall / Anti-Force-Stop / Anti-Clear-Data Shield
         if (packageName in SYSTEM_TAMPER_PACKAGES) {
@@ -1824,6 +1862,169 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
+    // v13.1 Anti-Cheat Enforcement Methods
+    private fun enforceCalculatorAppBlock(pkg: String) {
+        val now = SystemClock.elapsedRealtime()
+        triggerDoublePulseVibration()
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        tickerHandler.postDelayed({
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }, 60L)
+
+        if (isAlarmCurrentlyRinging) {
+            tickerHandler.postDelayed({
+                try {
+                    val alarmIntent = Intent(this, AlarmRingingActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    }
+                    startActivity(alarmIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, 120L)
+        }
+
+        if (now - lastCalculatorBlockToastElapsedMs >= 2000L) {
+            lastCalculatorBlockToastElapsedMs = now
+            tickerHandler.post {
+                try {
+                    Toast.makeText(
+                        applicationContext,
+                        "🚫 Calculator Locked! Solve the Alarm Challenge without cheating!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    private fun enforceBrowserCalculatorBlock() {
+        val now = SystemClock.elapsedRealtime()
+        triggerDoublePulseVibration()
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        tickerHandler.postDelayed({
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }, 60L)
+
+        if (isAlarmCurrentlyRinging) {
+            tickerHandler.postDelayed({
+                try {
+                    val alarmIntent = Intent(this, AlarmRingingActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    }
+                    startActivity(alarmIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, 120L)
+        }
+
+        if (now - lastCalculatorSearchBlockToastElapsedMs >= 2000L) {
+            lastCalculatorSearchBlockToastElapsedMs = now
+            tickerHandler.post {
+                try {
+                    Toast.makeText(
+                        applicationContext,
+                        "🚫 Calculator Search Blocked! Google/Chrome closed by Alarm Anti-Cheat Shield!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    private fun hasCalculatorSearchOrWidgetInBrowser(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+
+        var foundMatch = false
+        var hasSin = false
+        var hasCos = false
+        var hasTan = false
+        var hasAC = false
+
+        fun traverse(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > 45 || foundMatch) return
+
+            val text = node.text?.toString()?.lowercase(Locale.ROOT)
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT)
+            val viewId = try { node.viewIdResourceName?.lowercase(Locale.ROOT) } catch (e: Exception) { null }
+            val className = node.className?.toString() ?: ""
+
+            // 1. Check viewId for calculator
+            if (viewId != null && viewId.contains("calculator")) {
+                foundMatch = true
+                return
+            }
+
+            // 2. Check keywords in text or desc
+            if (text != null) {
+                for (kw in CALCULATOR_KEYWORDS) {
+                    if (text.contains(kw)) {
+                        foundMatch = true
+                        return
+                    }
+                }
+            }
+            if (desc != null) {
+                for (kw in CALCULATOR_KEYWORDS) {
+                    if (desc.contains(kw)) {
+                        foundMatch = true
+                        return
+                    }
+                }
+            }
+
+            // 3. Check calculator keypad widget indicators
+            val exactLabel = (text ?: desc)?.trim()
+            if (exactLabel != null) {
+                when (exactLabel) {
+                    "sin" -> hasSin = true
+                    "cos" -> hasCos = true
+                    "tan" -> hasTan = true
+                    "ac" -> hasAC = true
+                }
+                if ((hasSin && hasCos) || (hasSin && hasTan) || (hasAC && (hasSin || hasCos || hasTan))) {
+                    foundMatch = true
+                    return
+                }
+            }
+
+            // 4. If alarm currently ringing, check for math expressions inside EditText or input fields
+            if (isAlarmCurrentlyRinging) {
+                val isInput = className.contains("EditText", ignoreCase = true) || node.isEditable
+                if (isInput) {
+                    val inputContent = text ?: desc
+                    if (inputContent != null && MATH_EQUATION_REGEX.containsMatchIn(inputContent)) {
+                        foundMatch = true
+                        return
+                    }
+                }
+            }
+
+            val childCount = node.childCount
+            for (i in 0 until childCount) {
+                val child = try { node.getChild(i) } catch (e: Exception) { null }
+                if (child != null) {
+                    traverse(child, depth + 1)
+                    try { child.recycle() } catch (e: Exception) {}
+                    if (foundMatch) return
+                }
+            }
+        }
+
+        try {
+            traverse(root, 0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        return foundMatch
+    }
+
     private fun startYoutubeLongVideoCountdown() {
         if (isYoutubeLongVideoTimerRunning) return
         isYoutubeLongVideoTimerRunning = true
@@ -2283,6 +2484,99 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         @Volatile
         var isOurAppScreenOpen: Boolean = false
+
+        // v13.1 Anti-Cheat Alarm Ringing & Post-Alarm State
+        @Volatile
+        var isAlarmCurrentlyRinging: Boolean = false
+
+        @Volatile
+        var alarmAntiCheatActiveUntilElapsedMs: Long = 0L
+
+        val CALCULATOR_PACKAGES = setOf(
+            "com.google.android.calculator",
+            "com.android.calculator2",
+            "com.sec.android.app.popupcalculator",   // Samsung Calculator
+            "com.miui.calculator",                   // Xiaomi / Redmi / POCO Calculator
+            "com.coloros.calculator",                // OPPO / Realme Calculator
+            "com.oplus.calculator",                  // OnePlus / OPPO new Calculator
+            "com.oneplus.calculator",                // OnePlus Calculator
+            "com.vivo.calculator",                   // Vivo / iQOO Calculator
+            "com.transsion.calculator",              // Infinix / Tecno / Itel Calculator
+            "com.asus.calculator",                   // ASUS Calculator
+            "com.huawei.calculator",                 // Huawei / Honor Calculator
+            "com.hihonor.calculator",
+            "com.motorola.cn.calculator"
+        )
+
+        val ANTI_CHEAT_BROWSER_PACKAGES = setOf(
+            "com.android.chrome",
+            "com.google.android.googlequicksearchbox",
+            "com.sec.android.app.sbrowser",
+            "org.mozilla.firefox",
+            "com.opera.browser",
+            "com.opera.mini.native",
+            "com.opera.gx",
+            "com.brave.browser",
+            "com.microsoft.emmx",
+            "com.duckduckgo.mobile.android"
+        )
+
+        fun isCalculatorAppPackage(pkg: String): Boolean {
+            val lower = pkg.lowercase(Locale.ROOT)
+            return CALCULATOR_PACKAGES.contains(lower) ||
+                   lower.contains(".calculator") ||
+                   lower.endsWith("calculator") ||
+                   lower.contains("popupcalculator")
+        }
+
+        fun isAntiCheatBrowserPackage(pkg: String): Boolean {
+            val lower = pkg.lowercase(Locale.ROOT)
+            return ANTI_CHEAT_BROWSER_PACKAGES.contains(lower) ||
+                   BROWSER_PACKAGES.contains(lower) ||
+                   lower.contains("browser") ||
+                   lower.contains("chrome")
+        }
+
+        fun activateAlarmAntiCheatWindow(context: Context, isRingingNow: Boolean, durationMinutesAfterRing: Int = 15) {
+            isAlarmCurrentlyRinging = isRingingNow
+            val durationMs = durationMinutesAfterRing * 60_000L
+            alarmAntiCheatActiveUntilElapsedMs = SystemClock.elapsedRealtime() + durationMs
+            try {
+                val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                val epochUntil = System.currentTimeMillis() + durationMs
+                sp.edit()
+                    .putBoolean("alarm_currently_ringing", isRingingNow)
+                    .putLong("alarm_anticheat_until_epoch", epochUntil)
+                    .apply()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        fun deactivateAlarmRinging(context: Context) {
+            isAlarmCurrentlyRinging = false
+            try {
+                val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                sp.edit()
+                    .putBoolean("alarm_currently_ringing", false)
+                    .apply()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        fun isAlarmAntiCheatGuardActive(context: Context): Boolean {
+            if (isAlarmCurrentlyRinging) return true
+            if (SystemClock.elapsedRealtime() < alarmAntiCheatActiveUntilElapsedMs) return true
+            return try {
+                val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                val ringingInPrefs = sp.getBoolean("alarm_currently_ringing", false)
+                val epochUntil = sp.getLong("alarm_anticheat_until_epoch", 0L)
+                ringingInPrefs || (System.currentTimeMillis() < epochUntil)
+            } catch (e: Exception) {
+                false
+            }
+        }
 
         val STRICT_EXPLICIT_TAG_REGEX = Regex("""(?i)#(nsfw|onlyfans|nude|18plus|uncensored)\b""")
 

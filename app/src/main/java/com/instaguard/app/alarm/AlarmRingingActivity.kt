@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.instaguard.app.databinding.ActivityAlarmRingingBinding
+import com.instaguard.app.service.AppBlockerService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,6 +81,14 @@ class AlarmRingingActivity : AppCompatActivity() {
         setupMissionControls()
         setupSnoozeAndEmergencyControls()
         startClockAndPulseAnimations()
+
+        // v13.1 Activate Anti-Cheat Guard Window on Alarm Ringing
+        AppBlockerService.activateAlarmAntiCheatWindow(this, isRingingNow = true, durationMinutesAfterRing = 15)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppBlockerService.activateAlarmAntiCheatWindow(this, isRingingNow = true, durationMinutesAfterRing = 15)
     }
 
     private fun wakeAndUnlockScreen() {
@@ -266,6 +275,7 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         binding.btnEmergencyStop.visibility = if (isTest) View.VISIBLE else View.GONE
         binding.btnEmergencyStop.setOnClickListener {
+            AppBlockerService.deactivateAlarmRinging(this)
             stopAudioAndVibration()
             Toast.makeText(this, "🛑 Test alarm stopped.", Toast.LENGTH_SHORT).show()
             finish()
@@ -273,6 +283,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun snoozeAlarm() {
+        AppBlockerService.deactivateAlarmRinging(this)
         stopAudioAndVibration()
         AlarmManagerHelper.scheduleSnooze(this, alarm, alarm.snoozeMinutes)
         Toast.makeText(this, "💤 Alarm snoozed for ${alarm.snoozeMinutes} minutes.", Toast.LENGTH_LONG).show()
@@ -280,6 +291,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun dismissAlarmSuccessfully() {
+        AppBlockerService.deactivateAlarmRinging(this)
         stopAudioAndVibration()
 
         if (!isTest) {
@@ -332,6 +344,9 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (isFinishing) {
+            AppBlockerService.deactivateAlarmRinging(this)
+        }
         handler.removeCallbacks(clockRunnable)
         pulseAnimator?.cancel()
         stopAudioAndVibration()

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
+import com.instaguard.app.service.AppBlockerService
 
 /**
  * BroadcastReceiver triggered by AlarmManager or system BOOT_COMPLETED.
@@ -23,6 +24,9 @@ class AlarmReceiver : BroadcastReceiver() {
             val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID) ?: ""
             val isTest = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_TEST, false)
             val isSnooze = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, false)
+
+            // v13.1 Activate Anti-Cheat Guard Window
+            AppBlockerService.activateAlarmAntiCheatWindow(context, isRingingNow = true, durationMinutesAfterRing = 15)
 
             // Acquire short-lived WakeLock to ensure screen turns on and activity starts
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
