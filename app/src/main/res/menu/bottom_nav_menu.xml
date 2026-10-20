@@ -9,6 +9,10 @@
         android:icon="@drawable/ic_analytics_chart"
         android:title="Analytics" />
     <item
+        android:id="@+id/nav_alarm"
+        android:icon="@drawable/ic_alarm_tab"
+        android:title="Alarm" />
+    <item
         android:id="@+id/nav_shields"
         android:icon="@drawable/ic_shield_lock"
         android:title="Shields" />

@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/cardAlarmRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="@color/surface_card"
+    app:cardCornerRadius="18dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/surface_variant"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Row 1: Time, Countdown Badge & Master ON/OFF Switch -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvAlarmTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="06:30 AM"
+                android:textColor="@color/text_primary"
+                android:textSize="26sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/tvCountdownBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="Rings in 6h 45m"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/switchAlarmEnabled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:thumbTint="@color/accent_neon_blue"
+                app:trackTint="@color/surface_variant" />
+        </LinearLayout>
+
+        <!-- Row 2: Label & Hard Sound Name -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvAlarmLabel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🏷️ Morning Gym &amp; Deep Work"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvAlarmSound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="🚨 Nuclear Air-Raid Siren"
+                android:textColor="@color/accent_yellow"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Row 3: Repeat Days Indicators (M T W T F S S) -->
+        <LinearLayout
+            android:id="@+id/layoutDaysPills"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/pillMon"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="M"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillTue"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="T"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillWed"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="W"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillThu"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="T"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillFri"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="F"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillSat"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="S"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/pillSun"
+                android:layout_width="26dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_pill_version"
+                android:gravity="center"
+                android:text="S"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Row 4: Feature Badges (Auto-Delete, Snooze, Mission, Vol, Voice) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvBadgeAutoDelete"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:text="🗑️ Auto-Delete"
+                android:textColor="@color/accent_red"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvBadgeSnooze"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:text="💤 5m"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvBadgeMission"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:text="🧠 Math"
+                android:textColor="@color/accent_yellow"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvBadgeVolume"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:text="🔊 100%"
+                android:textColor="@color/accent_neon_blue"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvBadgeVoice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_pill_version"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:text="🗣️ Voice"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Divider line -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="10dp"
+            android:background="@color/surface_variant" />
+
+        <!-- Row 5: Action Buttons (Test, Edit, Delete) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTestAlarm"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="▶️ Test"
+                android:textColor="@color/accent_yellow"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                app:cornerRadius="10dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/accent_yellow"
+                app:backgroundTint="@color/surface_variant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnEditAlarm"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="✏️ Edit"
+                android:textColor="@color/accent_neon_blue"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                app:cornerRadius="10dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/accent_neon_blue"
+                app:backgroundTint="@color/surface_variant" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDeleteAlarm"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:text="🗑️ Delete"
+                android:textColor="@color/accent_red"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                app:cornerRadius="10dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="@color/accent_red"
+                app:backgroundTint="@color/surface_variant" />
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

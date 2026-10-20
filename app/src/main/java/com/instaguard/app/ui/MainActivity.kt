@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
+import com.instaguard.app.alarm.AlarmFragment
 import com.instaguard.app.data.GuardPreferences
 import com.instaguard.app.databinding.ActivityMainBinding
 import com.instaguard.app.service.AppBlockerService
@@ -49,6 +50,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var homeFragment: HomeDashboardFragment
     private lateinit var analyticsFragment: AnalyticsFragment
+    private lateinit var alarmFragment: AlarmFragment
     private lateinit var shieldsFragment: ShieldsFragment
     private lateinit var settingsFragment: SettingsFragment
     private var activeFragment: Fragment? = null
@@ -84,12 +86,14 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null) {
             homeFragment = HomeDashboardFragment()
             analyticsFragment = AnalyticsFragment()
+            alarmFragment = AlarmFragment()
             shieldsFragment = ShieldsFragment()
             settingsFragment = SettingsFragment()
 
             fm.beginTransaction()
                 .add(R.id.fragmentContainer, homeFragment, "HOME")
                 .add(R.id.fragmentContainer, analyticsFragment, "ANALYTICS").hide(analyticsFragment)
+                .add(R.id.fragmentContainer, alarmFragment, "ALARM").hide(alarmFragment)
                 .add(R.id.fragmentContainer, shieldsFragment, "SHIELDS").hide(shieldsFragment)
                 .add(R.id.fragmentContainer, settingsFragment, "SETTINGS").hide(settingsFragment)
                 .commit()
@@ -98,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             homeFragment = fm.findFragmentByTag("HOME") as? HomeDashboardFragment ?: HomeDashboardFragment()
             analyticsFragment = fm.findFragmentByTag("ANALYTICS") as? AnalyticsFragment ?: AnalyticsFragment()
+            alarmFragment = fm.findFragmentByTag("ALARM") as? AlarmFragment ?: AlarmFragment()
             shieldsFragment = fm.findFragmentByTag("SHIELDS") as? ShieldsFragment ?: ShieldsFragment()
             settingsFragment = fm.findFragmentByTag("SETTINGS") as? SettingsFragment ?: SettingsFragment()
             activeFragment = homeFragment
@@ -109,6 +114,7 @@ class MainActivity : AppCompatActivity() {
             val targetFragment = when (item.itemId) {
                 R.id.nav_home -> homeFragment
                 R.id.nav_analytics -> analyticsFragment
+                R.id.nav_alarm -> alarmFragment
                 R.id.nav_shields -> shieldsFragment
                 R.id.nav_settings -> settingsFragment
                 else -> null
@@ -135,7 +141,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v12.1 PRO"
+        binding.tvToolbarBadge.text = "v13.0 PRO"
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()
@@ -151,6 +157,7 @@ class MainActivity : AppCompatActivity() {
         when (fragment) {
             is HomeDashboardFragment -> fragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
             is AnalyticsFragment -> fragment.updateAnalytics(guardManager)
+            is AlarmFragment -> fragment.refreshAlarmsUI()
             is ShieldsFragment -> fragment.refreshShieldsUI(guardManager)
             is SettingsFragment -> fragment.refreshSettingsUI(guardManager)
         }
@@ -165,6 +172,9 @@ class MainActivity : AppCompatActivity() {
         }
         if (::analyticsFragment.isInitialized && analyticsFragment.isAdded) {
             analyticsFragment.updateAnalytics(guardManager)
+        }
+        if (::alarmFragment.isInitialized && alarmFragment.isAdded) {
+            alarmFragment.refreshAlarmsUI()
         }
         if (::shieldsFragment.isInitialized && shieldsFragment.isAdded) {
             shieldsFragment.refreshShieldsUI(guardManager)
