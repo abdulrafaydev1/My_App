@@ -23,7 +23,7 @@
     </style>
 
     <!-- Bottom Navigation Bar Label Style -->
-    <style name="BottomNavLabel" parent="TextAppearance.Material3.LabelSmall">
+    <style name="BottomNavLabel" parent="@android:style/TextAppearance.Small">
         <item name="android:textSize">11sp</item>
         <item name="android:textStyle">bold</item>
     </style>
