@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollShields"
@@ -8,17 +7,16 @@
     android:layout_height="match_parent"
     android:background="@color/bg_primary"
     android:fillViewport="true"
-    android:overScrollMode="never">
+    android:clipToPadding="false"
+    android:paddingTop="12dp"
+    android:paddingBottom="96dp"
+    android:paddingHorizontal="16dp">
 
     <LinearLayout
         android:id="@+id/layoutShieldsContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="24dp">
+        android:orientation="vertical">
 
         <!-- AI Visual Shield Card -->
         <com.google.android.material.card.MaterialCardView
@@ -29,7 +27,7 @@
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeWidth="1.5dp"
-            app:strokeColor="@color/border_card"
+            app:strokeColor="@color/surface_variant"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -38,34 +36,25 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
-                <!-- Header Row -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_shield_lock"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="Shield Icon" />
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="10dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:id="@+id/tvAiVisualShieldTitle"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="AI Visual Shield"
+                            android:text="🛡️ AI Visual Shield"
                             android:textColor="@color/text_primary"
-                            android:textSize="16sp"
+                            android:textSize="17sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -73,7 +62,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="ACTIVE • On-Device Neural Vision"
+                            android:text="ACTIVE • TFLite Neural + ML Kit"
                             android:textColor="@color/accent_neon_blue"
                             android:textSize="12sp"
                             android:textStyle="bold" />
@@ -91,20 +80,19 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="Analyzes video frames locally with zero cloud latency to auto-skip explicit postures and terminate adult browser searches."
+                    android:layout_marginTop="8dp"
+                    android:text="On-device computer vision analyzes live video frames in real time with 0ms cloud latency."
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
-                    android:lineSpacingExtra="2dp" />
+                    android:textSize="13sp" />
 
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
                     android:layout_marginTop="14dp"
                     android:layout_marginBottom="14dp"
-                    android:background="@color/border_subtle" />
+                    android:background="@color/surface_variant" />
 
-                <!-- Auto-Skip Toggle Row -->
+                <!-- Auto-Skip Toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -120,7 +108,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Auto-Skip Suggestive Content"
+                            android:text="⏭️ Auto-Skip Suggestive Videos"
                             android:textColor="@color/text_primary"
                             android:textSize="14sp"
                             android:textStyle="bold" />
@@ -129,7 +117,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Automatically swipes up when explicit poses are detected."
+                            android:text="Instantly swipes up on suggestive female content."
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -143,13 +131,12 @@
                         app:trackTint="@color/surface_variant" />
                 </LinearLayout>
 
-                <!-- Live Diagnostic HUD Container -->
+                <!-- Live Diagnostic Status & Counters -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:background="@drawable/bg_refresh_circle"
-                    android:backgroundTint="@color/surface_variant"
+                    android:background="@color/bg_primary"
                     android:padding="12dp"
                     android:orientation="vertical">
 
@@ -157,33 +144,29 @@
                         android:id="@+id/tvScannerDiagnosticLive"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="HUD Status: Normal Content Allowed"
+                        android:text="⚡ Scanner Status: Normal Content Allowed"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp"
-                        android:textStyle="bold"
-                        android:fontFamily="monospace" />
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvAutoSkippedCount"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="Auto-Skipped Suggestive Reels: 0"
+                        android:text="⏭️ Videos Auto-Skipped Today: 0"
                         android:textColor="@color/accent_yellow"
-                        android:textSize="12sp"
-                        android:fontFamily="monospace" />
+                        android:textSize="12sp" />
 
                     <TextView
                         android:id="@+id/tvBrowserBlockedCount"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Blocked Browser Searches: 0"
+                        android:text="🚫 Explicit Searches Blocked Today: 0"
                         android:textColor="@color/accent_red"
-                        android:textSize="12sp"
-                        android:fontFamily="monospace" />
+                        android:textSize="12sp" />
                 </LinearLayout>
-
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -193,10 +176,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="14dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/border_subtle"
+            app:strokeColor="@color/surface_variant"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -211,24 +194,16 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:src="@drawable/ic_reels_clapper"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="Reels Icon" />
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="10dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Only Reels &amp; Shorts Blocker"
+                            android:text="🎬 Only Reels &amp; Shorts Blocker"
                             android:textColor="@color/text_primary"
                             android:textSize="15sp"
                             android:textStyle="bold" />
@@ -236,8 +211,8 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Blocks short-form scroll feeds while allowing search, DMs, and long videos."
+                            android:layout_marginTop="4dp"
+                            android:text="Blocks addictive vertical shorts while allowing standard search, DMs, and long videos."
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -258,10 +233,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="14dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/border_subtle"
+            app:strokeColor="@color/surface_variant"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -276,24 +251,16 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:src="@drawable/ic_timer"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="Dimmer Icon" />
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="10dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Dopamine Dimmer (Grayscale)"
+                            android:text="🎨 Dopamine Dimmer (Grayscale)"
                             android:textColor="@color/text_primary"
                             android:textSize="15sp"
                             android:textStyle="bold" />
@@ -301,8 +268,8 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Gradually desaturates screen colors in the last 5 minutes of allowance."
+                            android:layout_marginTop="4dp"
+                            android:text="Gradually desaturates screen to grayscale in the final 5 minutes of allowed app time."
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -323,10 +290,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="14dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/border_subtle"
+            app:strokeColor="@color/surface_variant"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -341,24 +308,16 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:src="@drawable/ic_alarm_clock"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="Sleep Icon" />
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="10dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Night Sleep Guard (11:30 PM – 6:00 AM)"
+                            android:text="🌙 Night Sleep Guard (11PM - 6AM)"
                             android:textColor="@color/text_primary"
                             android:textSize="15sp"
                             android:textStyle="bold" />
@@ -366,8 +325,8 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Strict bedtime lockdown. Requires 3-Stage Math + PIN to disable."
+                            android:layout_marginTop="4dp"
+                            android:text="Enforces strict lockdown during bed hours. Requires Math Challenge or PIN to unlock."
                             android:textColor="@color/text_secondary"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -382,15 +341,15 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Security & Master PIN Management Card -->
+        <!-- Security & PIN Management Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/border_subtle"
+            app:strokeColor="@color/surface_variant"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -399,47 +358,30 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:src="@drawable/ic_lock"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="PIN Icon" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:text="Security Master PIN"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                    android:text="🔐 Master Security PIN &amp; Math Puzzles"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="Configure a 4-digit PIN required for disabling visual shields, sleep guard, and maintenance pauses."
+                    android:layout_marginTop="4dp"
+                    android:text="Set a 4-digit Master PIN to prevent impulse tampering, early unblocks, or setting changes."
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:lineSpacingExtra="2dp" />
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMasterPinSettings"
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginTop="12dp"
-                    android:text="Configure Master PIN"
+                    android:text="⚙️ Configure Master PIN"
                     android:textColor="#0B0F19"
                     android:textStyle="bold"
-                    android:textSize="13sp"
                     app:cornerRadius="12dp"
                     app:backgroundTint="@color/accent_neon_blue" />
             </LinearLayout>

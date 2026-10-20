@@ -9,13 +9,6 @@
     <color name="accent_neon_blue">#00E5FF</color>
     <color name="text_primary">#FFFFFF</color>
     <color name="text_secondary">#8B949E</color>
-    <color name="text_tertiary">#6E7681</color>
-
-    <!-- Border & Divider Tokens -->
-    <color name="border_subtle">#21262D</color>
-    <color name="border_card">#30363D</color>
-    <color name="divider">#21262D</color>
-    <color name="surface_elevated">#1C2128</color>
 
     <!-- Brand / Primary -->
     <color name="primary">#00E5FF</color>

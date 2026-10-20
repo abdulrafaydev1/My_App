@@ -19,64 +19,51 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:contentInsetStart="16dp"
-            app:contentInsetEnd="16dp"
-            app:elevation="0dp">
+            app:contentInsetStartWithNavigation="0dp"
+            app:title=""
+            app:titleTextColor="@color/text_primary">
 
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="start|center_vertical"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:src="@drawable/ic_shield_lock"
-                    app:tint="@color/accent_neon_blue"
-                    android:contentDescription="@string/app_name" />
-
-                <LinearLayout
+                <TextView
+                    android:id="@+id/tvToolbarTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:orientation="vertical">
+                    android:text="InstaGuard Pro"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/app_name"
-                        android:textColor="@color/text_primary"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:fontFamily="sans-serif-medium" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Digital Wellbeing &amp; Focus Guard"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="11sp" />
-                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvToolbarBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_pill_version"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="v12.1 PRO"
+                    android:textColor="@color/accent_neon_blue"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnRefresh"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_gravity="end|center_vertical"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="end"
                 android:layout_marginEnd="12dp"
-                android:background="@drawable/bg_refresh_circle"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_refresh"
                 app:tint="@color/accent_neon_blue"
                 android:contentDescription="@string/btn_refresh" />
         </androidx.appcompat.widget.Toolbar>
-
-        <!-- Crisp Subtle Border -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/border_subtle" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- Main Fragment / Tab Content Container -->
@@ -87,29 +74,21 @@
         android:layout_marginBottom="68dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-    <!-- Persistent Bottom Navigation Bar Container -->
-    <LinearLayout
+    <!-- YouTube / Instagram Style Bottom Navigation Bar -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNavigationView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="68dp"
         android:layout_gravity="bottom"
-        android:orientation="vertical">
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="@color/border_subtle" />
-
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/bottomNavigationView"
-            android:layout_width="match_parent"
-            android:layout_height="68dp"
-            android:background="@color/surface_card"
-            app:itemIconTint="@color/bottom_nav_color_selector"
-            app:itemTextColor="@color/bottom_nav_color_selector"
-            app:itemRippleColor="#2600E5FF"
-            app:elevation="0dp"
-            app:labelVisibilityMode="labeled"
-            app:menu="@menu/bottom_nav_menu" />
-    </LinearLayout>
+        android:background="@color/surface_card"
+        app:labelVisibilityMode="labeled"
+        app:itemIconSize="22dp"
+        app:itemTextAppearanceActive="@style/BottomNavLabel"
+        app:itemTextAppearanceInactive="@style/BottomNavLabel"
+        app:itemIconTint="@color/bottom_nav_color_selector"
+        app:itemTextColor="@color/bottom_nav_color_selector"
+        app:itemRippleColor="#3300E5FF"
+        app:elevation="16dp"
+        app:menu="@menu/bottom_nav_menu" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

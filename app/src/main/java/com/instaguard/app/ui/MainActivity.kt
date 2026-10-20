@@ -32,7 +32,7 @@ import com.instaguard.app.util.UsageStatsHelper
 import java.util.Locale
 
 /**
- * Main Activity for InstaGuard Pro v12.0 (Premium UI Suite).
+ * Main Activity for InstaGuard Pro v12.1 (Premium UI Suite).
  * Features a YouTube/Instagram-inspired persistent Bottom Navigation Bar,
  * OLED Dark-Glass theme, seamless 0-lag fragment caching,
  * real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
@@ -134,6 +134,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
+        binding.tvToolbarTitle.text = "InstaGuard Pro"
+        binding.tvToolbarBadge.text = "v12.1 PRO"
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()

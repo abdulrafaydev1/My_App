@@ -69,14 +69,14 @@ class ShieldsFragment : Fragment() {
             } else {
                 guardManager.prefs.isAiVisualShieldEnabled = true
                 refreshShieldsUI(guardManager)
-                Toast.makeText(requireContext(), "AI Visual Shield Activated", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "🛡️ AI Visual Shield & Safe Browser Guard Activated", Toast.LENGTH_SHORT).show()
             }
         }
 
         binding.switchAutoSkipVisual.setOnCheckedChangeListener { _, isChecked ->
             val mainActivity = activity as? MainActivity ?: return@setOnCheckedChangeListener
             mainActivity.guardManager.prefs.isVisualAutoSkipEnabled = isChecked
-            val msg = if (isChecked) "Auto-Skip Suggestive Videos Enabled" else "Auto-Skip Suggestive Videos Disabled"
+            val msg = if (isChecked) "⏭️ Auto-Skip Suggestive Videos Enabled" else "⏭️ Auto-Skip Suggestive Videos Disabled"
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         }
 
@@ -84,7 +84,7 @@ class ShieldsFragment : Fragment() {
             val mainActivity = activity as? MainActivity ?: return@setOnCheckedChangeListener
             mainActivity.guardManager.prefs.isOnlyReelsShortsMode = isChecked
             val msg = if (isChecked) {
-                "Only Reels & Shorts Blocker Active"
+                "🎯 Only Reels & Shorts Blocker Active (IG DMs & YT Long Videos Allowed)"
             } else {
                 "Standard Full-App Allowance Mode Active"
             }
@@ -95,9 +95,9 @@ class ShieldsFragment : Fragment() {
             val mainActivity = activity as? MainActivity ?: return@setOnCheckedChangeListener
             mainActivity.guardManager.prefs.isDopamineDimmerEnabled = isChecked
             val msg = if (isChecked) {
-                "Dopamine Dimmer (Grayscale) Enabled"
+                "🌑 Last 5-Min Dopamine Dimmer Tint Enabled"
             } else {
-                "Dopamine Dimmer Disabled"
+                "🌑 Last 5-Min Dopamine Dimmer Tint Disabled"
             }
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         }
@@ -112,7 +112,7 @@ class ShieldsFragment : Fragment() {
                 setupListeners()
                 Toast.makeText(
                     requireContext(),
-                    "Night Sleep Window is active! Solve 3-Stage Math Challenge + Master PIN to disable.",
+                    "🌙 Night Sleep Window is active! Solve 3-Stage Math Challenge + Master PIN to disable.",
                     Toast.LENGTH_LONG
                 ).show()
                 mainActivity.startNightSleepDisableMathChallenge(step = 1)
@@ -121,9 +121,9 @@ class ShieldsFragment : Fragment() {
 
             guardManager.prefs.isNightSleepGuardEnabled = isChecked
             val msg = if (isChecked) {
-                "Night Sleep Guard (11:30 PM – 6:00 AM) Enabled"
+                "🌙 Night Sleep Guard (11:30 PM – 6:00 AM) Enabled"
             } else {
-                "Night Sleep Guard Disabled"
+                "🌙 Night Sleep Guard Disabled"
             }
             Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         }
@@ -158,20 +158,20 @@ class ShieldsFragment : Fragment() {
         setupListeners()
 
         if (isVisualEnabled) {
-            binding.tvAiVisualShieldStatus.text = "ACTIVE • On-Device Neural Vision"
+            binding.tvAiVisualShieldStatus.text = "ACTIVE • Auto-skips suggestive content & terminates adult searches"
             binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#00E5FF"))
         } else {
             binding.tvAiVisualShieldStatus.text = "PAUSED • Protection disabled"
             binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#8B949E"))
         }
 
-        binding.tvAutoSkippedCount.text = "Auto-Skipped Suggestive Reels: $autoSkipped"
-        binding.tvBrowserBlockedCount.text = "Blocked Browser Searches: $browserBlocked"
-        binding.tvScannerDiagnosticLive.text = "HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
+        binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
+        binding.tvBrowserBlockedCount.text = "🚫 Blocked Browser Searches/Videos: $browserBlocked"
+        binding.tvScannerDiagnosticLive.text = "📡 HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
     }
 
     fun updateLiveHud() {
         if (_binding == null) return
-        binding.tvScannerDiagnosticLive.text = "HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
+        binding.tvScannerDiagnosticLive.text = "📡 HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
     }
 }

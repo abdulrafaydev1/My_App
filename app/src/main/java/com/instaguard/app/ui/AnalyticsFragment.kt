@@ -16,10 +16,10 @@ import java.util.Locale
 
 /**
  * Tab 2: Analytics Fragment (v12.0)
- * Modern Analytics & Weekly Insights Dashboard:
+ * Modern Analytics & Weekly Insights Dashboard featuring:
  * - Today's Total Screen Time & Total Reels/Shorts Scrolled
  * - Per-App Screen Time Breakdown with Dynamic Progress Bars
- * - Impulsive Urges & Blocked Attempts Log
+ * - Impulsive Urges & Weakness Log (Real-time blocked attempts tracking)
  * - 7-Day Historical Breakdown Table
  */
 class AnalyticsFragment : Fragment() {
@@ -80,7 +80,7 @@ class AnalyticsFragment : Fragment() {
         binding.tvAnalyticsTodayTotal.text = formatDurationHoursMinutesSeconds(totalTodayMs)
 
         val totalScrollsToday = AppBlockerService.getTotalScrollsToday(ctx)
-        binding.tvAnalyticsScrollsTotal.text = "$totalScrollsToday"
+        binding.tvAnalyticsScrollsTotal.text = "🔥 Total Reels/Shorts Scrolled Today: $totalScrollsToday"
 
         val instaPct = if (totalTodayMs > 0L) ((instaMs * 100) / totalTodayMs).toInt() else 0
         val ytPct = if (totalTodayMs > 0L) ((ytMs * 100) / totalTodayMs).toInt() else 0
@@ -92,16 +92,16 @@ class AnalyticsFragment : Fragment() {
         val fbScrolls = AppBlockerService.getScrollToday("FACEBOOK", ctx)
         val ttScrolls = AppBlockerService.getScrollToday("TIKTOK", ctx)
 
-        binding.tvAnalyticsInstagram.text = "Instagram: ${formatDuration(instaMs)} ($instaPct%) • $instaScrolls scrolls"
+        binding.tvAnalyticsInstagram.text = "📷 Instagram: ${formatDuration(instaMs)} ($instaPct%) • 🎬 $instaScrolls scrolls"
         binding.progressAnalyticsInstagram.progress = instaPct
 
-        binding.tvAnalyticsYouTube.text = "YouTube: ${formatDuration(ytMs)} ($ytPct%) • $ytScrolls scrolls"
+        binding.tvAnalyticsYouTube.text = "▶️ YouTube: ${formatDuration(ytMs)} ($ytPct%) • 🎬 $ytScrolls scrolls"
         binding.progressAnalyticsYouTube.progress = ytPct
 
-        binding.tvAnalyticsFacebook.text = "Facebook: ${formatDuration(fbMs)} ($fbPct%) • $fbScrolls scrolls"
+        binding.tvAnalyticsFacebook.text = "👥 Facebook: ${formatDuration(fbMs)} ($fbPct%) • 🎬 $fbScrolls scrolls"
         binding.progressAnalyticsFacebook.progress = fbPct
 
-        binding.tvAnalyticsTikTok.text = "TikTok: ${formatDuration(ttMs)} ($ttPct%) • $ttScrolls scrolls"
+        binding.tvAnalyticsTikTok.text = "🎵 TikTok: ${formatDuration(ttMs)} ($ttPct%) • 🎬 $ttScrolls scrolls"
         binding.progressAnalyticsTikTok.progress = ttPct
 
         // Weakness & Impulse Card
@@ -117,7 +117,7 @@ class AnalyticsFragment : Fragment() {
 
     private fun updateWeaknessImpulseCard(ctx: android.content.Context) {
         val totalBlockedToday = AppBlockerService.getTotalBlockedAttemptsToday(ctx)
-        binding.tvWeaknessTotalToday.text = "Total Blocked Attempts Today: $totalBlockedToday"
+        binding.tvWeaknessTotalToday.text = "🚫 Total Blocked Attempts Today: $totalBlockedToday"
 
         val igBlocked = AppBlockerService.getBlockedAttemptsToday("INSTAGRAM", ctx)
         val ytBlocked = AppBlockerService.getBlockedAttemptsToday("YOUTUBE", ctx)
@@ -128,11 +128,11 @@ class AnalyticsFragment : Fragment() {
 
         val logText = AppBlockerService.getBlockedAttemptsLogToday(ctx)
         if (logText.isBlank() || totalBlockedToday == 0) {
-            binding.tvWeaknessImpulseLog.text = "0 Blocked Attempts Today — 100% Pure Discipline!"
+            binding.tvWeaknessImpulseLog.text = "✅ 0 Blocked Attempts Today — 100% Pure Discipline!"
             binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#10B981"))
         } else {
             binding.tvWeaknessImpulseLog.text = logText
-            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#FF8A80"))
+            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#FCA5A5"))
         }
     }
 
