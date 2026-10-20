@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollDashboard"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_primary"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:overScrollMode="never">
 
     <LinearLayout
         android:id="@+id/layoutDashboardContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
 
         <!-- Top Hero Status & Allowance Card -->
         <com.google.android.material.card.MaterialCardView
@@ -24,7 +29,7 @@
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_card"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -34,6 +39,7 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
+                <!-- Header Row: Status dot + Title + Shield Icon -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -42,9 +48,9 @@
 
                     <View
                         android:id="@+id/viewStatusDot"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:background="@drawable/ic_launcher_background"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/bg_refresh_circle"
                         android:backgroundTint="@color/status_green" />
 
                     <TextView
@@ -53,29 +59,42 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="10dp"
-                        android:text="AI Focus Shield Active"
-                        android:textColor="@color/text_primary"
-                        android:textSize="17sp"
-                        android:textStyle="bold" />
+                        android:text="PROTECTION ACTIVE"
+                        android:textColor="@color/status_green"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.06"
+                        android:fontFamily="sans-serif-medium" />
 
                     <ImageView
                         android:id="@+id/imgOverallStatus"
-                        android:layout_width="26dp"
-                        android:layout_height="26dp"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
                         android:src="@drawable/ic_shield_lock"
                         app:tint="@color/accent_neon_blue"
                         android:contentDescription="Status Icon" />
                 </LinearLayout>
 
-                <!-- Big Bold Allowance Display -->
+                <!-- Allowance Countdown Section -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="REMAINING SOCIAL ALLOWANCE"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:fontFamily="sans-serif-medium" />
+
                 <TextView
                     android:id="@+id/tvDailyRemaining"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="2h 15m Remaining"
+                    android:layout_marginTop="2dp"
+                    android:text="02h 15m 00s"
                     android:textColor="@color/accent_neon_blue"
-                    android:textSize="26sp"
+                    android:textSize="32sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-black" />
 
@@ -86,26 +105,46 @@
                     android:layout_marginTop="2dp"
                     android:text="Combined allowance across protected social apps."
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    android:lineSpacingExtra="2dp" />
 
-                <!-- Glow Total Scrolls Metric -->
+                <!-- Bottom Metric Pills Row -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:paddingTop="12dp"
+                    android:layout_marginTop="16dp"
+                    android:padding="10dp"
+                    android:background="@drawable/bg_refresh_circle"
+                    android:backgroundTint="@color/surface_variant"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_reels_clapper"
+                        app:tint="@color/accent_yellow"
+                        android:contentDescription="Scrolls Icon" />
+
                     <TextView
                         android:id="@+id/tvTotalScrollsToday"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="Scrolls Today: 84"
+                        android:textColor="@color/accent_yellow"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🎬 Scrolls Today: 84"
-                        android:textColor="@color/accent_yellow"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
+                        android:text="4 Protected Apps"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
+
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -115,10 +154,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -138,8 +177,8 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="🔥 1-Day Active Streak"
-                        android:textColor="@color/accent_yellow"
+                        android:text="1-Day Active Streak"
+                        android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
@@ -147,21 +186,24 @@
                         android:id="@+id/tvDisciplineRank"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🏆 Master Rank"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
+                        android:text="Grandmaster Focus"
+                        android:textColor="@color/status_green"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp" />
                 </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvDisciplineScore"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Discipline Score: 92 / 100"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="10dp"
+                    android:text="Discipline Score: 92%"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
                     android:id="@+id/progressDisciplineScore"
@@ -171,30 +213,30 @@
                     android:progress="92"
                     app:trackColor="@color/surface_variant"
                     app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
 
                 <TextView
                     android:id="@+id/tvStreakSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="Maintain low scroll impulse to protect your streak."
+                    android:layout_marginTop="8dp"
+                    android:text="Peak focus! Iron discipline maintained."
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Deep Work Mode & Quick Toggles Card -->
+        <!-- Deep Work / Study Mode Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardDeepWorkMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="20dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -206,7 +248,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⚡ Deep Work &amp; Focus Mode"
+                    android:text="Deep Work Sessions"
                     android:textColor="@color/text_primary"
                     android:textSize="15sp"
                     android:textStyle="bold" />
@@ -216,8 +258,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Ready for deep focus sessions"
-                    android:textColor="@color/text_secondary"
+                    android:text="No active Study Mode session"
+                    android:textColor="@color/accent_yellow"
                     android:textSize="13sp" />
 
                 <LinearLayout
@@ -229,24 +271,26 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnDeepWork1Hour"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
-                        android:text="📚 1 Hour"
+                        android:text="1 Hour Focus"
                         android:textColor="#0B0F19"
                         android:textStyle="bold"
+                        android:textSize="13sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_neon_blue" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnDeepWork2Hour"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
-                        android:text="🚀 2 Hours"
+                        android:text="2 Hours Focus"
                         android:textColor="#0B0F19"
                         android:textStyle="bold"
+                        android:textSize="13sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_yellow" />
                 </LinearLayout>
@@ -254,27 +298,42 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCancelStudyMode"
                     android:layout_width="match_parent"
-                    android:layout_height="44dp"
+                    android:layout_height="40dp"
                     android:layout_marginTop="8dp"
-                    android:visibility="gone"
-                    android:text="❌ Cancel Study Mode"
-                    android:textColor="@color/text_primary"
-                    app:cornerRadius="12dp"
+                    android:text="Cancel Study Session"
+                    android:textColor="@color/accent_red"
+                    android:textSize="13sp"
+                    app:cornerRadius="10dp"
                     app:strokeColor="@color/accent_red"
                     app:strokeWidth="1dp"
-                    app:backgroundTint="@color/surface_variant" />
+                    app:backgroundTint="@color/surface_card" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Protected Apps Section Title -->
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:text="📱 Protected Social Apps"
-            android:textColor="@color/text_primary"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Protected Applications"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="30m Limit • 5h Lock"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
 
         <!-- Instagram Card -->
         <com.google.android.material.card.MaterialCardView
@@ -285,7 +344,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -300,24 +359,74 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_instagram"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Instagram Icon" />
+
                     <TextView
                         android:id="@+id/tvInstagramTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="10dp"
                         android:text="Instagram"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvInstagramBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 30m"
+                        android:text="ALLOWED"
+                        android:textColor="@color/status_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvInstagramTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00m 00s"
                         android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/tvInstagramLimit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginBottom="2dp"
+                        android:text="/ 30m 00s"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvInstagramStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:text="30m 00s left"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -326,53 +435,18 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:indicatorColor="@color/status_green"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tvInstagramTimer"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="30m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvInstagramLimit"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Daily: 30m"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvInstagramStatus"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvInstagramScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Reels Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="8dp"
+                    android:text="Today: 0 scrolls • Blocked: 0 • Total: 0"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -385,7 +459,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -400,24 +474,74 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_reels_clapper"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="YouTube Icon" />
+
                     <TextView
                         android:id="@+id/tvYouTubeTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="10dp"
                         android:text="YouTube"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvYouTubeBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 45m"
+                        android:text="ALLOWED"
+                        android:textColor="@color/status_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvYouTubeTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00m 00s"
                         android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/tvYouTubeLimit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginBottom="2dp"
+                        android:text="/ 30m 00s"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvYouTubeStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:text="30m 00s left"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -426,53 +550,18 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:indicatorColor="@color/status_green"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tvYouTubeTimer"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="45m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvYouTubeLimit"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Daily: 45m"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvYouTubeStatus"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvYouTubeScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Shorts Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="8dp"
+                    android:text="Today: 0 scrolls • Blocked: 0 • Total: 0"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -485,7 +574,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -500,24 +589,74 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_focus_shield_logo"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Facebook Icon" />
+
                     <TextView
                         android:id="@+id/tvFacebookTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="10dp"
                         android:text="Facebook"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvFacebookBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 30m"
+                        android:text="ALLOWED"
+                        android:textColor="@color/status_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvFacebookTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00m 00s"
                         android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/tvFacebookLimit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginBottom="2dp"
+                        android:text="/ 30m 00s"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvFacebookStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:text="30m 00s left"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -526,53 +665,18 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:indicatorColor="@color/status_green"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tvFacebookTimer"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="30m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvFacebookLimit"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Daily: 30m"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvFacebookStatus"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvFacebookScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Reels Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="8dp"
+                    android:text="Today: 0 scrolls • Blocked: 0 • Total: 0"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -585,7 +689,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -600,24 +704,74 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_reels_clapper"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="TikTok Icon" />
+
                     <TextView
                         android:id="@+id/tvTikTokTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="10dp"
                         android:text="TikTok"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvTikTokBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 20m"
+                        android:text="ALLOWED"
+                        android:textColor="@color/status_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingBottom="3dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tvTikTokTimer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00m 00s"
                         android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
-                        android:textStyle="bold" />
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/tvTikTokLimit"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginBottom="2dp"
+                        android:text="/ 30m 00s"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvTikTokStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="2dp"
+                        android:text="30m 00s left"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <com.google.android.material.progressindicator.LinearProgressIndicator
@@ -626,53 +780,18 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:indicatorColor="@color/status_green"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tvTikTokTimer"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="20m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvTikTokLimit"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Daily: 20m"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvTikTokStatus"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvTikTokScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Shorts Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="8dp"
+                    android:text="Today: 0 scrolls • Blocked: 0 • Total: 0"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -685,7 +804,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -700,22 +819,31 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_shield_lock"
+                        app:tint="@color/text_primary"
+                        android:contentDescription="Custom Apps Icon" />
+
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Other Custom Apps"
+                        android:layout_marginStart="10dp"
+                        android:text="Custom Monitored Apps"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvCustomAppsCountBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0 Apps"
+                        android:text="0 APPS"
                         android:textColor="@color/text_secondary"
-                        android:textSize="13sp" />
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <TextView
@@ -723,9 +851,10 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="Tap Settings to configure limits on any installed Android application."
+                    android:text="No custom apps added yet. Go to Settings tab to monitor any installed app."
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    android:lineSpacingExtra="2dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

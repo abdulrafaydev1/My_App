@@ -1,21 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollAnalytics"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_primary"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:overScrollMode="never">
 
     <LinearLayout
         android:id="@+id/layoutAnalyticsContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
 
-        <!-- Today's Focus & Usage Breakdown Card -->
+        <!-- Today's Focus Overview Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardAnalyticsReport"
             android:layout_width="match_parent"
@@ -24,7 +29,7 @@
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_card"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -36,15 +41,16 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="📊 Today's Focus Overview"
+                    android:text="Daily Focus Summary"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textSize="17sp"
                     android:textStyle="bold" />
 
+                <!-- Two-Column Metric Display -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="16dp"
                     android:orientation="horizontal">
 
                     <LinearLayout
@@ -56,20 +62,22 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TOTAL TIME USED"
+                            android:text="TOTAL SCREEN TIME"
                             android:textColor="@color/text_secondary"
                             android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:letterSpacing="0.06" />
 
                         <TextView
                             android:id="@+id/tvAnalyticsTodayTotal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="00:00"
+                            android:layout_marginTop="4dp"
+                            android:text="00h 00m 00s"
                             android:textColor="@color/accent_neon_blue"
                             android:textSize="22sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:fontFamily="monospace" />
                     </LinearLayout>
 
                     <LinearLayout
@@ -81,20 +89,22 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TOTAL SCROLLS"
+                            android:text="SCROLLS TODAY"
                             android:textColor="@color/text_secondary"
                             android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:letterSpacing="0.06" />
 
                         <TextView
                             android:id="@+id/tvAnalyticsScrollsTotal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
+                            android:layout_marginTop="4dp"
                             android:text="0"
                             android:textColor="@color/accent_yellow"
                             android:textSize="22sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:fontFamily="monospace" />
                     </LinearLayout>
                 </LinearLayout>
 
@@ -103,14 +113,23 @@
                     android:layout_height="1dp"
                     android:layout_marginTop="16dp"
                     android:layout_marginBottom="16dp"
-                    android:background="@color/surface_variant" />
+                    android:background="@color/border_subtle" />
 
-                <!-- Instagram Usage Bar -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:text="App Screen-Time Share"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <!-- Instagram -->
                 <TextView
                     android:id="@+id/tvAnalyticsInstagram"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Instagram: 0m / 30m"
+                    android:text="Instagram: 0m (0%) • 0 scrolls"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp" />
 
@@ -118,19 +137,19 @@
                     android:id="@+id/progressAnalyticsInstagram"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
                     app:trackColor="@color/surface_variant"
                     app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
 
-                <!-- YouTube Usage Bar -->
+                <!-- YouTube -->
                 <TextView
                     android:id="@+id/tvAnalyticsYouTube"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="YouTube: 0m / 45m"
+                    android:text="YouTube: 0m (0%) • 0 scrolls"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp" />
 
@@ -138,19 +157,19 @@
                     android:id="@+id/progressAnalyticsYouTube"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
                     app:trackColor="@color/surface_variant"
                     app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
 
-                <!-- Facebook Usage Bar -->
+                <!-- Facebook -->
                 <TextView
                     android:id="@+id/tvAnalyticsFacebook"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Facebook: 0m / 30m"
+                    android:text="Facebook: 0m (0%) • 0 scrolls"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp" />
 
@@ -158,19 +177,19 @@
                     android:id="@+id/progressAnalyticsFacebook"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
                     app:trackColor="@color/surface_variant"
                     app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
 
-                <!-- TikTok Usage Bar -->
+                <!-- TikTok -->
                 <TextView
                     android:id="@+id/tvAnalyticsTikTok"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="TikTok: 0m / 20m"
+                    android:text="TikTok: 0m (0%) • 0 scrolls"
                     android:textColor="@color/text_primary"
                     android:textSize="13sp" />
 
@@ -178,24 +197,24 @@
                     android:id="@+id/progressAnalyticsTikTok"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="6dp"
                     app:trackColor="@color/surface_variant"
                     app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
+                    app:trackCornerRadius="3dp"
                     app:trackThickness="6dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Weakness & Impulse Blocked Attempts Card -->
+        <!-- Impulse & Blocked Attempts Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardWeaknessLog"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -207,17 +226,17 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⚡ Impulse Attempts &amp; Weakness Log"
-                    android:textColor="@color/accent_red"
-                    android:textSize="16sp"
+                    android:text="Impulse Attempts &amp; Urges"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/tvWeaknessTotalToday"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="0 Blocked Attempts Today"
+                    android:layout_marginTop="8dp"
+                    android:text="Total Blocked Attempts Today: 0"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -227,19 +246,23 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="No impulse violations detected yet."
+                    android:text="IG: 0  •  YT: 0  •  FB: 0  •  TT: 0"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/tvWeaknessImpulseLog"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Log: Clean focus streak active."
-                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_refresh_circle"
+                    android:backgroundTint="@color/surface_variant"
+                    android:padding="12dp"
+                    android:text="0 Blocked Attempts Today — 100% Pure Discipline!"
+                    android:textColor="@color/status_green"
                     android:textSize="12sp"
-                    android:fontFamily="monospace" />
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="2dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -248,10 +271,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -263,20 +286,32 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="📅 7-Day Focus History"
+                    android:text="7-Day Historical Breakdown"
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Daily screen time recorded per protected application."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/tvAnalytics7DayReport"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_refresh_circle"
+                    android:backgroundTint="@color/surface_variant"
+                    android:padding="12dp"
                     android:text="Loading 7-day focus report..."
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp"
-                    android:fontFamily="monospace" />
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="3dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

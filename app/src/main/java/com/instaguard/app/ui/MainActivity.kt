@@ -133,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupToolbar() {
-        binding.toolbarMain.title = "InstaGuard Pro v12.0 (Premium UI Suite)"
+        binding.toolbarMain.title = ""
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()

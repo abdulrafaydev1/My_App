@@ -18,20 +18,65 @@
             android:id="@+id/toolbarMain"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="InstaGuard Pro v12.0 (Premium UI Suite)"
-            app:titleTextColor="@color/text_primary">
+            app:contentInsetStart="16dp"
+            app:contentInsetEnd="16dp"
+            app:elevation="0dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start|center_vertical"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_shield_lock"
+                    app:tint="@color/accent_neon_blue"
+                    android:contentDescription="@string/app_name" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/app_name"
+                        android:textColor="@color/text_primary"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:fontFamily="sans-serif-medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Digital Wellbeing &amp; Focus Guard"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnRefresh"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_gravity="end"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="end|center_vertical"
                 android:layout_marginEnd="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:background="@drawable/bg_refresh_circle"
                 android:src="@drawable/ic_refresh"
                 app:tint="@color/accent_neon_blue"
                 android:contentDescription="@string/btn_refresh" />
         </androidx.appcompat.widget.Toolbar>
+
+        <!-- Crisp Subtle Border -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/border_subtle" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- Main Fragment / Tab Content Container -->
@@ -39,20 +84,32 @@
         android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="72dp"
+        android:layout_marginBottom="68dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-    <!-- YouTube / Instagram Style Bottom Navigation Bar -->
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNavigationView"
+    <!-- Persistent Bottom Navigation Bar Container -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="72dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/surface_card"
-        app:itemIconTint="@color/bottom_nav_color_selector"
-        app:itemTextColor="@color/bottom_nav_color_selector"
-        app:itemRippleColor="#3300E5FF"
-        app:elevation="16dp"
-        app:menu="@menu/bottom_nav_menu" />
+        android:orientation="vertical">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/border_subtle" />
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNavigationView"
+            android:layout_width="match_parent"
+            android:layout_height="68dp"
+            android:background="@color/surface_card"
+            app:itemIconTint="@color/bottom_nav_color_selector"
+            app:itemTextColor="@color/bottom_nav_color_selector"
+            app:itemRippleColor="#2600E5FF"
+            app:elevation="0dp"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav_menu" />
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

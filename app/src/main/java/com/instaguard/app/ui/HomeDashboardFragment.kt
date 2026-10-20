@@ -23,10 +23,12 @@ import java.util.Locale
 
 /**
  * Tab 1: Home Dashboard Fragment (v12.0)
- * Displays Hero Protection Status & Combined Daily Allowance,
- * Focus Streak & Discipline Score Gamification,
- * Instant Deep Work / Study Mode with Cancel Support,
- * and Independent Real-Time 30 FPS Cards for Instagram, YouTube, Facebook, TikTok, & Custom Apps.
+ * Ultra-Premium Digital Wellbeing Dashboard:
+ * - Hero Protection Status & Combined Daily Social Allowance
+ * - Dedicated Scroll Counter & Active App Monitoring
+ * - Focus Streak & Gamified Discipline Score
+ * - Instant Deep Work / Study Mode with Cancel Support
+ * - 30 FPS Real-Time Usage Cards for Instagram, YouTube, Facebook, TikTok, & Custom Apps.
  */
 class HomeDashboardFragment : Fragment() {
 
@@ -118,16 +120,16 @@ class HomeDashboardFragment : Fragment() {
             binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
             binding.imgOverallStatus.setImageResource(R.drawable.ic_check_circle)
             binding.imgOverallStatus.setColorFilter(Color.parseColor("#10B981"))
-            binding.tvOverallStatusTitle.text = "AI FOCUS SHIELD ACTIVE"
+            binding.tvOverallStatusTitle.text = "PROTECTION ACTIVE"
             binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#10B981"))
             binding.tvOverallStatusDesc.text = "Strict limits and cooldowns actively enforced for all social apps."
         } else {
-            binding.cardOverallStatus.strokeColor = Color.parseColor("#F59E0B")
-            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
+            binding.cardOverallStatus.strokeColor = Color.parseColor("#FFD600")
+            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FFD600"))
             binding.imgOverallStatus.setImageResource(R.drawable.ic_warning)
-            binding.imgOverallStatus.setColorFilter(Color.parseColor("#F59E0B"))
+            binding.imgOverallStatus.setColorFilter(Color.parseColor("#FFD600"))
             binding.tvOverallStatusTitle.text = "SETUP REQUIRED"
-            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#F59E0B"))
+            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#FFD600"))
             binding.tvOverallStatusDesc.text = "Grant required permissions in Settings to activate full focus protection."
         }
 
@@ -138,10 +140,10 @@ class HomeDashboardFragment : Fragment() {
             val rem = maxOf(0L, limitMs - used)
             combinedRemainingMs += rem
         }
-        binding.tvDailyRemaining.text = formatAllowanceTime(combinedRemainingMs) + " Left"
+        binding.tvDailyRemaining.text = formatAllowanceTime(combinedRemainingMs)
 
         val totalScrollsToday = AppBlockerService.getTotalScrollsToday(ctx)
-        binding.tvTotalScrollsToday.text = "🔥 Total Scrolls Today: $totalScrollsToday"
+        binding.tvTotalScrollsToday.text = "Scrolls Today: $totalScrollsToday"
 
         // 2. Focus Streak & Discipline Score
         updateFocusStreakAndDisciplineScore(guardManager, totalScrollsToday)
@@ -149,16 +151,16 @@ class HomeDashboardFragment : Fragment() {
         // 3. Deep Work / Study Mode
         if (AppBlockerService.isDeepWorkModeActive(ctx)) {
             val deepWorkRem = AppBlockerService.getDeepWorkRemainingMs(ctx)
-            binding.tvDeepWorkStatus.text = "🔥 ACTIVE STUDY LOCK: ${guardManager.formatWithMillis(deepWorkRem)} remaining"
+            binding.tvDeepWorkStatus.text = "Active Study Lock: ${guardManager.formatWithMillis(deepWorkRem)} remaining"
             binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#FF1744"))
             binding.btnCancelStudyMode.visibility = View.VISIBLE
             binding.btnCancelStudyMode.isEnabled = true
             binding.btnCancelStudyMode.alpha = 1.0f
         } else {
             binding.tvDeepWorkStatus.text = "No active Study Mode session"
-            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#FFD600"))
-            binding.btnCancelStudyMode.visibility = View.VISIBLE
-            binding.btnCancelStudyMode.alpha = 0.5f
+            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#8B949E"))
+            binding.btnCancelStudyMode.visibility = View.GONE
+            binding.btnCancelStudyMode.isEnabled = false
         }
 
         // 4. Per-App Cards
@@ -229,7 +231,7 @@ class HomeDashboardFragment : Fragment() {
     private fun updateFocusStreakAndDisciplineScore(guardManager: GuardManager, totalScrolls: Int) {
         val ctx = context ?: return
         val streak = guardManager.prefs.focusStreakDays
-        binding.tvFocusStreak.text = "🔥 ${streak}-Day Active Streak"
+        binding.tvFocusStreak.text = "${streak}-Day Active Streak"
 
         val lockedCount = AppBlockerService.APP_KEYS.count { AppBlockerService.isAppLocked(it, ctx) }
         val scrollPenalty = if (totalScrolls > 50) (totalScrolls - 50) / 10 else 0
@@ -239,10 +241,10 @@ class HomeDashboardFragment : Fragment() {
         binding.progressDisciplineScore.progress = disciplineScore
 
         val (rankText, rankColor) = when {
-            disciplineScore >= 90 -> "🏆 Grandmaster Focus" to Color.parseColor("#10B981")
-            disciplineScore >= 75 -> "🧘 Focus Monk" to Color.parseColor("#00E5FF")
-            disciplineScore >= 50 -> "⚔️ Focus Warrior" to Color.parseColor("#FFD600")
-            else -> "📱 Reel Rookie" to Color.parseColor("#FF1744")
+            disciplineScore >= 90 -> "Grandmaster Focus" to Color.parseColor("#10B981")
+            disciplineScore >= 75 -> "Focus Monk" to Color.parseColor("#00E5FF")
+            disciplineScore >= 50 -> "Focus Warrior" to Color.parseColor("#FFD600")
+            else -> "Reel Rookie" to Color.parseColor("#FF1744")
         }
 
         binding.tvDisciplineRank.text = rankText
@@ -284,10 +286,10 @@ class HomeDashboardFragment : Fragment() {
         val todayScrolls = AppBlockerService.getScrollToday(appKey, ctx)
         val totalScrolls = AppBlockerService.getScrollTotal(appKey, ctx)
         val blockedToday = AppBlockerService.getBlockedAttemptsToday(appKey, ctx)
-        tvScrolls.text = "🎬 Today: $todayScrolls scrolls  •  🚫 Blocked: $blockedToday  •  Total: $totalScrolls"
+        tvScrolls.text = "Today: $todayScrolls scrolls • Blocked: $blockedToday • Total: $totalScrolls"
 
         if (lockRemaining > 0L) {
-            // LOCKED STATE (Crimson Red Border)
+            // LOCKED STATE (Crisp Red Border)
             card.strokeColor = Color.parseColor("#FF1744")
             card.strokeWidth = dpToPx(1.5f)
 
@@ -299,7 +301,7 @@ class HomeDashboardFragment : Fragment() {
             }
             tvBadge.background = badgeBg
 
-            tvTimer.text = "Used: " + guardManager.formatWithMillis(limitMs)
+            tvTimer.text = guardManager.formatWithMillis(limitMs)
             tvTimer.setTextColor(Color.parseColor("#FF1744"))
 
             tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
@@ -377,7 +379,7 @@ class HomeDashboardFragment : Fragment() {
         val minutes = (safeMs % 3_600_000) / 60_000
         val seconds = (safeMs % 60_000) / 1_000
         return if (hours > 0) {
-            String.format(Locale.US, "%dh %02dm %02ds", hours, minutes, seconds)
+            String.format(Locale.US, "%02dh %02dm %02ds", hours, minutes, seconds)
         } else {
             String.format(Locale.US, "%02dm %02ds", minutes, seconds)
         }

@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollSettings"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_primary"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:overScrollMode="never">
 
     <LinearLayout
         android:id="@+id/layoutSettingsContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="24dp">
 
         <!-- Custom AI Voice Alert Card -->
         <com.google.android.material.card.MaterialCardView
@@ -24,7 +29,7 @@
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_card"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -36,7 +41,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🗣️ Custom AI Voice Warning"
+                    android:text="Voice Warning Alert"
                     android:textColor="@color/text_primary"
                     android:textSize="17sp"
                     android:textStyle="bold" />
@@ -45,49 +50,56 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Spoken out loud via Android Text-To-Speech when you attempt to open a locked app."
+                    android:text="Spoken out loud via Android Text-To-Speech when attempting to launch a locked app or reaching time thresholds."
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    android:lineSpacingExtra="2dp" />
 
+                <!-- Current Voice Quote Box -->
                 <TextView
                     android:id="@+id/tvCurrentCustomVoice"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:background="@color/bg_primary"
-                    android:padding="12dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_refresh_circle"
+                    android:backgroundTint="@color/surface_variant"
+                    android:padding="14dp"
                     android:text="&quot;Time is up! Put your phone down and get back to work!&quot;"
                     android:textColor="@color/accent_neon_blue"
                     android:textSize="13sp"
-                    android:textStyle="italic" />
+                    android:textStyle="italic"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="2dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnEditCustomVoice"
                         android:layout_width="0dp"
-                        android:layout_height="46dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
-                        android:text="✏️ Edit Message"
+                        android:text="Edit Voice Alert"
                         android:textColor="#0B0F19"
                         android:textStyle="bold"
+                        android:textSize="13sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_neon_blue" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnTestCustomVoice"
                         android:layout_width="0dp"
-                        android:layout_height="46dp"
+                        android:layout_height="44dp"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
-                        android:text="🔊 Test Voice"
+                        android:text="Test Voice"
                         android:textColor="#0B0F19"
                         android:textStyle="bold"
+                        android:textSize="13sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_yellow" />
                 </LinearLayout>
@@ -99,10 +111,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -114,47 +126,57 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⚙️ App Management &amp; Tools"
+                    android:text="Application Management"
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Temporary maintenance unlock and custom package shielding."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMaintenanceMode"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="44dp"
                     android:layout_marginTop="12dp"
-                    android:text="🔧 5-Minute Maintenance Pause"
+                    android:text="5-Minute Maintenance Pause"
                     android:textColor="@color/text_primary"
+                    android:textSize="13sp"
                     app:cornerRadius="12dp"
-                    app:strokeColor="@color/surface_variant"
+                    app:strokeColor="@color/border_card"
                     app:strokeWidth="1dp"
-                    app:backgroundTint="@color/bg_primary" />
+                    app:backgroundTint="@color/surface_variant" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnAddCustomApp"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="44dp"
                     android:layout_marginTop="8dp"
-                    android:text="➕ Add Custom App to Shield"
+                    android:text="+ Add Custom App to Shield"
                     android:textColor="@color/text_primary"
+                    android:textSize="13sp"
                     app:cornerRadius="12dp"
-                    app:strokeColor="@color/surface_variant"
+                    app:strokeColor="@color/border_card"
                     app:strokeWidth="1dp"
-                    app:backgroundTint="@color/bg_primary" />
+                    app:backgroundTint="@color/surface_variant" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Test Mode Card -->
+        <!-- Developer Test Mode Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardTestMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="20dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -173,7 +195,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="⚡ Developer Test Mode"
+                        android:text="Developer Test Mode"
                         android:textColor="@color/text_primary"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -182,7 +204,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Temporarily reduces app limits to 2 minutes for testing."
+                        android:text="Sets allowance to 1m and lock to 2m for rapid testing."
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -201,9 +223,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="10dp"
-            android:text="🔒 System Service Permissions"
+            android:text="System Permissions"
             android:textColor="@color/text_primary"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <!-- Accessibility Service Card -->
@@ -215,7 +237,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -227,8 +249,8 @@
 
                 <ImageView
                     android:id="@+id/imgAccessibilityStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:src="@drawable/ic_check_circle"
                     app:tint="@color/status_green"
                     android:contentDescription="Accessibility Icon" />
@@ -254,14 +276,14 @@
                         android:layout_height="wrap_content"
                         android:text="ENABLED"
                         android:textColor="@color/status_green"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnEnableAccessibility"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="38dp"
                     android:text="Enable"
                     android:textColor="#0B0F19"
                     android:textStyle="bold"
@@ -280,7 +302,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -292,8 +314,8 @@
 
                 <ImageView
                     android:id="@+id/imgUsageStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:src="@drawable/ic_check_circle"
                     app:tint="@color/status_green"
                     android:contentDescription="Usage Icon" />
@@ -319,14 +341,14 @@
                         android:layout_height="wrap_content"
                         android:text="GRANTED"
                         android:textColor="@color/status_green"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnGrantUsage"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="38dp"
                     android:text="Grant"
                     android:textColor="#0B0F19"
                     android:textStyle="bold"
@@ -345,7 +367,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -357,8 +379,8 @@
 
                 <ImageView
                     android:id="@+id/imgOverlayStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:src="@drawable/ic_check_circle"
                     app:tint="@color/status_green"
                     android:contentDescription="Overlay Icon" />
@@ -384,14 +406,14 @@
                         android:layout_height="wrap_content"
                         android:text="GRANTED"
                         android:textColor="@color/status_green"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnGrantOverlay"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="38dp"
                     android:text="Grant"
                     android:textColor="#0B0F19"
                     android:textStyle="bold"
@@ -406,10 +428,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
+            app:strokeColor="@color/border_subtle"
             app:cardBackgroundColor="@color/surface_card">
 
             <LinearLayout
@@ -421,7 +443,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="InstaGuard Pro v12.0 - Premium Edition"
+                    android:text="InstaGuard Pro v12.0"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -430,7 +452,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="AI Visual &amp; Focus Shield • YouTube / Instagram Style Dark UI • Zero Cloud Latency"
+                    android:text="On-Device Neural Vision Engine • Zero Cloud Latency • OLED Dark-Glass UI"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
