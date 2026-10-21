@@ -24,9 +24,9 @@ data class SmartAlarm(
     var label: String = "Wake Up Mission",
     var repeatDays: Set<Int> = emptySet(), // 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat, 7 = Sun; empty = One-Time
     var deleteAfterRinging: Boolean = false,
-    var soundId: Int = 0,
-    var snoozeMinutes: Int = 5, // 0 = Off, 2, 5, 10, 15, 30
-    var dismissMissionType: Int = 0, // 0 = Standard Tap, 1 = 3 Hard Math Questions, 2 = 15-Tap Rapid Reflex Challenge
+    var soundId: Int = 2, // Default: ⚡ Extreme 3000Hz Piezo Buzzer
+    var snoozeMinutes: Int = 0, // Default: Off (No Snooze)
+    var dismissMissionType: Int = 1, // Default: 🧠 5 Hard Math Questions (Random)
     var forceMaxVolume: Boolean = true,
     var heavyVibration: Boolean = true,
     var aiVoiceAnnouncement: Boolean = true
@@ -66,9 +66,9 @@ data class SmartAlarm(
                 label = json.optString("label", "Wake Up Mission"),
                 repeatDays = daysSet,
                 deleteAfterRinging = json.optBoolean("deleteAfterRinging", false),
-                soundId = json.optInt("soundId", 0),
-                snoozeMinutes = json.optInt("snoozeMinutes", 5),
-                dismissMissionType = json.optInt("dismissMissionType", 0),
+                soundId = json.optInt("soundId", 2),
+                snoozeMinutes = json.optInt("snoozeMinutes", 0),
+                dismissMissionType = json.optInt("dismissMissionType", 1),
                 forceMaxVolume = json.optBoolean("forceMaxVolume", true),
                 heavyVibration = json.optBoolean("heavyVibration", true),
                 aiVoiceAnnouncement = json.optBoolean("aiVoiceAnnouncement", true)
@@ -105,9 +105,10 @@ object AlarmManagerHelper {
                 minute = 30,
                 enabled = false,
                 label = "Morning Focus & Workout",
-                soundId = 0,
+                soundId = 2,
                 repeatDays = setOf(1, 2, 3, 4, 5),
                 deleteAfterRinging = false,
+                snoozeMinutes = 0,
                 dismissMissionType = 1
             )
             list.add(defaultAlarm)
@@ -220,7 +221,10 @@ object AlarmManagerHelper {
 
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}")
             putExtra(EXTRA_ALARM_ID, alarm.id)
+            putExtra("alarm_id", alarm.id)
+            putExtra("delete_after_ringing", alarm.deleteAfterRinging)
             putExtra(EXTRA_IS_TEST, false)
         }
         val pendingIntent = PendingIntent.getBroadcast(
@@ -230,7 +234,9 @@ object AlarmManagerHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, MainActivity::class.java)
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            data = android.net.Uri.parse("instaguard://show/${alarm.id}")
+        }
         val showPendingIntent = PendingIntent.getActivity(
             context,
             alarm.id.hashCode() + 1,
@@ -262,7 +268,10 @@ object AlarmManagerHelper {
 
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}/snooze")
             putExtra(EXTRA_ALARM_ID, alarm.id)
+            putExtra("alarm_id", alarm.id)
+            putExtra("delete_after_ringing", alarm.deleteAfterRinging)
             putExtra(EXTRA_IS_SNOOZE, true)
             putExtra(EXTRA_IS_TEST, false)
         }
@@ -273,7 +282,9 @@ object AlarmManagerHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, MainActivity::class.java)
+        val showIntent = Intent(context, MainActivity::class.java).apply {
+            data = android.net.Uri.parse("instaguard://show/${alarm.id}/snooze")
+        }
         val showPendingIntent = PendingIntent.getActivity(
             context,
             alarm.id.hashCode() + 1,
@@ -293,7 +304,9 @@ object AlarmManagerHelper {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/$alarmId")
             putExtra(EXTRA_ALARM_ID, alarmId)
+            putExtra("alarm_id", alarmId)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -303,6 +316,50 @@ object AlarmManagerHelper {
         )
         try {
             alarmManager.cancel(pendingIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /**
+     * Handles alarm dismissal, auto-delete, or rescheduling next repeat occurrence.
+     * Synchronously persists changes to SharedPreferences and broadcasts update.
+     */
+    fun handleAlarmDismissed(context: Context, alarmId: String?) {
+        val prefs = getPrefs(context)
+        val targetId = if (!alarmId.isNullOrBlank()) alarmId else prefs.getString("active_ringing_alarm_id", null) ?: ""
+        val list = loadAlarms(context)
+        val alarm = list.find { it.id == targetId }
+        val deleteAfterFromPrefs = prefs.getBoolean("active_ringing_delete_after", false)
+
+        val shouldDelete = (alarm?.deleteAfterRinging == true) || deleteAfterFromPrefs
+
+        if (shouldDelete) {
+            cancelAlarm(context, targetId)
+            list.removeAll { it.id == targetId }
+            val array = JSONArray()
+            list.forEach { array.put(it.toJsonObject()) }
+            prefs.edit().putString(KEY_ALARMS_JSON, array.toString()).commit()
+        } else if (alarm != null) {
+            if (alarm.repeatDays.isEmpty()) {
+                alarm.enabled = false
+                val array = JSONArray()
+                list.forEach { array.put(it.toJsonObject()) }
+                prefs.edit().putString(KEY_ALARMS_JSON, array.toString()).commit()
+                cancelAlarm(context, targetId)
+            } else {
+                scheduleAlarm(context, alarm)
+            }
+        }
+
+        // Clear active ringing extras from SharedPreferences
+        prefs.edit()
+            .remove("active_ringing_alarm_id")
+            .remove("active_ringing_delete_after")
+            .commit()
+
+        try {
+            context.sendBroadcast(Intent("com.instaguard.app.ACTION_ALARM_LIST_CHANGED"))
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -332,13 +389,11 @@ object AlarmManagerHelper {
     }
 
     fun formatTimeAmPm(hour: Int, minute: Int): String {
-        val h12 = when {
-            hour == 0 -> 12
-            hour > 12 -> hour - 12
-            else -> hour
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
         }
-        val amPm = if (hour < 12) "AM" else "PM"
-        return String.format(Locale.US, "%02d:%02d %s", h12, minute, amPm)
+        return java.text.SimpleDateFormat("hh:mm a", Locale.getDefault()).format(cal.time).uppercase(Locale.getDefault())
     }
 
     fun formatRepeatDays(days: Set<Int>): String {

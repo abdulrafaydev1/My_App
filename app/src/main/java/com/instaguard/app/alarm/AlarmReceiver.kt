@@ -4,11 +4,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
+import com.instaguard.app.service.AlarmRingingService
 import com.instaguard.app.service.AppBlockerService
 
 /**
  * BroadcastReceiver triggered by AlarmManager or system BOOT_COMPLETED.
- * Immediately acquires WakeLock and launches the full-screen AlarmRingingActivity.
+ * Immediately acquires WakeLock and launches dedicated foreground AlarmRingingService.
  */
 class AlarmReceiver : BroadcastReceiver() {
 
@@ -24,38 +25,27 @@ class AlarmReceiver : BroadcastReceiver() {
             val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID) ?: ""
             val isTest = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_TEST, false)
             val isSnooze = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, false)
+            val deleteAfter = intent.getBooleanExtra("delete_after_ringing", false)
 
-            // v13.1 Activate Anti-Cheat Guard Window
-            AppBlockerService.activateAlarmAntiCheatWindow(context, isRingingNow = true, durationMinutesAfterRing = 15)
-
-            // Acquire short-lived WakeLock to ensure screen turns on and activity starts
+            // Acquire 60-second full wake lock to turn on screen immediately
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-            val wakeLock = pm?.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "InstaGuard:AlarmWakeLock"
-            )
-            wakeLock?.acquire(10_000L)
-
-            val ringingIntent = Intent(context, AlarmRingingActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_USER_ACTION
-                putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarmId)
-                putExtra(AlarmManagerHelper.EXTRA_IS_TEST, isTest)
-                putExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, isSnooze)
-            }
-
             try {
-                context.startActivity(ringingIntent)
+                @Suppress("DEPRECATION")
+                val wakeLock = pm?.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                    "InstaGuard:AlarmReceiverWakeLock"
+                )
+                wakeLock?.acquire(60_000L)
             } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                try {
-                    if (wakeLock?.isHeld == true) {
-                        wakeLock.release()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                val wakeLock = pm?.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "InstaGuard:AlarmReceiverPartialWakeLock"
+                )
+                wakeLock?.acquire(60_000L)
             }
+
+            // Immediately start dedicated foreground AlarmRingingService
+            AlarmRingingService.startAlarm(context, alarmId, isTest, isSnooze, deleteAfter)
         }
     }
 }

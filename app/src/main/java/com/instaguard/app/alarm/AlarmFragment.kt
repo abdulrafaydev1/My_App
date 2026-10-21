@@ -20,6 +20,8 @@ import com.instaguard.app.R
 import com.instaguard.app.databinding.DialogEditAlarmBinding
 import com.instaguard.app.databinding.FragmentAlarmBinding
 import com.instaguard.app.databinding.ItemSmartAlarmBinding
+import com.instaguard.app.service.AlarmRingingService
+import java.util.Calendar
 
 /**
  * Tab 3: Alarm Fragment (v13.0)
@@ -45,8 +47,24 @@ class AlarmFragment : Fragment() {
         return binding.root
     }
 
+    private val alarmListChangedReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            refreshAlarmsUI()
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        try {
+            val filter = android.content.IntentFilter("com.instaguard.app.ACTION_ALARM_LIST_CHANGED")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requireContext().registerReceiver(alarmListChangedReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                requireContext().registerReceiver(alarmListChangedReceiver, filter)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         setupRecyclerView()
         setupHeroButtons()
         refreshAlarmsUI()
@@ -59,6 +77,11 @@ class AlarmFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        try {
+            requireContext().unregisterReceiver(alarmListChangedReceiver)
+        } catch (e: Exception) {
+            // Ignored
+        }
         HardAlarmSoundEngine.stopPlaying(context)
         _binding = null
     }
@@ -93,8 +116,8 @@ class AlarmFragment : Fragment() {
             val alarms = AlarmManagerHelper.loadAlarms(requireContext())
             val targetAlarm = alarms.firstOrNull() ?: SmartAlarm(
                 label = "Hardcore Wake Up Test",
-                soundId = 0,
-                snoozeMinutes = 5,
+                soundId = 2,
+                snoozeMinutes = 0,
                 dismissMissionType = 1
             )
             testAlarmDirectly(targetAlarm)
@@ -140,12 +163,13 @@ class AlarmFragment : Fragment() {
 
     private fun testAlarmDirectly(alarm: SmartAlarm) {
         val ctx = requireContext()
-        val intent = Intent(ctx, AlarmRingingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarm.id)
-            putExtra(AlarmManagerHelper.EXTRA_IS_TEST, true)
-        }
-        ctx.startActivity(intent)
+        AlarmRingingService.startAlarm(
+            context = ctx,
+            alarmId = alarm.id,
+            isTest = true,
+            isSnooze = false,
+            deleteAfter = alarm.deleteAfterRinging
+        )
         Toast.makeText(ctx, "⚡ Launching Live Alarm Test...", Toast.LENGTH_SHORT).show()
     }
 
@@ -172,11 +196,23 @@ class AlarmFragment : Fragment() {
             .create()
 
         val isEditing = existingAlarm != null
-        val alarm = existingAlarm?.copy() ?: SmartAlarm(hour = 6, minute = 30)
+        val alarm = if (isEditing) {
+            existingAlarm!!.copy()
+        } else {
+            val cal = Calendar.getInstance()
+            SmartAlarm(
+                hour = cal.get(Calendar.HOUR_OF_DAY),
+                minute = cal.get(Calendar.MINUTE),
+                soundId = 2,
+                snoozeMinutes = 0,
+                dismissMissionType = 1
+            )
+        }
 
         dialogBinding.tvDialogTitle.text = if (isEditing) "✏️ Edit Hard Alarm" else "⏰ Create New Hard Alarm"
 
-        // 1. TimePicker
+        // 1. TimePicker: Force 12-hour AM/PM view
+        dialogBinding.timePickerAlarm.setIs24HourView(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             dialogBinding.timePickerAlarm.hour = alarm.hour
             dialogBinding.timePickerAlarm.minute = alarm.minute
@@ -272,13 +308,13 @@ class AlarmFragment : Fragment() {
         )
         val snoozeAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, snoozeOptions.map { it.second })
         dialogBinding.spinnerSnooze.adapter = snoozeAdapter
-        val initialSnoozeIndex = snoozeOptions.indexOfFirst { it.first == alarm.snoozeMinutes }.coerceAtLeast(2)
+        val initialSnoozeIndex = snoozeOptions.indexOfFirst { it.first == alarm.snoozeMinutes }.let { if (it >= 0) it else 0 }
         dialogBinding.spinnerSnooze.setSelection(initialSnoozeIndex)
 
         // 7. Mission Spinner
         val missionOptions = listOf(
             0 to "Standard Tap Dismiss",
-            1 to "🧠 3 Hard Math Questions",
+            1 to "🧠 5 Hard Math Questions (Random)",
             2 to "⚡ Rapid 15-Tap Wake Check"
         )
         val missionAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, missionOptions.map { it.second })

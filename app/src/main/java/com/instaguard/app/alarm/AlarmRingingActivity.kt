@@ -4,20 +4,17 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.KeyguardManager
 import android.content.Context
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import android.speech.tts.TextToSpeech
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.instaguard.app.databinding.ActivityAlarmRingingBinding
+import com.instaguard.app.service.AlarmRingingService
 import com.instaguard.app.service.AppBlockerService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -25,9 +22,8 @@ import java.util.Locale
 
 /**
  * Full-Screen Alarm Ringing Activity.
- * Displays over lockscreen, turns on display, streams synthesized hardcore alarm sound,
- * drives continuous earthquake vibration, speaks AI voice alerts,
- * and handles Snooze, Math/Tap Wake-Up Missions, and Delete-After-Ringing logic.
+ * Displays over lockscreen, turns on display, and requires solving 5 Hard Random Math Questions
+ * before the alarm sound can be stopped. Cannot be exited via Back, Recents, or Power Menu.
  */
 class AlarmRingingActivity : AppCompatActivity() {
 
@@ -37,12 +33,9 @@ class AlarmRingingActivity : AppCompatActivity() {
     private var isSnooze = false
 
     private val handler = Handler(Looper.getMainLooper())
-    private var vibrator: Vibrator? = null
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
     private var pulseAnimator: ObjectAnimator? = null
 
-    // Math Mission State
+    // Math Mission State: 5 Hard Questions (Stage 1 to 5)
     private var mathStep = 1
     private var expectedMathAnswer = 0
 
@@ -63,32 +56,46 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding = ActivityAlarmRingingBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Block Android Back button: Alarm cannot be dismissed by pressing Back
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                Toast.makeText(
+                    this@AlarmRingingActivity,
+                    "🚫 Solve all 5 Math Questions to stop the alarm!",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        })
+
         val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID) ?: ""
         isTest = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_TEST, false)
         isSnooze = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, false)
 
         alarm = AlarmManagerHelper.getAlarmById(this, alarmId) ?: SmartAlarm(
             label = if (isTest) "Test Wake-Up Mission" else "Wake Up Mission",
-            soundId = 0,
-            snoozeMinutes = 5,
-            dismissMissionType = 0
+            soundId = 2,
+            snoozeMinutes = 0,
+            dismissMissionType = 1
         )
 
-        initVibrator()
-        initTts()
+        // Ensure foreground AlarmRingingService is active and playing
+        AlarmRingingService.startAlarm(
+            context = this,
+            alarmId = alarm.id,
+            isTest = isTest,
+            isSnooze = isSnooze,
+            deleteAfter = alarm.deleteAfterRinging
+        )
+
         bindAlarmDataToUi()
-        startAlarmAudioAndVibration()
         setupMissionControls()
         setupSnoozeAndEmergencyControls()
         startClockAndPulseAnimations()
-
-        // v13.1 Activate Anti-Cheat Guard Window on Alarm Ringing
-        AppBlockerService.activateAlarmAntiCheatWindow(this, isRingingNow = true, durationMinutesAfterRing = 15)
     }
 
     override fun onResume() {
         super.onResume()
-        AppBlockerService.activateAlarmAntiCheatWindow(this, isRingingNow = true, durationMinutesAfterRing = 15)
+        AppBlockerService.setAlarmRingingState(this, isRinging = true, alarmId = alarm.id)
     }
 
     private fun wakeAndUnlockScreen() {
@@ -97,15 +104,14 @@ class AlarmRingingActivity : AppCompatActivity() {
             setTurnScreenOn(true)
             val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
             km?.requestDismissKeyguard(this, null)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        )
     }
 
     private fun bindAlarmDataToUi() {
@@ -129,74 +135,8 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.tvDateLive.text = dateFormat.format(now)
     }
 
-    private fun startAlarmAudioAndVibration() {
-        // 1. Audio
-        HardAlarmSoundEngine.startPlaying(
-            context = this,
-            soundId = alarm.soundId,
-            forceMaxVolume = alarm.forceMaxVolume,
-            loop = true
-        )
-
-        // 2. Vibration
-        if (alarm.heavyVibration) {
-            val pattern = longArrayOf(0, 1000, 300, 1000, 300)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val effect = VibrationEffect.createWaveform(pattern, 0)
-                vibrator?.vibrate(effect)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(pattern, 0)
-            }
-        }
-    }
-
-    private fun initVibrator() {
-        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vm?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-        }
-    }
-
-    private fun initTts() {
-        if (!alarm.aiVoiceAnnouncement) return
-        try {
-            tts = TextToSpeech(applicationContext) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts?.language = Locale.US
-                    tts?.setSpeechRate(0.95f)
-                    isTtsReady = true
-                    speakAlarmAnnouncement()
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun speakAlarmAnnouncement() {
-        if (!isTtsReady || !alarm.aiVoiceAnnouncement) return
-        val speech = "Attention! Wake up now! It is time for ${alarm.label}!"
-        tts?.speak(speech, TextToSpeech.QUEUE_FLUSH, null, "alarm_announcement")
-    }
-
     private fun setupMissionControls() {
         when (alarm.dismissMissionType) {
-            1 -> {
-                // Math Mission
-                binding.btnStandardDismiss.visibility = View.GONE
-                binding.layoutTapMission.visibility = View.GONE
-                binding.layoutMathMission.visibility = View.VISIBLE
-                mathStep = 1
-                generateNextMathProblem()
-
-                binding.btnSubmitMath.setOnClickListener {
-                    checkMathAnswer()
-                }
-            }
             2 -> {
                 // Rapid 15-Tap Challenge
                 binding.btnStandardDismiss.visibility = View.GONE
@@ -214,7 +154,7 @@ class AlarmRingingActivity : AppCompatActivity() {
                     }
                 }
             }
-            else -> {
+            0 -> {
                 // Standard Tap
                 binding.layoutMathMission.visibility = View.GONE
                 binding.layoutTapMission.visibility = View.GONE
@@ -224,6 +164,18 @@ class AlarmRingingActivity : AppCompatActivity() {
                     dismissAlarmSuccessfully()
                 }
             }
+            else -> {
+                // Default: 5 Hard Random Math Questions (Stage 1 to 5)
+                binding.btnStandardDismiss.visibility = View.GONE
+                binding.layoutTapMission.visibility = View.GONE
+                binding.layoutMathMission.visibility = View.VISIBLE
+                mathStep = 1
+                generateNextMathProblem()
+
+                binding.btnSubmitMath.setOnClickListener {
+                    checkMathAnswer()
+                }
+            }
         }
     }
 
@@ -231,16 +183,53 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.btnRapidTap.text = "⚡ TAP ${tapsRemaining} TIMES TO WAKE UP (${tapsRemaining} left)"
     }
 
+    /**
+     * Generates fresh random arithmetic questions across 4 varied templates using nanoTime seed.
+     * Template 0: (a * b) + c (a in 12..29, b in 4..9, c in 15..85)
+     * Template 1: (a * b) - c (a in 14..32, b in 5..9, c in 11..49)
+     * Template 2: a + b + c (a in 120..350, b in 110..290, c in 45..180)
+     * Template 3: (a * b) + (c * d) (a in 7..15, b in 6..12, c in 5..11, d in 4..9)
+     */
     private fun generateNextMathProblem() {
-        val num1 = (12..48).random()
-        val num2 = (4..9).random()
-        val num3 = (15..75).random()
-        val isAddition = (0..1).random() == 1
+        val rng = kotlin.random.Random(System.nanoTime())
+        val template = rng.nextInt(4)
+        val problemStr: String
+        val answer: Int
 
-        val problemStr = if (isAddition) "($num1 × $num2) + $num3 = ?" else "($num1 × $num2) - $num3 = ?"
-        expectedMathAnswer = if (isAddition) (num1 * num2) + num3 else (num1 * num2) - num3
+        when (template) {
+            0 -> {
+                val a = rng.nextInt(12, 30) // 12..29
+                val b = rng.nextInt(4, 10)  // 4..9
+                val c = rng.nextInt(15, 86) // 15..85
+                problemStr = "($a × $b) + $c = ?"
+                answer = (a * b) + c
+            }
+            1 -> {
+                val a = rng.nextInt(14, 33) // 14..32
+                val b = rng.nextInt(5, 10)  // 5..9
+                val c = rng.nextInt(11, 50) // 11..49
+                problemStr = "($a × $b) - $c = ?"
+                answer = (a * b) - c
+            }
+            2 -> {
+                val a = rng.nextInt(120, 351) // 120..350
+                val b = rng.nextInt(110, 291) // 110..290
+                val c = rng.nextInt(45, 181)  // 45..180
+                problemStr = "$a + $b + $c = ?"
+                answer = a + b + c
+            }
+            else -> {
+                val a = rng.nextInt(7, 16)  // 7..15
+                val b = rng.nextInt(6, 13)  // 6..12
+                val c = rng.nextInt(5, 12)  // 5..11
+                val d = rng.nextInt(4, 10)  // 4..9
+                problemStr = "($a × $b) + ($c × $d) = ?"
+                answer = (a * b) + (c * d)
+            }
+        }
 
-        binding.tvMathStep.text = "🧠 WAKE-UP MATH MISSION (Stage $mathStep of 3)"
+        expectedMathAnswer = answer
+        binding.tvMathStep.text = "🧠 WAKE-UP MATH MISSION (Stage $mathStep of 5)"
         binding.tvMathProblem.text = problemStr
         binding.etMathAnswer.setText("")
     }
@@ -248,12 +237,12 @@ class AlarmRingingActivity : AppCompatActivity() {
     private fun checkMathAnswer() {
         val input = binding.etMathAnswer.text.toString().trim().toIntOrNull()
         if (input != null && input == expectedMathAnswer) {
-            if (mathStep < 3) {
+            if (mathStep < 5) {
                 mathStep++
-                Toast.makeText(this, "✅ Correct! Stage $mathStep unlocked.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "✅ Correct! Stage $mathStep of 5 unlocked.", Toast.LENGTH_SHORT).show()
                 generateNextMathProblem()
             } else {
-                Toast.makeText(this, "🎯 All 3 Math Missions Solved! Awake and energized!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "🎯 All 5 Math Missions Solved! Awake and energized!", Toast.LENGTH_LONG).show()
                 dismissAlarmSuccessfully()
             }
         } else {
@@ -273,45 +262,25 @@ class AlarmRingingActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnEmergencyStop.visibility = if (isTest) View.VISIBLE else View.GONE
-        binding.btnEmergencyStop.setOnClickListener {
-            AppBlockerService.deactivateAlarmRinging(this)
-            stopAudioAndVibration()
-            Toast.makeText(this, "🛑 Test alarm stopped.", Toast.LENGTH_SHORT).show()
-            finish()
-        }
+        // Even in test mode, instant bypass button is hidden to ensure mission completion
+        binding.btnEmergencyStop.visibility = View.GONE
     }
 
     private fun snoozeAlarm() {
-        AppBlockerService.deactivateAlarmRinging(this)
-        stopAudioAndVibration()
+        // Stop dedicated foreground service
+        AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
+
+        // Schedule snooze trigger
         AlarmManagerHelper.scheduleSnooze(this, alarm, alarm.snoozeMinutes)
         Toast.makeText(this, "💤 Alarm snoozed for ${alarm.snoozeMinutes} minutes.", Toast.LENGTH_LONG).show()
         finish()
     }
 
     private fun dismissAlarmSuccessfully() {
-        AppBlockerService.deactivateAlarmRinging(this)
-        stopAudioAndVibration()
+        // Stop dedicated foreground service and handle post-dismissal repeat/auto-delete logic
+        AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
 
-        if (!isTest) {
-            if (alarm.deleteAfterRinging) {
-                AlarmManagerHelper.deleteAlarm(this, alarm.id)
-                Toast.makeText(this, "🗑️ Alarm deleted after ringing as configured!", Toast.LENGTH_LONG).show()
-            } else if (alarm.repeatDays.isNotEmpty()) {
-                // Schedule next occurrence on next repeat day
-                AlarmManagerHelper.scheduleAlarm(this, alarm)
-                Toast.makeText(this, "✅ Alarm dismissed. Next repeat scheduled.", Toast.LENGTH_SHORT).show()
-            } else {
-                // One-time alarm: mark disabled
-                alarm.enabled = false
-                AlarmManagerHelper.saveAlarm(this, alarm)
-                Toast.makeText(this, "✅ Alarm dismissed.", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(this, "✅ Test completed successfully!", Toast.LENGTH_SHORT).show()
-        }
-
+        Toast.makeText(this, "✅ Alarm dismissed successfully!", Toast.LENGTH_SHORT).show()
         finish()
     }
 
@@ -326,29 +295,10 @@ class AlarmRingingActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopAudioAndVibration() {
-        HardAlarmSoundEngine.stopPlaying(this)
-        try {
-            vibrator?.cancel()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        try {
-            tts?.stop()
-            tts?.shutdown()
-            tts = null
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        if (isFinishing) {
-            AppBlockerService.deactivateAlarmRinging(this)
-        }
+        // Sound is owned by AlarmRingingService and MUST NEVER stop on activity destroy unless solved!
         handler.removeCallbacks(clockRunnable)
         pulseAnimator?.cancel()
-        stopAudioAndVibration()
     }
 }

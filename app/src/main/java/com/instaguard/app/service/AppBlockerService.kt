@@ -247,8 +247,23 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 null
             }
             if (rootPkg != null) {
-                // v13.1 Anti-Cheat Guard: Calculator App Lock & Browser Math/Calculator Search Blocker
-                if (isAlarmAntiCheatGuardActive(this@AppBlockerService)) {
+                // v13.2 Alarm Ringing Immortal Lock & Anti-Cheat Protection
+                if (isAlarmCurrentlyRinging) {
+                    if (rootPkg != applicationContext.packageName) {
+                        if (isCalculatorAppPackage(rootPkg)) {
+                            enforceCalculatorAppBlock(rootPkg)
+                        } else if (isLauncherPackage(rootPkg) || rootPkg == "com.android.systemui") {
+                            bringAlarmActivityToFront()
+                        } else if (isAntiCheatBrowserPackage(rootPkg)) {
+                            if (tickCounter % 6 == 0) {
+                                val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                                if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                                    enforceBrowserCalculatorBlock()
+                                }
+                            }
+                        }
+                    }
+                } else if (isAlarmAntiCheatGuardActive(this@AppBlockerService)) {
                     if (isCalculatorAppPackage(rootPkg)) {
                         enforceCalculatorAppBlock(rootPkg)
                     } else if (isAntiCheatBrowserPackage(rootPkg)) {
@@ -494,6 +509,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         initNotificationChannel()
         initTextToSpeech()
         syncFromPrefs(applicationContext)
+        // Clear stale alarm ringing state on service start if not actively ringing
+        if (!isAlarmCurrentlyRinging) {
+            try {
+                val sp = applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                sp.edit().putBoolean("alarm_currently_ringing", false).apply()
+            } catch (e: Exception) {}
+        }
+
         checkMidnightCrossover()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService created; Monotonic 50ms Stopwatch Engine started.")
@@ -507,6 +530,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         initNotificationChannel()
         initTextToSpeech()
         syncFromPrefs(applicationContext)
+        // Clear stale alarm ringing state on service start if not actively ringing
+        if (!isAlarmCurrentlyRinging) {
+            try {
+                val sp = applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                sp.edit().putBoolean("alarm_currently_ringing", false).apply()
+            } catch (e: Exception) {}
+        }
+
         checkMidnightCrossover()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService connected; Monotonic 50ms Stopwatch Engine running.")
@@ -604,8 +635,66 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         val packageName = event.packageName?.toString() ?: ""
 
-        // v13.1 Anti-Cheat Guard: Calculator App Lock & Browser Math/Calculator Search Blocker
-        if (isAlarmAntiCheatGuardActive(this)) {
+        // v13.2 Alarm Immortal Lock & Power-Off Blocker while Alarm is Ringing
+        if (isAlarmCurrentlyRinging) {
+            // NEVER fire BACK or HOME when inside our own app package!
+            if (packageName == applicationContext.packageName) {
+                return
+            }
+
+            // 1. Block Phone Power-Off / Restart Menu
+            val isSystemPkg = packageName == "android" ||
+                              packageName == "com.android.systemui" ||
+                              packageName.contains("systemui") ||
+                              packageName.contains("globalactions") ||
+                              packageName.contains("power")
+            if (isSystemPkg) {
+                val className = event.className?.toString() ?: ""
+                val isPowerMenuClass = className.contains("GlobalActions", ignoreCase = true) ||
+                                      className.contains("PowerOff", ignoreCase = true) ||
+                                      className.contains("PowerMenu", ignoreCase = true) ||
+                                      className.contains("Shutdown", ignoreCase = true)
+                var hasPowerOffText = false
+                val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                if (root != null) {
+                    hasPowerOffText = containsPowerOffKeywords(root)
+                }
+
+                if (isPowerMenuClass || hasPowerOffText) {
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        try {
+                            performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+                        } catch (e: Exception) {}
+                    }
+                    bringAlarmActivityToFront()
+                    showPowerOffBlockedToast()
+                    return
+                }
+            }
+
+            // 2. If user opens Recents or returns to Home launcher, bring Alarm screen back immediately!
+            if (isLauncherPackage(packageName) || packageName == "com.android.systemui") {
+                bringAlarmActivityToFront()
+                return
+            }
+
+            // 3. Calculator Lock while ringing
+            if (isCalculatorAppPackage(packageName)) {
+                enforceCalculatorAppBlock(packageName)
+                return
+            }
+
+            // 4. Browser Calculator Search Blocker while ringing
+            if (isAntiCheatBrowserPackage(packageName)) {
+                val root = try { rootInActiveWindow } catch (e: Exception) { null }
+                if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                    enforceBrowserCalculatorBlock()
+                    return
+                }
+            }
+        } else if (isAlarmAntiCheatGuardActive(this)) {
+            // Post-alarm 3-minute anti-cheat window
             if (isCalculatorAppPackage(packageName)) {
                 enforceCalculatorAppBlock(packageName)
                 return
@@ -1862,8 +1951,92 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    // v13.1 Anti-Cheat Enforcement Methods
+    // v13.2 Anti-Cheat & Immortal Alarm Enforcement Methods
+    private var lastAlarmActivityBringToFrontElapsedMs = 0L
+    private var lastPowerOffBlockToastElapsedMs = 0L
+
+    private fun bringAlarmActivityToFront() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAlarmActivityBringToFrontElapsedMs < 400L) return
+        lastAlarmActivityBringToFrontElapsedMs = now
+
+        try {
+            val alarmIntent = Intent(this, AlarmRingingActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(alarmIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun showPowerOffBlockedToast() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPowerOffBlockToastElapsedMs < 2000L) return
+        lastPowerOffBlockToastElapsedMs = now
+        tickerHandler.post {
+            try {
+                Toast.makeText(
+                    applicationContext,
+                    "🚫 Power Off Blocked! Solve all 5 Math Questions first!",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private val POWER_OFF_KEYWORDS = listOf(
+        "power off", "shut down", "restart", "reboot",
+        "slide to power off", "turn off", "power menu", "emergency mode"
+    )
+
+    private fun containsPowerOffKeywords(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var found = false
+
+        fun traverse(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > 30 || found) return
+            val text = node.text?.toString()?.lowercase(Locale.ROOT)
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT)
+            if (text != null) {
+                for (kw in POWER_OFF_KEYWORDS) {
+                    if (text.contains(kw)) {
+                        found = true
+                        return
+                    }
+                }
+            }
+            if (desc != null) {
+                for (kw in POWER_OFF_KEYWORDS) {
+                    if (desc.contains(kw)) {
+                        found = true
+                        return
+                    }
+                }
+            }
+            for (i in 0 until node.childCount) {
+                val child = try { node.getChild(i) } catch (e: Exception) { null }
+                if (child != null) {
+                    traverse(child, depth + 1)
+                    try { child.recycle() } catch (e: Exception) {}
+                    if (found) return
+                }
+            }
+        }
+
+        try {
+            traverse(root, 0)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return found
+    }
+
     private fun enforceCalculatorAppBlock(pkg: String) {
+        if (pkg == applicationContext.packageName) return // NEVER block or back out of our own app!
+
         val now = SystemClock.elapsedRealtime()
         triggerDoublePulseVibration()
         performGlobalAction(GLOBAL_ACTION_BACK)
@@ -1873,15 +2046,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         if (isAlarmCurrentlyRinging) {
             tickerHandler.postDelayed({
-                try {
-                    val alarmIntent = Intent(this, AlarmRingingActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    }
-                    startActivity(alarmIntent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }, 120L)
+                bringAlarmActivityToFront()
+            }, 100L)
         }
 
         if (now - lastCalculatorBlockToastElapsedMs >= 2000L) {
@@ -1910,15 +2076,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         if (isAlarmCurrentlyRinging) {
             tickerHandler.postDelayed({
-                try {
-                    val alarmIntent = Intent(this, AlarmRingingActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                    }
-                    startActivity(alarmIntent)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }, 120L)
+                bringAlarmActivityToFront()
+            }, 100L)
         }
 
         if (now - lastCalculatorSearchBlockToastElapsedMs >= 2000L) {
@@ -2485,12 +2644,12 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         @Volatile
         var isOurAppScreenOpen: Boolean = false
 
-        // v13.1 Anti-Cheat Alarm Ringing & Post-Alarm State
+        // v13.2 Anti-Cheat Alarm Ringing & Post-Alarm State
         @Volatile
         var isAlarmCurrentlyRinging: Boolean = false
 
         @Volatile
-        var alarmAntiCheatActiveUntilElapsedMs: Long = 0L
+        var lastActualAlarmRingRealtimeMs: Long = 0L
 
         val CALCULATOR_PACKAGES = setOf(
             "com.google.android.calculator",
@@ -2537,42 +2696,46 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                    lower.contains("chrome")
         }
 
-        fun activateAlarmAntiCheatWindow(context: Context, isRingingNow: Boolean, durationMinutesAfterRing: Int = 15) {
-            isAlarmCurrentlyRinging = isRingingNow
-            val durationMs = durationMinutesAfterRing * 60_000L
-            alarmAntiCheatActiveUntilElapsedMs = SystemClock.elapsedRealtime() + durationMs
+        fun setAlarmRingingState(context: Context, isRinging: Boolean, alarmId: String? = null) {
+            isAlarmCurrentlyRinging = isRinging
+            if (isRinging) {
+                lastActualAlarmRingRealtimeMs = SystemClock.elapsedRealtime()
+            }
             try {
                 val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                val epochUntil = System.currentTimeMillis() + durationMs
-                sp.edit()
-                    .putBoolean("alarm_currently_ringing", isRingingNow)
-                    .putLong("alarm_anticheat_until_epoch", epochUntil)
-                    .apply()
+                val edit = sp.edit().putBoolean("alarm_currently_ringing", isRinging)
+                if (isRinging) {
+                    edit.putLong("last_actual_alarm_ring_epoch", System.currentTimeMillis())
+                }
+                edit.commit()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
 
+        fun activateAlarmAntiCheatWindow(context: Context, isRingingNow: Boolean, durationMinutesAfterRing: Int = 3) {
+            setAlarmRingingState(context, isRingingNow)
+        }
+
         fun deactivateAlarmRinging(context: Context) {
-            isAlarmCurrentlyRinging = false
-            try {
-                val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                sp.edit()
-                    .putBoolean("alarm_currently_ringing", false)
-                    .apply()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            setAlarmRingingState(context, false)
         }
 
         fun isAlarmAntiCheatGuardActive(context: Context): Boolean {
             if (isAlarmCurrentlyRinging) return true
-            if (SystemClock.elapsedRealtime() < alarmAntiCheatActiveUntilElapsedMs) return true
+            val nowRealtime = SystemClock.elapsedRealtime()
+            if (lastActualAlarmRingRealtimeMs > 0L && (nowRealtime - lastActualAlarmRingRealtimeMs < 3 * 60_000L)) {
+                return true
+            }
             return try {
                 val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
                 val ringingInPrefs = sp.getBoolean("alarm_currently_ringing", false)
-                val epochUntil = sp.getLong("alarm_anticheat_until_epoch", 0L)
-                ringingInPrefs || (System.currentTimeMillis() < epochUntil)
+                if (ringingInPrefs) return true
+                val lastRingEpoch = sp.getLong("last_actual_alarm_ring_epoch", 0L)
+                if (lastRingEpoch > 0L && (System.currentTimeMillis() - lastRingEpoch < 3 * 60_000L)) {
+                    return true
+                }
+                false
             } catch (e: Exception) {
                 false
             }
