@@ -511,10 +511,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         syncFromPrefs(applicationContext)
         // Clear stale alarm ringing state on service start if not actively ringing
         if (!isAlarmCurrentlyRinging) {
-            try {
-                val sp = applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                sp.edit().putBoolean("alarm_currently_ringing", false).apply()
-            } catch (e: Exception) {}
+            clearAlarmRingingState(applicationContext)
         }
 
         checkMidnightCrossover()
@@ -532,10 +529,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         syncFromPrefs(applicationContext)
         // Clear stale alarm ringing state on service start if not actively ringing
         if (!isAlarmCurrentlyRinging) {
-            try {
-                val sp = applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                sp.edit().putBoolean("alarm_currently_ringing", false).apply()
-            } catch (e: Exception) {}
+            clearAlarmRingingState(applicationContext)
         }
 
         checkMidnightCrossover()
@@ -2644,9 +2638,12 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         @Volatile
         var isOurAppScreenOpen: Boolean = false
 
-        // v13.2 Anti-Cheat Alarm Ringing & Post-Alarm State
+        // v13.3 Anti-Cheat Alarm Ringing State
         @Volatile
         var isAlarmCurrentlyRinging: Boolean = false
+
+        @Volatile
+        var alarmAntiCheatActiveUntilElapsedMs: Long = 0L
 
         @Volatile
         var lastActualAlarmRingRealtimeMs: Long = 0L
@@ -2696,18 +2693,35 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                    lower.contains("chrome")
         }
 
-        fun setAlarmRingingState(context: Context, isRinging: Boolean, alarmId: String? = null) {
-            isAlarmCurrentlyRinging = isRinging
-            if (isRinging) {
-                lastActualAlarmRingRealtimeMs = SystemClock.elapsedRealtime()
+        fun clearAlarmRingingState(context: Context) {
+            isAlarmCurrentlyRinging = false
+            alarmAntiCheatActiveUntilElapsedMs = 0L
+            lastActualAlarmRingRealtimeMs = 0L
+            try {
+                context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean("alarm_currently_ringing", false)
+                    .putLong("alarm_anticheat_until_epoch", 0L)
+                    .putLong("last_actual_alarm_ring_epoch", 0L)
+                    .commit()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
+        }
+
+        fun setAlarmRingingState(context: Context, isRinging: Boolean, alarmId: String? = null) {
+            if (!isRinging) {
+                clearAlarmRingingState(context)
+                return
+            }
+            isAlarmCurrentlyRinging = true
+            lastActualAlarmRingRealtimeMs = SystemClock.elapsedRealtime()
             try {
                 val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                val edit = sp.edit().putBoolean("alarm_currently_ringing", isRinging)
-                if (isRinging) {
-                    edit.putLong("last_actual_alarm_ring_epoch", System.currentTimeMillis())
-                }
-                edit.commit()
+                sp.edit()
+                    .putBoolean("alarm_currently_ringing", true)
+                    .putLong("last_actual_alarm_ring_epoch", System.currentTimeMillis())
+                    .commit()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -2718,27 +2732,11 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         fun deactivateAlarmRinging(context: Context) {
-            setAlarmRingingState(context, false)
+            clearAlarmRingingState(context)
         }
 
         fun isAlarmAntiCheatGuardActive(context: Context): Boolean {
-            if (isAlarmCurrentlyRinging) return true
-            val nowRealtime = SystemClock.elapsedRealtime()
-            if (lastActualAlarmRingRealtimeMs > 0L && (nowRealtime - lastActualAlarmRingRealtimeMs < 3 * 60_000L)) {
-                return true
-            }
-            return try {
-                val sp = context.applicationContext.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
-                val ringingInPrefs = sp.getBoolean("alarm_currently_ringing", false)
-                if (ringingInPrefs) return true
-                val lastRingEpoch = sp.getLong("last_actual_alarm_ring_epoch", 0L)
-                if (lastRingEpoch > 0L && (System.currentTimeMillis() - lastRingEpoch < 3 * 60_000L)) {
-                    return true
-                }
-                false
-            } catch (e: Exception) {
-                false
-            }
+            return isAlarmCurrentlyRinging
         }
 
         val STRICT_EXPLICIT_TAG_REGEX = Regex("""(?i)#(nsfw|onlyfans|nude|18plus|uncensored)\b""")

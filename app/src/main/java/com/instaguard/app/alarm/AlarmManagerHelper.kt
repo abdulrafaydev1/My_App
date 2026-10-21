@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.ui.MainActivity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -357,6 +358,8 @@ object AlarmManagerHelper {
             .remove("active_ringing_alarm_id")
             .remove("active_ringing_delete_after")
             .commit()
+
+        AppBlockerService.clearAlarmRingingState(context)
 
         try {
             context.sendBroadcast(Intent("com.instaguard.app.ACTION_ALARM_LIST_CHANGED"))

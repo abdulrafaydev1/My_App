@@ -267,6 +267,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun snoozeAlarm() {
+        AppBlockerService.clearAlarmRingingState(this)
         // Stop dedicated foreground service
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
 
@@ -277,6 +278,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun dismissAlarmSuccessfully() {
+        AppBlockerService.clearAlarmRingingState(this)
         // Stop dedicated foreground service and handle post-dismissal repeat/auto-delete logic
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
 

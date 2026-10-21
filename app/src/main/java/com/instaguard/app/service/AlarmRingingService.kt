@@ -271,7 +271,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         wakeLock = null
 
         // 4. Update AppBlockerService anti-cheat state
-        AppBlockerService.setAlarmRingingState(this, isRinging = false, alarmId = alarmId)
+        AppBlockerService.clearAlarmRingingState(this)
 
         // 5. Handle dismissal & repeat/auto-delete logic synchronously
         AlarmManagerHelper.handleAlarmDismissed(this, alarmId)
@@ -303,6 +303,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        AppBlockerService.clearAlarmRingingState(this)
         HardAlarmSoundEngine.stopPlaying(this)
         try {
             vibrator?.cancel()
@@ -347,6 +348,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         }
 
         fun stopAlarmAfterSolved(context: Context, alarmId: String?) {
+            AppBlockerService.clearAlarmRingingState(context)
             val intent = Intent(context, AlarmRingingService::class.java).apply {
                 action = ACTION_STOP_ALARM
                 putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarmId)
