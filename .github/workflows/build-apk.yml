@@ -32,12 +32,12 @@ jobs:
           set -o pipefail
           gradle compileDebugKotlin --stacktrace --no-daemon 2>&1 | tee compile.log || {
             echo "::error::Compilation failed. Printing compile.log:"
-            tail -n 80 compile.log
+            cat compile.log
             exit 1
           }
           gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon 2>&1 | tee test.log || {
             echo "::error::Tests or packaging failed. Printing test.log:"
-            tail -n 80 test.log
+            cat test.log
             exit 1
           }
 
@@ -52,6 +52,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
-          path: app/build/reports/tests/
+          name: build-failure-logs
+          path: |
+            *.log
+            app/build/reports/
           retention-days: 7
