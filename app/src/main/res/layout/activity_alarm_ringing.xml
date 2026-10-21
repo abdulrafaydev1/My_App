@@ -197,6 +197,20 @@
                         android:textSize="14sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_neon_blue" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSkipToCameraTest"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="10dp"
+                        android:text="🧪 Skip 5 Questions (Test Camera Scanner)"
+                        android:textColor="@color/accent_neon_blue"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/accent_neon_blue"
+                        app:strokeWidth="1.5dp"
+                        app:backgroundTint="@color/surface_variant" />
                 </LinearLayout>
 
                 <!-- 3. Rapid 15-Tap Mission -->

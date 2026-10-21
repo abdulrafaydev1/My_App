@@ -40,7 +40,7 @@ import java.util.Locale
 /**
  * Full-Screen Alarm Ringing Activity (v14.3 Master Edition).
  * 2-Stage Wake-Up Mission:
- * Stage 1: 5 Hard Math Questions (or Rapid Tap / Standard Tap).
+ * Stage 1: 5 Hard Math Questions (or Rapid Tap / Standard Tap) + "🧪 Skip 5 Questions" test bypass.
  * Stage 2: CameraX + Google ML Kit 400+ Object Verification Scanner requiring 5 sequential item scans
  *          (Item 1/5 to 5/5) before stopping the alarm!
  *          Matches 3-State reference UI (Idle White -> Error Red -> Verified Green) + Flashlight & Target Cycling.
@@ -167,7 +167,8 @@ class AlarmRingingActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
         )
     }
 
@@ -231,6 +232,12 @@ class AlarmRingingActivity : AppCompatActivity() {
 
                 binding.btnSubmitMath.setOnClickListener {
                     checkMathAnswer()
+                }
+
+                // 🧪 Skip 5 Questions (Test Camera Scanner) button
+                binding.btnSkipToCameraTest.setOnClickListener {
+                    Toast.makeText(this, "🧪 Skipping Math: Launching Camera Scanner...", Toast.LENGTH_SHORT).show()
+                    transitionToStage2CameraScanner()
                 }
             }
         }

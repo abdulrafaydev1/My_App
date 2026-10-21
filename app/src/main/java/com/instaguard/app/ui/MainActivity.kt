@@ -1,5 +1,7 @@
 package com.instaguard.app.ui
 
+import android.app.AlarmManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.text.InputFilter
@@ -80,6 +83,8 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
         }
 
+        checkAndRequestAlarmOptimizations()
+
         initPreviewTts()
         setupFragments(savedInstanceState)
         setupBottomNavigation()
@@ -136,6 +141,7 @@ class MainActivity : AppCompatActivity() {
 
                 // Refresh target fragment immediately on tab switch
                 if (targetFragment == alarmFragment) {
+                    checkAndRequestAlarmOptimizations()
                     if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                         requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
                     }
@@ -157,6 +163,30 @@ class MainActivity : AppCompatActivity() {
             refreshAllFragments()
             InstaGuardWidgetProvider.updateAllWidgets(this)
             Toast.makeText(this, R.string.btn_refresh, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun checkAndRequestAlarmOptimizations() {
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (pm != null && !pm.isIgnoringBatteryOptimizations(packageName)) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {}
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            if (am != null && !am.canScheduleExactAlarms()) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
         }
     }
 

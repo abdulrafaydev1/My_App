@@ -9,7 +9,12 @@ import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
+import com.instaguard.app.alarm.AlarmManagerHelper
+import com.instaguard.app.alarm.SmartAlarm
+import com.instaguard.app.service.AlarmRingingService
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -214,6 +219,115 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
      * Continuously computes elapsed time delta using SystemClock.elapsedRealtime()
      * and adds delta directly to active app's accumulated usage and daily totals.
      */
+    
+    private var lastBackupTriggeredMinuteKey: String = ""
+    private var backupWakeLock: PowerManager.WakeLock? = null
+    private var isTimeTickReceiverRegistered = false
+
+    private val timeTickReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            checkBackupAlarms()
+            updateBackupAlarmWakeLock()
+        }
+    }
+
+    private fun registerTimeTickReceiverSafely() {
+        if (!isTimeTickReceiverRegistered) {
+            try {
+                val filter = IntentFilter(Intent.ACTION_TIME_TICK)
+                registerReceiver(timeTickReceiver, filter)
+                isTimeTickReceiverRegistered = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun unregisterTimeTickReceiverSafely() {
+        if (isTimeTickReceiverRegistered) {
+            try {
+                unregisterReceiver(timeTickReceiver)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            isTimeTickReceiverRegistered = false
+        }
+    }
+
+    fun updateBackupAlarmWakeLock() {
+        try {
+            val context = applicationContext ?: return
+            val enabledAlarms = AlarmManagerHelper.loadAlarms(context).filter { it.enabled }
+            val now = System.currentTimeMillis()
+            val hasAlarmSoon = enabledAlarms.any { alarm ->
+                val nextMs = AlarmManagerHelper.calculateNextTriggerMs(alarm)
+                nextMs - now in 0L..(12 * 3600_000L)
+            }
+
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+            if (hasAlarmSoon) {
+                if (backupWakeLock == null || backupWakeLock?.isHeld != true) {
+                    backupWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InstaGuard:BackupAlarmWakeLock").apply {
+                        setReferenceCounted(false)
+                        acquire(12 * 3600_000L)
+                    }
+                }
+            } else {
+                if (backupWakeLock?.isHeld == true) {
+                    backupWakeLock?.release()
+                }
+                backupWakeLock = null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating backup alarm wake lock", e)
+        }
+    }
+
+    private fun checkBackupAlarms() {
+        try {
+            if (isAlarmCurrentlyRinging) return
+            val context = applicationContext ?: return
+            val enabledAlarms = AlarmManagerHelper.loadAlarms(context).filter { it.enabled }
+            if (enabledAlarms.isEmpty()) return
+
+            val nowCal = Calendar.getInstance()
+            val currentHour = nowCal.get(Calendar.HOUR_OF_DAY)
+            val currentMinute = nowCal.get(Calendar.MINUTE)
+            val currentDayOfWeek = when (nowCal.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.MONDAY -> 1
+                Calendar.TUESDAY -> 2
+                Calendar.WEDNESDAY -> 3
+                Calendar.THURSDAY -> 4
+                Calendar.FRIDAY -> 5
+                Calendar.SATURDAY -> 6
+                Calendar.SUNDAY -> 7
+                else -> 1
+            }
+
+            for (alarm in enabledAlarms) {
+                val matchesTime = alarm.hour == currentHour && alarm.minute == currentMinute
+                val matchesDay = alarm.repeatDays.isEmpty() || alarm.repeatDays.contains(currentDayOfWeek)
+                if (matchesTime && matchesDay) {
+                    val minuteKey = alarm.id + "_" + nowCal.get(Calendar.YEAR) + "_" + nowCal.get(Calendar.DAY_OF_YEAR) + "_" + currentHour + ":" + currentMinute
+                    if (minuteKey != lastBackupTriggeredMinuteKey) {
+                        lastBackupTriggeredMinuteKey = minuteKey
+                        Log.i(TAG, "⏰ Backup Alarm Watchdog: Firing alarm " + alarm.id + " (" + alarm.label + ")")
+                        AlarmRingingService.startAlarm(
+                            context = context,
+                            alarmId = alarm.id,
+                            isTest = false,
+                            isSnooze = false,
+                            deleteAfter = alarm.deleteAfterRinging
+                        )
+                    }
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in checkBackupAlarms", e)
+        }
+    }
+
     private val tickerRunnable = object : Runnable {
         override fun run() {
             val nowElapsed = SystemClock.elapsedRealtime()
@@ -231,11 +345,17 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 lastValidTrackedAppKey = null
                 removeFloatingPill()
                 hideDopamineTintOverlay()
-                tickerHandler.postDelayed(this, 50L)
+                checkBackupAlarms()
+                updateBackupAlarmWakeLock()
+                tickerHandler.postDelayed(this, 1000L)
                 return
             }
 
             // 2. Active PiP Hunter whenever any app is in 5-hour cooldown lock
+            if (tickCounter % 20 == 0) {
+                checkBackupAlarms()
+            }
+
             if (isAnyAppLocked()) {
                 killPipWindowsIfAny()
             }
@@ -515,6 +635,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         checkMidnightCrossover()
+        registerTimeTickReceiverSafely()
+        updateBackupAlarmWakeLock()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService created; Monotonic 50ms Stopwatch Engine started.")
     }
@@ -533,6 +655,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         checkMidnightCrossover()
+        registerTimeTickReceiverSafely()
+        updateBackupAlarmWakeLock()
         startStopwatchTicker()
         Log.i(TAG, "AppBlockerService connected; Monotonic 50ms Stopwatch Engine running.")
     }
@@ -2612,6 +2736,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        unregisterTimeTickReceiverSafely()
+        try {
+            if (backupWakeLock?.isHeld == true) backupWakeLock?.release()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        backupWakeLock = null
         removeFloatingPillCompletely()
         removeDopamineTintOverlayCompletely()
         stopStopwatchTicker()
@@ -2691,6 +2822,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                    BROWSER_PACKAGES.contains(lower) ||
                    lower.contains("browser") ||
                    lower.contains("chrome")
+        }
+
+        fun triggerAlarmWakeLockUpdate(context: Context) {
+            activeServiceInstance?.updateBackupAlarmWakeLock()
         }
 
         fun clearAlarmRingingState(context: Context) {

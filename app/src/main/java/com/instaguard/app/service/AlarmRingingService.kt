@@ -94,7 +94,9 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         }
 
         // 5. Start mathematical audio synthesizer at 100% volume
-        HardAlarmSoundEngine.startPlaying(this, alarm.soundId, forceMaxVolume = alarm.forceMaxVolume)
+        if (!HardAlarmSoundEngine.isCurrentlyPlaying) {
+            HardAlarmSoundEngine.startPlaying(this, alarm.soundId, forceMaxVolume = alarm.forceMaxVolume)
+        }
 
         // 6. Start continuous vibration
         if (alarm.heavyVibration) {
@@ -137,12 +139,21 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         try {
             @Suppress("DEPRECATION")
             val screenLock = pm.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
                 "InstaGuard:ScreenTurnOnWakeLock"
             )
-            screenLock.acquire(10_000L)
+            screenLock.acquire(120_000L)
         } catch (e: Exception) {
-            // Screen bright lock may not be available on all Android versions
+            try {
+                @Suppress("DEPRECATION")
+                val screenLock = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                    "InstaGuard:ScreenTurnOnWakeLockFallback"
+                )
+                screenLock.acquire(30_000L)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
         }
     }
 
@@ -186,6 +197,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
                 setSound(null, null) // Audio is handled mathematically via AudioTrack
                 enableVibration(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
             }
             nm?.createNotificationChannel(channel)
         }

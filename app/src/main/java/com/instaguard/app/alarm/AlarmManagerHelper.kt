@@ -136,6 +136,7 @@ object AlarmManagerHelper {
         val array = JSONArray()
         alarms.forEach { array.put(it.toJsonObject()) }
         getPrefs(context).edit().putString(KEY_ALARMS_JSON, array.toString()).apply()
+        AppBlockerService.triggerAlarmWakeLockUpdate(context)
     }
 
     fun getAlarmById(context: Context, id: String): SmartAlarm? {
@@ -157,6 +158,7 @@ object AlarmManagerHelper {
         } else {
             cancelAlarm(context, alarm.id)
         }
+        AppBlockerService.triggerAlarmWakeLockUpdate(context)
     }
 
     fun deleteAlarm(context: Context, alarmId: String) {
@@ -164,6 +166,7 @@ object AlarmManagerHelper {
         list.removeAll { it.id == alarmId }
         saveAlarms(context, list)
         cancelAlarm(context, alarmId)
+        AppBlockerService.triggerAlarmWakeLockUpdate(context)
     }
 
     /**
@@ -225,10 +228,19 @@ object AlarmManagerHelper {
 
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             data = android.net.Uri.parse("instaguard://alarm/${alarm.id}")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
+            putExtra("alarm_label", alarm.label)
+            putExtra("sound_id", alarm.soundId)
+            putExtra("snooze_minutes", alarm.snoozeMinutes)
             putExtra("delete_after_ringing", alarm.deleteAfterRinging)
+            putExtra("dismiss_mission_type", alarm.dismissMissionType)
+            putExtra("force_max_volume", alarm.forceMaxVolume)
+            putExtra("heavy_vibration", alarm.heavyVibration)
+            putExtra("ai_voice", alarm.aiVoiceAnnouncement)
+            putExtra("scan_target_item_id", alarm.scanTargetItemId)
             putExtra(EXTRA_IS_TEST, false)
         }
         val pendingIntent = PendingIntent.getBroadcast(
@@ -238,13 +250,25 @@ object AlarmManagerHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, MainActivity::class.java).apply {
+        val showActivityIntent = Intent(context, AlarmRingingActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             data = android.net.Uri.parse("instaguard://show/${alarm.id}")
+            putExtra(EXTRA_ALARM_ID, alarm.id)
+            putExtra("alarm_id", alarm.id)
+            putExtra("alarm_label", alarm.label)
+            putExtra("sound_id", alarm.soundId)
+            putExtra("snooze_minutes", alarm.snoozeMinutes)
+            putExtra("delete_after_ringing", alarm.deleteAfterRinging)
+            putExtra("dismiss_mission_type", alarm.dismissMissionType)
+            putExtra("force_max_volume", alarm.forceMaxVolume)
+            putExtra("heavy_vibration", alarm.heavyVibration)
+            putExtra("ai_voice", alarm.aiVoiceAnnouncement)
+            putExtra("scan_target_item_id", alarm.scanTargetItemId)
         }
         val showPendingIntent = PendingIntent.getActivity(
             context,
-            alarm.id.hashCode() + 1,
-            showIntent,
+            alarm.id.hashCode() + 10000,
+            showActivityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -272,10 +296,19 @@ object AlarmManagerHelper {
 
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             data = android.net.Uri.parse("instaguard://alarm/${alarm.id}/snooze")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
+            putExtra("alarm_label", alarm.label)
+            putExtra("sound_id", alarm.soundId)
+            putExtra("snooze_minutes", alarm.snoozeMinutes)
             putExtra("delete_after_ringing", alarm.deleteAfterRinging)
+            putExtra("dismiss_mission_type", alarm.dismissMissionType)
+            putExtra("force_max_volume", alarm.forceMaxVolume)
+            putExtra("heavy_vibration", alarm.heavyVibration)
+            putExtra("ai_voice", alarm.aiVoiceAnnouncement)
+            putExtra("scan_target_item_id", alarm.scanTargetItemId)
             putExtra(EXTRA_IS_SNOOZE, true)
             putExtra(EXTRA_IS_TEST, false)
         }
@@ -286,13 +319,26 @@ object AlarmManagerHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val showIntent = Intent(context, MainActivity::class.java).apply {
+        val showActivityIntent = Intent(context, AlarmRingingActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             data = android.net.Uri.parse("instaguard://show/${alarm.id}/snooze")
+            putExtra(EXTRA_ALARM_ID, alarm.id)
+            putExtra("alarm_id", alarm.id)
+            putExtra("alarm_label", alarm.label)
+            putExtra("sound_id", alarm.soundId)
+            putExtra("snooze_minutes", alarm.snoozeMinutes)
+            putExtra("delete_after_ringing", alarm.deleteAfterRinging)
+            putExtra("dismiss_mission_type", alarm.dismissMissionType)
+            putExtra("force_max_volume", alarm.forceMaxVolume)
+            putExtra("heavy_vibration", alarm.heavyVibration)
+            putExtra("ai_voice", alarm.aiVoiceAnnouncement)
+            putExtra("scan_target_item_id", alarm.scanTargetItemId)
+            putExtra(EXTRA_IS_SNOOZE, true)
         }
         val showPendingIntent = PendingIntent.getActivity(
             context,
-            alarm.id.hashCode() + 1,
-            showIntent,
+            alarm.id.hashCode() + 10000,
+            showActivityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
