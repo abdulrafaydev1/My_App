@@ -75,6 +75,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Camera permission for Stage 2 Camera Scanner Alarm Missions
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
+        }
+
         initPreviewTts()
         setupFragments(savedInstanceState)
         setupBottomNavigation()
@@ -130,6 +135,11 @@ class MainActivity : AppCompatActivity() {
                 activeFragment = targetFragment
 
                 // Refresh target fragment immediately on tab switch
+                if (targetFragment == alarmFragment) {
+                    if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
+                    }
+                }
                 refreshActiveTab(targetFragment)
                 true
             } else {
@@ -141,7 +151,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v13.3 PRO"
+        binding.tvToolbarBadge.text = "v14.0 PRO"
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()

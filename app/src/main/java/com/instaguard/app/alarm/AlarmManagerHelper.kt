@@ -30,7 +30,8 @@ data class SmartAlarm(
     var dismissMissionType: Int = 1, // Default: 🧠 5 Hard Math Questions (Random)
     var forceMaxVolume: Boolean = true,
     var heavyVibration: Boolean = true,
-    var aiVoiceAnnouncement: Boolean = true
+    var aiVoiceAnnouncement: Boolean = true,
+    var scanTargetItemId: Int = -1 // -1 = Random Item, or 0..7 for specific AlarmScanItem
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -48,6 +49,7 @@ data class SmartAlarm(
         put("forceMaxVolume", forceMaxVolume)
         put("heavyVibration", heavyVibration)
         put("aiVoiceAnnouncement", aiVoiceAnnouncement)
+        put("scanTargetItemId", scanTargetItemId)
     }
 
     companion object {
@@ -72,7 +74,8 @@ data class SmartAlarm(
                 dismissMissionType = json.optInt("dismissMissionType", 1),
                 forceMaxVolume = json.optBoolean("forceMaxVolume", true),
                 heavyVibration = json.optBoolean("heavyVibration", true),
-                aiVoiceAnnouncement = json.optBoolean("aiVoiceAnnouncement", true)
+                aiVoiceAnnouncement = json.optBoolean("aiVoiceAnnouncement", true),
+                scanTargetItemId = json.optInt("scanTargetItemId", -1)
             )
         }
     }

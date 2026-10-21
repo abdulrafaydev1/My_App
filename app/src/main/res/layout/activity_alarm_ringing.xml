@@ -8,6 +8,7 @@
     android:keepScreenOn="true">
 
     <ScrollView
+        android:id="@+id/layoutStage1Container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true">
@@ -196,6 +197,20 @@
                         android:textSize="14sp"
                         app:cornerRadius="12dp"
                         app:backgroundTint="@color/accent_neon_blue" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSkipToCameraTest"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="10dp"
+                        android:text="🧪 Skip 5 Questions (Test Camera Scanner)"
+                        android:textColor="@color/accent_neon_blue"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        app:cornerRadius="12dp"
+                        app:strokeColor="@color/accent_neon_blue"
+                        app:strokeWidth="1.5dp"
+                        app:backgroundTint="@color/surface_variant" />
                 </LinearLayout>
 
                 <!-- 3. Rapid 15-Tap Mission -->
@@ -260,5 +275,270 @@
 
         </LinearLayout>
     </ScrollView>
+
+    <!-- Stage 2: CameraX & ML Kit Object Scanner Container -->
+    <LinearLayout
+        android:id="@+id/layoutStage2CameraScanner"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:background="@color/bg_primary"
+        android:visibility="gone"
+        android:paddingHorizontal="20dp"
+        android:paddingTop="36dp"
+        android:paddingBottom="24dp">
+
+        <!-- Top Header Section -->
+        <TextView
+            android:id="@+id/tvCameraScanTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan this Item [Laptop] on camera"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/tvCameraScanSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Align item within the frame"
+            android:textColor="#9E9E9E"
+            android:textSize="13sp"
+            android:gravity="center" />
+
+        <!-- Center Rounded Camera Frame (300dp x 420dp) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="300dp"
+            android:layout_height="420dp"
+            android:layout_marginTop="18dp"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="@android:color/black">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <!-- Live CameraX Viewfinder -->
+                <androidx.camera.view.PreviewView
+                    android:id="@+id/cameraPreviewView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:scaleType="fillCenter"
+                    app:implementationMode="compatible" />
+
+                <!-- Captured Freeze Screenshot View -->
+                <ImageView
+                    android:id="@+id/capturedFreezeImageView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone" />
+
+                <!-- 3-State Custom Frame Overlay (Idle White, Error Red, Verified Green) -->
+                <com.instaguard.app.alarm.ScannerFrameOverlayView
+                    android:id="@+id/scannerFrameOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <!-- Top-Inside Error Pill Banner (Screen 2) -->
+                <LinearLayout
+                    android:id="@+id/bannerErrorInside"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|center_horizontal"
+                    android:layout_marginTop="24dp"
+                    android:background="@drawable/bg_pill_version"
+                    android:backgroundTint="#D94A151B"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="10dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⚠️ Item not aligned - Please scan properly"
+                        android:textColor="#FFCDD2"
+                        android:textSize="13.5sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Center-Inside Verified Glass Card (Screen 3) -->
+                <LinearLayout
+                    android:id="@+id/cardVerifiedInside"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:background="@drawable/bg_pill_version"
+                    android:backgroundTint="#CC1E242B"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:paddingHorizontal="24dp"
+                    android:paddingVertical="16dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="✓ Scan Verified"
+                        android:textColor="#00E676"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvVerifiedConfidence"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Confidence 99.8%"
+                        android:textColor="#D0D7DE"
+                        android:textSize="13.5sp" />
+                </LinearLayout>
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Bottom Controls Area -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="16dp">
+
+            <!-- Bottom Bar for State 1 (1. Scanner UI) -->
+            <LinearLayout
+                android:id="@+id/layoutBottomState1"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:visibility="visible">
+
+                <!-- Left circular dark button: Flashlight / Torch Toggle -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleTorch"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:text="🔦"
+                    android:textSize="18sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:padding="0dp"
+                    app:cornerRadius="26dp"
+                    app:backgroundTint="@color/surface_card"
+                    app:strokeColor="@color/surface_variant"
+                    app:strokeWidth="1.5dp" />
+
+                <!-- Center large circular shutter button -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/btnCaptureScan"
+                    android:layout_width="74dp"
+                    android:layout_height="74dp"
+                    android:layout_marginHorizontal="34dp"
+                    app:cardCornerRadius="37dp"
+                    app:cardElevation="6dp"
+                    app:strokeColor="#FFFFFF"
+                    app:strokeWidth="4dp"
+                    app:cardBackgroundColor="@color/bg_primary">
+
+                    <View
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:layout_gravity="center"
+                        android:background="@drawable/ic_launcher_background"
+                        android:backgroundTint="#EEEEEE" />
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Right circular dark button: Switch Target Item -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSwitchTargetItem"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:text="🔄"
+                    android:textSize="18sp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:padding="0dp"
+                    app:cornerRadius="26dp"
+                    app:backgroundTint="@color/surface_card"
+                    app:strokeColor="@color/surface_variant"
+                    app:strokeWidth="1.5dp" />
+            </LinearLayout>
+
+            <!-- Bottom Bar for State 2 (2. Scan Properly Error State) -->
+            <LinearLayout
+                android:id="@+id/layoutBottomState2Error"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvErrorAdvice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⚠️ Item not aligned - Please scan properly\nPlease refocus item on camera &amp; try scanning"
+                    android:textColor="#FF5252"
+                    android:textSize="13sp"
+                    android:gravity="center" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnRetryScan"
+                    android:layout_width="140dp"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:text="Retry"
+                    android:textColor="#0B0F19"
+                    android:textStyle="bold"
+                    android:textSize="14sp"
+                    app:cornerRadius="22dp"
+                    app:backgroundTint="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/tvScanningAdvice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="💡 Tap here for Scanning Advice"
+                    android:textColor="@color/accent_neon_blue"
+                    android:textSize="12sp"
+                    android:padding="4dp" />
+            </LinearLayout>
+
+            <!-- Bottom Bar for State 3 (3. Scan Verified Success State) -->
+            <LinearLayout
+                android:id="@+id/layoutBottomState3Verified"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnVerifiedDismiss"
+                    android:layout_width="220dp"
+                    android:layout_height="54dp"
+                    android:text="Verified Successfully ✔"
+                    android:textColor="#000000"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    app:cornerRadius="27dp"
+                    app:backgroundTint="#00E676" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Task Completed"
+                    android:textColor="#9E9E9E"
+                    android:textSize="12.5sp" />
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
 
 </FrameLayout>

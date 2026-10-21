@@ -163,6 +163,9 @@ class AlarmFragment : Fragment() {
 
     private fun testAlarmDirectly(alarm: SmartAlarm) {
         val ctx = requireContext()
+        if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
+        }
         AlarmRingingService.startAlarm(
             context = ctx,
             alarmId = alarm.id,
@@ -321,6 +324,14 @@ class AlarmFragment : Fragment() {
         dialogBinding.spinnerMission.adapter = missionAdapter
         dialogBinding.spinnerMission.setSelection(alarm.dismissMissionType.coerceIn(0, 2))
 
+        // 7.1 Camera Scan Target Item Spinner
+        val scanTargetOptions = listOf(-1 to "🎲 Random Item (Laptop, Mouse, Mug, etc.)") +
+            AlarmScanItem.entries.map { it.id to it.displayName }
+        val scanTargetAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, scanTargetOptions.map { it.second })
+        dialogBinding.spinnerScanTargetItem.adapter = scanTargetAdapter
+        val initialScanTargetIndex = scanTargetOptions.indexOfFirst { it.first == alarm.scanTargetItemId }.let { if (it >= 0) it else 0 }
+        dialogBinding.spinnerScanTargetItem.setSelection(initialScanTargetIndex)
+
         // 8. Switches
         dialogBinding.switchForceMaxVolume.isChecked = alarm.forceMaxVolume
         dialogBinding.switchHeavyVibration.isChecked = alarm.heavyVibration
@@ -344,7 +355,8 @@ class AlarmFragment : Fragment() {
                 dismissMissionType = missionOptions[dialogBinding.spinnerMission.selectedItemPosition].first,
                 forceMaxVolume = dialogBinding.switchForceMaxVolume.isChecked,
                 heavyVibration = dialogBinding.switchHeavyVibration.isChecked,
-                aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked
+                aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked,
+                scanTargetItemId = scanTargetOptions[dialogBinding.spinnerScanTargetItem.selectedItemPosition].first
             )
             testAlarmDirectly(testAlarm)
         }
@@ -365,6 +377,7 @@ class AlarmFragment : Fragment() {
             alarm.forceMaxVolume = dialogBinding.switchForceMaxVolume.isChecked
             alarm.heavyVibration = dialogBinding.switchHeavyVibration.isChecked
             alarm.aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked
+            alarm.scanTargetItemId = scanTargetOptions[dialogBinding.spinnerScanTargetItem.selectedItemPosition].first
             alarm.enabled = true
 
             AlarmManagerHelper.saveAlarm(ctx, alarm)

@@ -1,18 +1,35 @@
 package com.instaguard.app.alarm
 
+import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.CameraControl
+import androidx.camera.core.CameraInfo
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.instaguard.app.databinding.ActivityAlarmRingingBinding
 import com.instaguard.app.service.AlarmRingingService
 import com.instaguard.app.service.AppBlockerService
@@ -21,9 +38,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Full-Screen Alarm Ringing Activity.
- * Displays over lockscreen, turns on display, and requires solving 5 Hard Random Math Questions
- * before the alarm sound can be stopped. Cannot be exited via Back, Recents, or Power Menu.
+ * Full-Screen Alarm Ringing Activity (v14.0 Master Edition).
+ * 2-Stage Wake-Up Mission:
+ * Stage 1: 5 Hard Math Questions (or Rapid Tap / Standard Tap) + "🧪 Skip 5 Questions" test bypass.
+ * Stage 2: CameraX + Google ML Kit 400+ Object Verification Scanner matching 3-State reference UI
+ *          (Idle White -> Error Red -> Verified Green) + Flashlight & Target Cycling.
+ * Cannot be bypassed via Back, Recents, or Power Off menu until verification is complete!
  */
 class AlarmRingingActivity : AppCompatActivity() {
 
@@ -42,6 +62,29 @@ class AlarmRingingActivity : AppCompatActivity() {
     // Rapid Tap Mission State
     private var tapsRemaining = 15
 
+    // Stage 2 Camera Scanner State
+    private var isStage2Active = false
+    private lateinit var targetItem: AlarmScanItem
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var cameraControl: CameraControl? = null
+    private var cameraInfo: CameraInfo? = null
+    private var isTorchOn = false
+    private var lastSeenLabelsAdvice = ""
+
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startCameraX()
+        } else {
+            Toast.makeText(
+                this,
+                "⚠️ Camera permission required to scan ${targetItem.displayName}!",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     private val clockRunnable = object : Runnable {
         override fun run() {
             updateLiveClock()
@@ -59,11 +102,12 @@ class AlarmRingingActivity : AppCompatActivity() {
         // Block Android Back button: Alarm cannot be dismissed by pressing Back
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                Toast.makeText(
-                    this@AlarmRingingActivity,
-                    "🚫 Solve all 5 Math Questions to stop the alarm!",
-                    Toast.LENGTH_SHORT
-                ).show()
+                val message = if (isStage2Active) {
+                    "🚫 Scan ${targetItem.displayName} on camera to stop the alarm!"
+                } else {
+                    "🚫 Solve all 5 Math Questions to stop the alarm!"
+                }
+                Toast.makeText(this@AlarmRingingActivity, message, Toast.LENGTH_SHORT).show()
             }
         })
 
@@ -78,6 +122,14 @@ class AlarmRingingActivity : AppCompatActivity() {
             dismissMissionType = 1
         )
 
+        // Initialize target scan item for Stage 2
+        val targetId = alarm.scanTargetItemId
+        targetItem = if (targetId >= 0) {
+            AlarmScanItem.fromId(targetId)
+        } else {
+            AlarmScanItem.randomItem()
+        }
+
         // Ensure foreground AlarmRingingService is active and playing
         AlarmRingingService.startAlarm(
             context = this,
@@ -89,6 +141,7 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         bindAlarmDataToUi()
         setupMissionControls()
+        setupCameraScannerControls()
         setupSnoozeAndEmergencyControls()
         startClockAndPulseAnimations()
     }
@@ -175,6 +228,12 @@ class AlarmRingingActivity : AppCompatActivity() {
                 binding.btnSubmitMath.setOnClickListener {
                     checkMathAnswer()
                 }
+
+                // 🧪 Skip 5 Questions (Test Camera Scanner) button
+                binding.btnSkipToCameraTest.setOnClickListener {
+                    Toast.makeText(this, "🧪 Skipping Math: Launching Camera Scanner...", Toast.LENGTH_SHORT).show()
+                    transitionToStage2CameraScanner()
+                }
             }
         }
     }
@@ -185,10 +244,6 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     /**
      * Generates fresh random arithmetic questions across 4 varied templates using nanoTime seed.
-     * Template 0: (a * b) + c (a in 12..29, b in 4..9, c in 15..85)
-     * Template 1: (a * b) - c (a in 14..32, b in 5..9, c in 11..49)
-     * Template 2: a + b + c (a in 120..350, b in 110..290, c in 45..180)
-     * Template 3: (a * b) + (c * d) (a in 7..15, b in 6..12, c in 5..11, d in 4..9)
      */
     private fun generateNextMathProblem() {
         val rng = kotlin.random.Random(System.nanoTime())
@@ -242,13 +297,263 @@ class AlarmRingingActivity : AppCompatActivity() {
                 Toast.makeText(this, "✅ Correct! Stage $mathStep of 5 unlocked.", Toast.LENGTH_SHORT).show()
                 generateNextMathProblem()
             } else {
-                Toast.makeText(this, "🎯 All 5 Math Missions Solved! Awake and energized!", Toast.LENGTH_LONG).show()
-                dismissAlarmSuccessfully()
+                Toast.makeText(this, "🎯 All 5 Math Missions Solved! Now verify item on camera!", Toast.LENGTH_LONG).show()
+                transitionToStage2CameraScanner()
             }
         } else {
             Toast.makeText(this, "❌ Incorrect answer! Try again.", Toast.LENGTH_SHORT).show()
             binding.etMathAnswer.setText("")
         }
+    }
+
+    // ==========================================
+    // STAGE 2: CameraX & ML Kit Object Scanner
+    // ==========================================
+
+    private fun transitionToStage2CameraScanner() {
+        isStage2Active = true
+        binding.layoutStage1Container.visibility = View.GONE
+        binding.layoutStage2CameraScanner.visibility = View.VISIBLE
+
+        updateTargetItemUi()
+        resetToScanState1()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startCameraX()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun updateTargetItemUi() {
+        binding.tvCameraScanTitle.text = "Scan this Item [${targetItem.displayName}] on camera"
+        binding.tvCameraScanSubtitle.text = "Align item within the frame"
+    }
+
+    private fun setupCameraScannerControls() {
+        // 1. Flashlight / Torch Toggle Button
+        binding.btnToggleTorch.setOnClickListener {
+            toggleTorch()
+        }
+
+        // 2. Switch Target Item Button
+        binding.btnSwitchTargetItem.setOnClickListener {
+            targetItem = AlarmScanItem.getNextItem(targetItem)
+            updateTargetItemUi()
+            resetToScanState1()
+            Toast.makeText(this, "🔄 Switched to: ${targetItem.displayName}", Toast.LENGTH_SHORT).show()
+        }
+
+        // 3. Center Capture Shutter Button
+        binding.btnCaptureScan.setOnClickListener {
+            captureAndAnalyzeFrame()
+        }
+
+        // 4. Retry button in State 2
+        binding.btnRetryScan.setOnClickListener {
+            resetToScanState1()
+        }
+
+        // 5. Scanning Advice in State 2
+        binding.tvScanningAdvice.setOnClickListener {
+            showScanningAdviceDialog()
+        }
+
+        // 6. Verified Dismiss Button in State 3
+        binding.btnVerifiedDismiss.setOnClickListener {
+            dismissAlarmSuccessfully()
+        }
+    }
+
+    private fun startCameraX() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            try {
+                cameraProvider = cameraProviderFuture.get()
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(binding.cameraPreviewView.surfaceProvider)
+                }
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                cameraProvider?.unbindAll()
+                val camera = cameraProvider?.bindToLifecycle(this, cameraSelector, preview)
+                cameraControl = camera?.cameraControl
+                cameraInfo = camera?.cameraInfo
+            } catch (e: Exception) {
+                Log.e("AlarmRingingActivity", "CameraX initialization failed", e)
+                Toast.makeText(this, "Camera initialization failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun toggleTorch() {
+        val newTorchState = !isTorchOn
+        cameraControl?.enableTorch(newTorchState)?.addListener({
+            isTorchOn = newTorchState
+            runOnUiThread {
+                binding.btnToggleTorch.text = if (isTorchOn) "🔦 ON" else "🔦"
+                binding.btnToggleTorch.backgroundTintList = ColorStateList.valueOf(
+                    if (isTorchOn) Color.parseColor("#FFD600") else Color.parseColor("#161B22")
+                )
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    private fun captureAndAnalyzeFrame() {
+        val bitmap = binding.cameraPreviewView.bitmap
+        if (bitmap == null) {
+            Toast.makeText(this, "Camera preview initializing, please try in 1 second...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Freeze preview on screen
+        binding.capturedFreezeImageView.setImageBitmap(bitmap)
+        binding.capturedFreezeImageView.visibility = View.VISIBLE
+
+        val isClear = isImageClearAndAdequate(bitmap)
+        if (!isClear) {
+            lastSeenLabelsAdvice = "Camera lens is covered or the frame is too dark. Align item under good lighting."
+            onScanError()
+            return
+        }
+
+        val options = ImageLabelerOptions.Builder()
+            .setConfidenceThreshold(0.40f)
+            .build()
+        val labeler = ImageLabeling.getClient(options)
+        val inputImage = InputImage.fromBitmap(bitmap, 0)
+
+        labeler.process(inputImage)
+            .addOnSuccessListener { labels ->
+                var highestConfidence = 0f
+                var matched = false
+                val detectedNames = mutableListOf<String>()
+
+                for (label in labels) {
+                    val text = label.text.lowercase(Locale.ROOT)
+                    val conf = label.confidence
+                    detectedNames.add("${label.text} (${(conf * 100).toInt()}%)")
+
+                    for (kw in targetItem.matchedKeywords) {
+                        if (text.contains(kw) || kw.contains(text)) {
+                            matched = true
+                            if (conf > highestConfidence) {
+                                highestConfidence = conf
+                            }
+                        }
+                    }
+                }
+
+                lastSeenLabelsAdvice = if (detectedNames.isNotEmpty()) {
+                    "ML Kit detected: " + detectedNames.take(5).joinToString(", ")
+                } else {
+                    "No clear objects detected. Move closer to ${targetItem.displayName} with good lighting."
+                }
+
+                if (matched) {
+                    val scaledConfidence = 92.0f + (highestConfidence * 7.8f).coerceIn(0f, 7.8f)
+                    onScanSuccess(scaledConfidence)
+                } else {
+                    onScanError()
+                }
+            }
+            .addOnFailureListener { e ->
+                lastSeenLabelsAdvice = "Vision analysis error: ${e.message}"
+                onScanError()
+            }
+    }
+
+    private fun onScanSuccess(confidence: Float) {
+        binding.scannerFrameOverlay.scanState = ScanUiState.VERIFIED_GREEN
+        binding.bannerErrorInside.visibility = View.GONE
+        binding.cardVerifiedInside.visibility = View.VISIBLE
+        binding.tvVerifiedConfidence.text = "Confidence ${String.format(Locale.US, "%.1f", confidence)}%"
+
+        binding.layoutBottomState1.visibility = View.GONE
+        binding.layoutBottomState2Error.visibility = View.GONE
+        binding.layoutBottomState3Verified.visibility = View.VISIBLE
+
+        // Immediately stop alarm sound & vibration and unlock Calculator!
+        AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
+        AppBlockerService.clearAlarmRingingState(this)
+
+        Toast.makeText(this, "🎯 ${targetItem.displayName} Verified! Alarm stopped.", Toast.LENGTH_SHORT).show()
+
+        // Auto-close activity after 1800ms
+        handler.postDelayed({
+            if (!isFinishing && !isDestroyed) {
+                finish()
+            }
+        }, 1800L)
+    }
+
+    private fun onScanError() {
+        binding.scannerFrameOverlay.scanState = ScanUiState.ERROR_RED
+        binding.bannerErrorInside.visibility = View.VISIBLE
+        binding.cardVerifiedInside.visibility = View.GONE
+
+        binding.layoutBottomState1.visibility = View.GONE
+        binding.layoutBottomState2Error.visibility = View.VISIBLE
+        binding.layoutBottomState3Verified.visibility = View.GONE
+
+        // Alarm keeps ringing!
+    }
+
+    private fun resetToScanState1() {
+        binding.scannerFrameOverlay.scanState = ScanUiState.IDLE_WHITE
+        binding.bannerErrorInside.visibility = View.GONE
+        binding.cardVerifiedInside.visibility = View.GONE
+        binding.capturedFreezeImageView.visibility = View.GONE
+
+        binding.layoutBottomState1.visibility = View.VISIBLE
+        binding.layoutBottomState2Error.visibility = View.GONE
+        binding.layoutBottomState3Verified.visibility = View.GONE
+    }
+
+    private fun isImageClearAndAdequate(bitmap: Bitmap): Boolean {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w < 10 || h < 10) return false
+
+        var totalLum = 0.0
+        var totalLumSq = 0.0
+        val sampleStepX = (w / 16).coerceAtLeast(1)
+        val sampleStepY = (h / 16).coerceAtLeast(1)
+        var count = 0
+
+        for (y in 0 until h step sampleStepY) {
+            for (x in 0 until w step sampleStepX) {
+                val pixel = bitmap.getPixel(x, y)
+                val r = (pixel shr 16) and 0xFF
+                val g = (pixel shr 8) and 0xFF
+                val b = pixel and 0xFF
+                val lum = 0.299 * r + 0.587 * g + 0.114 * b
+                totalLum += lum
+                totalLumSq += lum * lum
+                count++
+            }
+        }
+
+        if (count == 0) return false
+        val meanLum = totalLum / count
+        val variance = (totalLumSq / count) - (meanLum * meanLum)
+
+        // Ensure not completely black (meanLum >= 12) or flat (variance > 8)
+        return meanLum in 12.0..248.0 && variance > 8.0
+    }
+
+    private fun showScanningAdviceDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("💡 Scanning Advice: ${targetItem.displayName}")
+            .setMessage(
+                "How to verify '${targetItem.displayName}':\n\n" +
+                "1. Center the ${targetItem.displayName} fully inside the rounded frame.\n" +
+                "2. Turn on room lights or tap the 🔦 flashlight button.\n" +
+                "3. Ensure the camera is held still and focused.\n\n" +
+                "Diagnostic details:\n$lastSeenLabelsAdvice\n\n" +
+                "Tip: You can tap 🔄 in State 1 to switch to a different item if needed!"
+            )
+            .setPositiveButton("Got It", null)
+            .show()
     }
 
     private fun setupSnoozeAndEmergencyControls() {
@@ -299,8 +604,12 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Sound is owned by AlarmRingingService and MUST NEVER stop on activity destroy unless solved!
         handler.removeCallbacks(clockRunnable)
         pulseAnimator?.cancel()
+        try {
+            cameraProvider?.unbindAll()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

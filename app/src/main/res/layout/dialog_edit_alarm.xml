@@ -322,6 +322,23 @@
             android:layout_marginTop="6dp"
             android:background="@color/surface_card" />
 
+        <!-- Camera Scan Target Item -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="📷 Camera Scan Target Item"
+            android:textColor="@color/text_primary"
+            android:textSize="13.5sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spinnerScanTargetItem"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/surface_card" />
+
         <!-- Extra Pro Switches -->
         <LinearLayout
             android:layout_width="match_parent"
