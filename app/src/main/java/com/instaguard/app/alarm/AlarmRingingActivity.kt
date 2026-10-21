@@ -38,12 +38,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Full-Screen Alarm Ringing Activity (v14.0 Master Edition).
+ * Full-Screen Alarm Ringing Activity (v14.2 Master Edition).
  * 2-Stage Wake-Up Mission:
  * Stage 1: 5 Hard Math Questions (or Rapid Tap / Standard Tap) + "🧪 Skip 5 Questions" test bypass.
- * Stage 2: CameraX + Google ML Kit 400+ Object Verification Scanner matching 3-State reference UI
- *          (Idle White -> Error Red -> Verified Green) + Flashlight & Target Cycling.
- * Cannot be bypassed via Back, Recents, or Power Off menu until verification is complete!
+ * Stage 2: CameraX + Google ML Kit 400+ Object Verification Scanner requiring 5 sequential item scans
+ *          (Item 1/5 to 5/5) before stopping the alarm!
+ *          Matches 3-State reference UI (Idle White -> Error Red -> Verified Green) + Flashlight & Target Cycling.
+ * Cannot be bypassed via Back, Recents, or Power Off menu until all 5 items are verified!
  */
 class AlarmRingingActivity : AppCompatActivity() {
 
@@ -62,9 +63,13 @@ class AlarmRingingActivity : AppCompatActivity() {
     // Rapid Tap Mission State
     private var tapsRemaining = 15
 
-    // Stage 2 Camera Scanner State
+    // Stage 2 Camera Scanner State: 5 Sequential Items Queue (1/5 to 5/5)
+    private val totalScanItemsRequired = 5
+    private val requiredScanItems = mutableListOf<AlarmScanItem>()
+    private var currentScanItemIndex = 0
+    private var isAdvancingToNext = false
     private var isStage2Active = false
-    private lateinit var targetItem: AlarmScanItem
+
     private var cameraProvider: ProcessCameraProvider? = null
     private var cameraControl: CameraControl? = null
     private var cameraInfo: CameraInfo? = null
@@ -79,7 +84,7 @@ class AlarmRingingActivity : AppCompatActivity() {
         } else {
             Toast.makeText(
                 this,
-                "⚠️ Camera permission required to scan ${targetItem.displayName}!",
+                "⚠️ Camera permission required to scan items!",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -103,7 +108,11 @@ class AlarmRingingActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val message = if (isStage2Active) {
-                    "🚫 Scan ${targetItem.displayName} on camera to stop the alarm!"
+                    val currentItem = if (requiredScanItems.isNotEmpty() && currentScanItemIndex < requiredScanItems.size) {
+                        requiredScanItems[currentScanItemIndex].displayName
+                    } else "Item"
+                    val step = currentScanItemIndex + 1
+                    "🚫 Scan $currentItem ($step/$totalScanItemsRequired) on camera to stop the alarm!"
                 } else {
                     "🚫 Solve all 5 Math Questions to stop the alarm!"
                 }
@@ -122,13 +131,8 @@ class AlarmRingingActivity : AppCompatActivity() {
             dismissMissionType = 1
         )
 
-        // Initialize target scan item for Stage 2
-        val targetId = alarm.scanTargetItemId
-        targetItem = if (targetId >= 0) {
-            AlarmScanItem.fromId(targetId)
-        } else {
-            AlarmScanItem.randomItem()
-        }
+        // Initialize 5 distinct required items for Stage 2
+        initializeRequiredScanItems()
 
         // Ensure foreground AlarmRingingService is active and playing
         AlarmRingingService.startAlarm(
@@ -297,7 +301,7 @@ class AlarmRingingActivity : AppCompatActivity() {
                 Toast.makeText(this, "✅ Correct! Stage $mathStep of 5 unlocked.", Toast.LENGTH_SHORT).show()
                 generateNextMathProblem()
             } else {
-                Toast.makeText(this, "🎯 All 5 Math Missions Solved! Now verify item on camera!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "🎯 All 5 Math Missions Solved! Now verify 5 items on camera!", Toast.LENGTH_LONG).show()
                 transitionToStage2CameraScanner()
             }
         } else {
@@ -307,15 +311,37 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     // ==========================================
-    // STAGE 2: CameraX & ML Kit Object Scanner
+    // STAGE 2: CameraX & ML Kit 5-Item Scanner
     // ==========================================
+
+    private fun initializeRequiredScanItems() {
+        requiredScanItems.clear()
+        val allItems = AlarmScanItem.entries.toMutableList()
+        val preferredItem = if (alarm.scanTargetItemId >= 0) {
+            AlarmScanItem.fromId(alarm.scanTargetItemId)
+        } else null
+
+        if (preferredItem != null) {
+            requiredScanItems.add(preferredItem)
+            allItems.remove(preferredItem)
+        }
+        allItems.shuffle()
+        while (requiredScanItems.size < totalScanItemsRequired && allItems.isNotEmpty()) {
+            requiredScanItems.add(allItems.removeAt(0))
+        }
+        currentScanItemIndex = 0
+    }
 
     private fun transitionToStage2CameraScanner() {
         isStage2Active = true
         binding.layoutStage1Container.visibility = View.GONE
         binding.layoutStage2CameraScanner.visibility = View.VISIBLE
 
-        updateTargetItemUi()
+        if (requiredScanItems.isEmpty()) {
+            initializeRequiredScanItems()
+        }
+
+        updateCameraScannerHeaderForCurrentItem()
         resetToScanState1()
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -325,9 +351,14 @@ class AlarmRingingActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTargetItemUi() {
-        binding.tvCameraScanTitle.text = "Scan this Item [${targetItem.displayName}] on camera"
-        binding.tvCameraScanSubtitle.text = "Align item within the frame"
+    private fun updateCameraScannerHeaderForCurrentItem() {
+        if (requiredScanItems.isEmpty()) return
+        val currentItem = requiredScanItems[currentScanItemIndex]
+        val stepNumber = currentScanItemIndex + 1
+        binding.tvCameraScanTitle.text =
+            "Scan this Item [${currentItem.displayName}] on camera (${stepNumber}/${totalScanItemsRequired})"
+        binding.tvCameraScanSubtitle.text =
+            "Align item within the frame • Item ${stepNumber} of ${totalScanItemsRequired}"
     }
 
     private fun setupCameraScannerControls() {
@@ -336,12 +367,19 @@ class AlarmRingingActivity : AppCompatActivity() {
             toggleTorch()
         }
 
-        // 2. Switch Target Item Button
+        // 2. Switch Current Target Item Button (cycles through items for current step)
         binding.btnSwitchTargetItem.setOnClickListener {
-            targetItem = AlarmScanItem.getNextItem(targetItem)
-            updateTargetItemUi()
+            if (requiredScanItems.isEmpty()) return@setOnClickListener
+            val current = requiredScanItems[currentScanItemIndex]
+            val next = AlarmScanItem.getNextItem(current)
+            requiredScanItems[currentScanItemIndex] = next
+            updateCameraScannerHeaderForCurrentItem()
             resetToScanState1()
-            Toast.makeText(this, "🔄 Switched to: ${targetItem.displayName}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                "🔄 Switched Item ${currentScanItemIndex + 1}/$totalScanItemsRequired to: ${next.displayName}",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         // 3. Center Capture Shutter Button
@@ -359,9 +397,13 @@ class AlarmRingingActivity : AppCompatActivity() {
             showScanningAdviceDialog()
         }
 
-        // 6. Verified Dismiss Button in State 3
+        // 6. Verified Button in State 3 (Next Item or Final Dismiss)
         binding.btnVerifiedDismiss.setOnClickListener {
-            dismissAlarmSuccessfully()
+            if (currentScanItemIndex < totalScanItemsRequired - 1) {
+                advanceToNextScanItem()
+            } else {
+                dismissAlarmSuccessfully()
+            }
         }
     }
 
@@ -399,6 +441,9 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun captureAndAnalyzeFrame() {
+        if (requiredScanItems.isEmpty()) return
+        val currentTarget = requiredScanItems[currentScanItemIndex]
+
         val bitmap = binding.cameraPreviewView.bitmap
         if (bitmap == null) {
             Toast.makeText(this, "Camera preview initializing, please try in 1 second...", Toast.LENGTH_SHORT).show()
@@ -433,7 +478,7 @@ class AlarmRingingActivity : AppCompatActivity() {
                     val conf = label.confidence
                     detectedNames.add("${label.text} (${(conf * 100).toInt()}%)")
 
-                    for (kw in targetItem.matchedKeywords) {
+                    for (kw in currentTarget.matchedKeywords) {
                         if (text.contains(kw) || kw.contains(text)) {
                             matched = true
                             if (conf > highestConfidence) {
@@ -446,7 +491,7 @@ class AlarmRingingActivity : AppCompatActivity() {
                 lastSeenLabelsAdvice = if (detectedNames.isNotEmpty()) {
                     "ML Kit detected: " + detectedNames.take(5).joinToString(", ")
                 } else {
-                    "No clear objects detected. Move closer to ${targetItem.displayName} with good lighting."
+                    "No clear objects detected. Move closer to ${currentTarget.displayName} with good lighting."
                 }
 
                 if (matched) {
@@ -463,6 +508,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun onScanSuccess(confidence: Float) {
+        isAdvancingToNext = false
         binding.scannerFrameOverlay.scanState = ScanUiState.VERIFIED_GREEN
         binding.bannerErrorInside.visibility = View.GONE
         binding.cardVerifiedInside.visibility = View.VISIBLE
@@ -472,18 +518,55 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.layoutBottomState2Error.visibility = View.GONE
         binding.layoutBottomState3Verified.visibility = View.VISIBLE
 
-        // Immediately stop alarm sound & vibration and unlock Calculator!
-        AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
-        AppBlockerService.clearAlarmRingingState(this)
+        val stepNumber = currentScanItemIndex + 1
 
-        Toast.makeText(this, "🎯 ${targetItem.displayName} Verified! Alarm stopped.", Toast.LENGTH_SHORT).show()
+        if (currentScanItemIndex < totalScanItemsRequired - 1) {
+            // Case A: Items 1, 2, 3, or 4 Verified -> Keep alarm ringing and advance!
+            binding.tvVerifiedTitle.text = "✓ Scan Verified ($stepNumber/$totalScanItemsRequired)"
+            binding.btnVerifiedDismiss.text = "Verified ($stepNumber/5) — Next Item ➔"
+            val remaining = totalScanItemsRequired - stepNumber
+            binding.tvVerifiedSubtitle.text = "$remaining more item(s) to scan"
 
-        // Auto-close activity after 1800ms
-        handler.postDelayed({
-            if (!isFinishing && !isDestroyed) {
-                finish()
-            }
-        }, 1800L)
+            Toast.makeText(
+                this,
+                "🎯 Item $stepNumber/5 Verified! ($remaining more to scan)",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            // Auto-advance after 1300ms
+            handler.postDelayed({
+                if (isStage2Active && !isFinishing && !isDestroyed) {
+                    advanceToNextScanItem()
+                }
+            }, 1300L)
+        } else {
+            // Case B: Final Item 5/5 Verified -> All 5 done! Stop alarm!
+            binding.tvVerifiedTitle.text = "✓ All 5 Items Verified! (5/5)"
+            binding.btnVerifiedDismiss.text = "Verified Successfully ✔"
+            binding.tvVerifiedSubtitle.text = "All 5 Scans & Task Completed"
+
+            // Immediately stop alarm sound & vibration and unlock Calculator!
+            AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
+            AppBlockerService.clearAlarmRingingState(this)
+
+            Toast.makeText(this, "🎉 All 5 Items Verified! Alarm stopped.", Toast.LENGTH_LONG).show()
+
+            // Auto-close activity after 1600ms
+            handler.postDelayed({
+                if (!isFinishing && !isDestroyed) {
+                    finish()
+                }
+            }, 1600L)
+        }
+    }
+
+    private fun advanceToNextScanItem() {
+        if (isAdvancingToNext) return
+        if (currentScanItemIndex >= totalScanItemsRequired - 1) return
+        isAdvancingToNext = true
+        currentScanItemIndex++
+        resetToScanState1()
+        updateCameraScannerHeaderForCurrentItem()
     }
 
     private fun onScanError() {
@@ -499,6 +582,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun resetToScanState1() {
+        isAdvancingToNext = false
         binding.scannerFrameOverlay.scanState = ScanUiState.IDLE_WHITE
         binding.bannerErrorInside.visibility = View.GONE
         binding.cardVerifiedInside.visibility = View.GONE
@@ -542,15 +626,17 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun showScanningAdviceDialog() {
+        if (requiredScanItems.isEmpty()) return
+        val currentItem = requiredScanItems[currentScanItemIndex]
         AlertDialog.Builder(this)
-            .setTitle("💡 Scanning Advice: ${targetItem.displayName}")
+            .setTitle("💡 Scanning Advice: ${currentItem.displayName} (${currentScanItemIndex + 1}/$totalScanItemsRequired)")
             .setMessage(
-                "How to verify '${targetItem.displayName}':\n\n" +
-                "1. Center the ${targetItem.displayName} fully inside the rounded frame.\n" +
+                "How to verify '${currentItem.displayName}':\n\n" +
+                "1. Center the ${currentItem.displayName} fully inside the rounded frame.\n" +
                 "2. Turn on room lights or tap the 🔦 flashlight button.\n" +
                 "3. Ensure the camera is held still and focused.\n\n" +
                 "Diagnostic details:\n$lastSeenLabelsAdvice\n\n" +
-                "Tip: You can tap 🔄 in State 1 to switch to a different item if needed!"
+                "Tip: You can tap 🔄 in State 1 to switch this item if you don't have it nearby!"
             )
             .setPositiveButton("Got It", null)
             .show()

@@ -383,6 +383,7 @@
                     android:visibility="gone">
 
                     <TextView
+                        android:id="@+id/tvVerifiedTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="✓ Scan Verified"
@@ -521,16 +522,19 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnVerifiedDismiss"
-                    android:layout_width="220dp"
+                    android:layout_width="wrap_content"
+                    android:minWidth="220dp"
+                    android:paddingHorizontal="24dp"
                     android:layout_height="54dp"
                     android:text="Verified Successfully ✔"
                     android:textColor="#000000"
                     android:textStyle="bold"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     app:cornerRadius="27dp"
                     app:backgroundTint="#00E676" />
 
                 <TextView
+                    android:id="@+id/tvVerifiedSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
