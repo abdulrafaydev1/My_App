@@ -13,6 +13,7 @@ import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import com.instaguard.app.alarm.AlarmManagerHelper
+import com.instaguard.app.alarm.HardAlarmSoundEngine
 import com.instaguard.app.alarm.SmartAlarm
 import com.instaguard.app.service.AlarmRingingService
 import android.graphics.Bitmap
