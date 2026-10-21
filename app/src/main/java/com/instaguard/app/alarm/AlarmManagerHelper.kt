@@ -351,7 +351,7 @@ object AlarmManagerHelper {
     }
 
     fun cancelAlarm(context: Context, alarmId: String) {
-        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").apply()
+        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").commit()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val requestCode = (alarmId.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
@@ -377,7 +377,7 @@ object AlarmManagerHelper {
     }
 
     fun clearAlarmNextEpoch(context: Context, alarmId: String) {
-        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").apply()
+        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").commit()
     }
 
     /**
@@ -387,6 +387,14 @@ object AlarmManagerHelper {
     fun handleAlarmDismissed(context: Context, alarmId: String?) {
         val prefs = getPrefs(context)
         val targetId = if (!alarmId.isNullOrBlank()) alarmId else prefs.getString("active_ringing_alarm_id", null) ?: ""
+
+        // Synchronously record cooldown timestamp so watchdog never refires immediately
+        prefs.edit()
+            .putLong("last_alarm_solved_timestamp_ms", System.currentTimeMillis())
+            .putString("active_ringing_alarm_id", "")
+            .remove("alarm_next_epoch_$targetId")
+            .commit()
+
         val list = loadAlarms(context)
         val alarm = list.find { it.id == targetId }
         val deleteAfterFromPrefs = prefs.getBoolean("active_ringing_delete_after", false)
@@ -415,6 +423,7 @@ object AlarmManagerHelper {
         prefs.edit()
             .remove("active_ringing_alarm_id")
             .remove("active_ringing_delete_after")
+            .remove("alarm_currently_ringing")
             .commit()
 
         AppBlockerService.clearAlarmRingingState(context)

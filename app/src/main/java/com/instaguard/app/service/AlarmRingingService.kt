@@ -48,7 +48,11 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        val action = intent.action
 
         if (action == ACTION_STOP_ALARM) {
             val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID)
@@ -56,10 +60,10 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             return START_NOT_STICKY
         }
 
-        val alarmId = intent?.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID) ?: ""
-        val isTest = intent?.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_TEST, false) ?: false
-        val isSnooze = intent?.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, false) ?: false
-        val deleteAfter = intent?.getBooleanExtra("delete_after_ringing", false) ?: false
+        val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID) ?: ""
+        val isTest = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_TEST, false)
+        val isSnooze = intent.getBooleanExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, false)
+        val deleteAfter = intent.getBooleanExtra("delete_after_ringing", false)
 
         val alarm = AlarmManagerHelper.getAlarmById(this, alarmId) ?: SmartAlarm(
             label = if (isTest) "Test Wake-Up Mission" else "Wake Up Mission",
@@ -130,7 +134,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             e.printStackTrace()
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun acquireServiceWakeLocks() {
@@ -369,7 +373,10 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         }
 
         fun stopAlarmAfterSolved(context: Context, alarmId: String?) {
+            HardAlarmSoundEngine.stopPlaying(context)
             AppBlockerService.clearAlarmRingingState(context)
+            AlarmManagerHelper.handleAlarmDismissed(context, alarmId)
+
             val intent = Intent(context, AlarmRingingService::class.java).apply {
                 action = ACTION_STOP_ALARM
                 putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarmId)

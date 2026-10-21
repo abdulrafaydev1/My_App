@@ -134,7 +134,8 @@
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
             android:showWhenLocked="true"
-            android:excludeFromRecents="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.instaguard.app.alarm"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Material3.Dark.NoActionBar" />
 

@@ -283,6 +283,15 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         try {
             if (isAlarmCurrentlyRinging) return
             val context = applicationContext ?: return
+
+            val prefs = context.getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+            val nowMs = System.currentTimeMillis()
+            val lastSolvedMs = prefs.getLong("last_alarm_solved_timestamp_ms", 0L)
+            if (nowMs - lastSolvedMs < 65_000L) {
+                // Cooldown: do not fire within 65 seconds after an alarm was solved/dismissed
+                return
+            }
+
             val enabledAlarms = AlarmManagerHelper.loadAlarms(context).filter { it.enabled }
             if (enabledAlarms.isEmpty()) {
                 if (alarmSchedulerWakeLock?.isHeld == true) {
@@ -292,7 +301,6 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 return
             }
 
-            val nowMs = System.currentTimeMillis()
             val nowCal = Calendar.getInstance()
             val currentHour = nowCal.get(Calendar.HOUR_OF_DAY)
             val currentMinute = nowCal.get(Calendar.MINUTE)
@@ -309,14 +317,17 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             }
 
             for (alarm in enabledAlarms) {
+                val minuteKey = alarm.id + "_" + nowCal.get(Calendar.YEAR) + "_" + nowCal.get(Calendar.DAY_OF_YEAR) + "_" + alarm.hour + "_" + alarm.minute
+                val firedKey = prefs.getString("alarm_last_fired_minute_key_${alarm.id}", "")
+                if (firedKey == minuteKey) continue
+
                 val targetEpoch = AlarmManagerHelper.getAlarmNextEpoch(context, alarm.id)
-                val matchesEpoch = targetEpoch > 0L && nowMs >= targetEpoch && (nowMs - targetEpoch < 90_000L)
+                val matchesEpoch = targetEpoch > 0L && nowMs >= targetEpoch && (nowMs - targetEpoch < 60_000L)
                 val matchesDay = alarm.repeatDays.isEmpty() || alarm.repeatDays.contains(currentDayOfWeek)
                 val matchesTime = (alarm.hour == currentHour && alarm.minute == currentMinute && currentSecond in 0..10 && matchesDay)
 
                 if (matchesEpoch || matchesTime) {
-                    val minuteKey = alarm.id + "_" + nowCal.get(Calendar.YEAR) + "_" + nowCal.get(Calendar.DAY_OF_YEAR) + "_" + alarm.hour + "_" + alarm.minute
-                    if (lastFiredAlarmMinuteKey == minuteKey) return
+                    prefs.edit().putString("alarm_last_fired_minute_key_${alarm.id}", minuteKey).commit()
                     lastFiredAlarmMinuteKey = minuteKey
 
                     Log.i(TAG, "⏰ 1s Real-Time Watchdog: Firing alarm " + alarm.id + " (" + alarm.label + ")")
@@ -355,11 +366,14 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             // Step B — Start the 3000Hz Piezo Buzzer & Heavy Vibration IMMEDIATELY
             setAlarmRingingState(this, isRinging = true, alarmId = alarm.id)
             val sp = getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
+            val nowCal = Calendar.getInstance()
+            val minuteKey = alarm.id + "_" + nowCal.get(Calendar.YEAR) + "_" + nowCal.get(Calendar.DAY_OF_YEAR) + "_" + alarm.hour + "_" + alarm.minute
             sp.edit()
                 .putString("active_ringing_alarm_id", alarm.id)
                 .putBoolean("active_ringing_delete_after", alarm.deleteAfterRinging)
                 .putBoolean("alarm_currently_ringing", true)
                 .putLong("last_actual_alarm_ring_epoch", System.currentTimeMillis())
+                .putString("alarm_last_fired_minute_key_${alarm.id}", minuteKey)
                 .commit()
 
             HardAlarmSoundEngine.startPlaying(applicationContext, alarm.soundId, forceMaxVolume = alarm.forceMaxVolume)
@@ -2887,6 +2901,8 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                     .putBoolean("alarm_currently_ringing", false)
                     .putLong("alarm_anticheat_until_epoch", 0L)
                     .putLong("last_actual_alarm_ring_epoch", 0L)
+                    .putString("active_ringing_alarm_id", "")
+                    .remove("active_ringing_delete_after")
                     .commit()
             } catch (e: Exception) {
                 e.printStackTrace()

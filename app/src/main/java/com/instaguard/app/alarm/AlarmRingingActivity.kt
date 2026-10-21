@@ -67,8 +67,10 @@ class AlarmRingingActivity : AppCompatActivity() {
     private val totalScanItemsRequired = 5
     private val requiredScanItems = mutableListOf<AlarmScanItem>()
     private var currentScanItemIndex = 0
-    private var isAdvancingToNext = false
     private var isStage2Active = false
+    private var isCaptureAnalysisInProgress = false
+    private var lastVerifiedStepIndex = -1
+    private var autoAdvanceRunnable: Runnable? = null
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var cameraControl: CameraControl? = null
@@ -342,6 +344,12 @@ class AlarmRingingActivity : AppCompatActivity() {
             initializeRequiredScanItems()
         }
 
+        currentScanItemIndex = 0
+        lastVerifiedStepIndex = -1
+        isCaptureAnalysisInProgress = false
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
+
         updateCameraScannerHeaderForCurrentItem()
         resetToScanState1()
 
@@ -370,7 +378,7 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         // 2. Switch Current Target Item Button (cycles through items for current step)
         binding.btnSwitchTargetItem.setOnClickListener {
-            if (requiredScanItems.isEmpty()) return@setOnClickListener
+            if (requiredScanItems.isEmpty() || isCaptureAnalysisInProgress) return@setOnClickListener
             val current = requiredScanItems[currentScanItemIndex]
             val next = AlarmScanItem.getNextItem(current)
             requiredScanItems[currentScanItemIndex] = next
@@ -383,13 +391,16 @@ class AlarmRingingActivity : AppCompatActivity() {
             ).show()
         }
 
-        // 3. Center Capture Shutter Button
+        // 3. Center Capture Shutter Button (Protected against rapid taps)
         binding.btnCaptureScan.setOnClickListener {
+            if (isCaptureAnalysisInProgress || lastVerifiedStepIndex == currentScanItemIndex) return@setOnClickListener
+            isCaptureAnalysisInProgress = true
             captureAndAnalyzeFrame()
         }
 
         // 4. Retry button in State 2
         binding.btnRetryScan.setOnClickListener {
+            isCaptureAnalysisInProgress = false
             resetToScanState1()
         }
 
@@ -401,7 +412,7 @@ class AlarmRingingActivity : AppCompatActivity() {
         // 6. Verified Button in State 3 (Next Item or Final Dismiss)
         binding.btnVerifiedDismiss.setOnClickListener {
             if (currentScanItemIndex < totalScanItemsRequired - 1) {
-                advanceToNextScanItem()
+                advanceToStep(currentScanItemIndex + 1)
             } else {
                 dismissAlarmSuccessfully()
             }
@@ -442,11 +453,16 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun captureAndAnalyzeFrame() {
-        if (requiredScanItems.isEmpty()) return
-        val currentTarget = requiredScanItems[currentScanItemIndex]
+        if (requiredScanItems.isEmpty()) {
+            isCaptureAnalysisInProgress = false
+            return
+        }
+        val stepBeingAnalyzed = currentScanItemIndex
+        val currentTarget = requiredScanItems[stepBeingAnalyzed]
 
         val bitmap = binding.cameraPreviewView.bitmap
         if (bitmap == null) {
+            isCaptureAnalysisInProgress = false
             Toast.makeText(this, "Camera preview initializing, please try in 1 second...", Toast.LENGTH_SHORT).show()
             return
         }
@@ -458,6 +474,7 @@ class AlarmRingingActivity : AppCompatActivity() {
         val isClear = isImageClearAndAdequate(bitmap)
         if (!isClear) {
             lastSeenLabelsAdvice = "Camera lens is covered or the frame is too dark. Align item under good lighting."
+            isCaptureAnalysisInProgress = false
             onScanError()
             return
         }
@@ -470,6 +487,11 @@ class AlarmRingingActivity : AppCompatActivity() {
 
         labeler.process(inputImage)
             .addOnSuccessListener { labels ->
+                // Ensure this result is strictly for the current step and hasn't been handled already
+                if (lastVerifiedStepIndex == stepBeingAnalyzed || currentScanItemIndex != stepBeingAnalyzed) {
+                    return@addOnSuccessListener
+                }
+
                 var highestConfidence = 0f
                 var matched = false
                 val detectedNames = mutableListOf<String>()
@@ -496,20 +518,27 @@ class AlarmRingingActivity : AppCompatActivity() {
                 }
 
                 if (matched) {
+                    lastVerifiedStepIndex = stepBeingAnalyzed
                     val scaledConfidence = 92.0f + (highestConfidence * 7.8f).coerceIn(0f, 7.8f)
-                    onScanSuccess(scaledConfidence)
+                    onScanSuccess(scaledConfidence, stepBeingAnalyzed)
                 } else {
+                    isCaptureAnalysisInProgress = false
+                    lastVerifiedStepIndex = -1
                     onScanError()
                 }
             }
             .addOnFailureListener { e ->
                 lastSeenLabelsAdvice = "Vision analysis error: ${e.message}"
+                isCaptureAnalysisInProgress = false
+                lastVerifiedStepIndex = -1
                 onScanError()
             }
     }
 
-    private fun onScanSuccess(confidence: Float) {
-        isAdvancingToNext = false
+    private fun onScanSuccess(confidence: Float, stepBeingAnalyzed: Int) {
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
+
         binding.scannerFrameOverlay.scanState = ScanUiState.VERIFIED_GREEN
         binding.bannerErrorInside.visibility = View.GONE
         binding.cardVerifiedInside.visibility = View.VISIBLE
@@ -519,14 +548,18 @@ class AlarmRingingActivity : AppCompatActivity() {
         binding.layoutBottomState2Error.visibility = View.GONE
         binding.layoutBottomState3Verified.visibility = View.VISIBLE
 
-        val stepNumber = currentScanItemIndex + 1
+        val stepNumber = stepBeingAnalyzed + 1
 
-        if (currentScanItemIndex < totalScanItemsRequired - 1) {
-            // Case A: Items 1, 2, 3, or 4 Verified -> Keep alarm ringing and advance!
+        if (stepBeingAnalyzed < totalScanItemsRequired - 1) {
+            // Case A: Items 1, 2, 3, or 4 Verified -> Keep alarm ringing and advance strictly by +1!
             binding.tvVerifiedTitle.text = "✓ Scan Verified ($stepNumber/$totalScanItemsRequired)"
             binding.btnVerifiedDismiss.text = "Verified ($stepNumber/5) — Next Item ➔"
             val remaining = totalScanItemsRequired - stepNumber
             binding.tvVerifiedSubtitle.text = "$remaining more item(s) to scan"
+
+            binding.btnVerifiedDismiss.setOnClickListener {
+                advanceToStep(stepBeingAnalyzed + 1)
+            }
 
             Toast.makeText(
                 this,
@@ -534,12 +567,13 @@ class AlarmRingingActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
 
-            // Auto-advance after 1300ms
-            handler.postDelayed({
+            // Auto-advance strictly to next step after 1200ms
+            autoAdvanceRunnable = Runnable {
                 if (isStage2Active && !isFinishing && !isDestroyed) {
-                    advanceToNextScanItem()
+                    advanceToStep(stepBeingAnalyzed + 1)
                 }
-            }, 1300L)
+            }
+            handler.postDelayed(autoAdvanceRunnable!!, 1200L)
         } else {
             // Case B: Final Item 5/5 Verified -> All 5 done! Stop alarm!
             binding.tvVerifiedTitle.text = "✓ All 5 Items Verified! (5/5)"
@@ -550,22 +584,28 @@ class AlarmRingingActivity : AppCompatActivity() {
             AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
             AppBlockerService.clearAlarmRingingState(this)
 
+            binding.btnVerifiedDismiss.setOnClickListener {
+                dismissAlarmSuccessfully()
+            }
+
             Toast.makeText(this, "🎉 All 5 Items Verified! Alarm stopped.", Toast.LENGTH_LONG).show()
 
-            // Auto-close activity after 1600ms
+            // Auto-close activity after 1500ms
             handler.postDelayed({
                 if (!isFinishing && !isDestroyed) {
-                    finish()
+                    dismissAlarmSuccessfully()
                 }
-            }, 1600L)
+            }, 1500L)
         }
     }
 
-    private fun advanceToNextScanItem() {
-        if (isAdvancingToNext) return
-        if (currentScanItemIndex >= totalScanItemsRequired - 1) return
-        isAdvancingToNext = true
-        currentScanItemIndex++
+    private fun advanceToStep(targetNextIndex: Int) {
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
+        if (currentScanItemIndex != targetNextIndex - 1) return
+        currentScanItemIndex = targetNextIndex
+        isCaptureAnalysisInProgress = false
+        lastVerifiedStepIndex = -1
         resetToScanState1()
         updateCameraScannerHeaderForCurrentItem()
     }
@@ -583,7 +623,6 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun resetToScanState1() {
-        isAdvancingToNext = false
         binding.scannerFrameOverlay.scanState = ScanUiState.IDLE_WHITE
         binding.bannerErrorInside.visibility = View.GONE
         binding.cardVerifiedInside.visibility = View.GONE
@@ -659,6 +698,8 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun snoozeAlarm() {
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
         AppBlockerService.clearAlarmRingingState(this)
         // Stop dedicated foreground service
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
@@ -666,16 +707,18 @@ class AlarmRingingActivity : AppCompatActivity() {
         // Schedule snooze trigger
         AlarmManagerHelper.scheduleSnooze(this, alarm, alarm.snoozeMinutes)
         Toast.makeText(this, "💤 Alarm snoozed for ${alarm.snoozeMinutes} minutes.", Toast.LENGTH_LONG).show()
-        finish()
+        finishAndRemoveTask()
     }
 
     private fun dismissAlarmSuccessfully() {
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
         AppBlockerService.clearAlarmRingingState(this)
         // Stop dedicated foreground service and handle post-dismissal repeat/auto-delete logic
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
 
         Toast.makeText(this, "✅ Alarm dismissed successfully!", Toast.LENGTH_SHORT).show()
-        finish()
+        finishAndRemoveTask()
     }
 
     private fun startClockAndPulseAnimations() {
@@ -691,6 +734,8 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        autoAdvanceRunnable?.let { handler.removeCallbacks(it) }
+        autoAdvanceRunnable = null
         handler.removeCallbacks(clockRunnable)
         pulseAnimator?.cancel()
         try {
