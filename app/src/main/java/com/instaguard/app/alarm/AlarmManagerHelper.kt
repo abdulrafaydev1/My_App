@@ -27,11 +27,11 @@ data class SmartAlarm(
     var deleteAfterRinging: Boolean = false,
     var soundId: Int = 2, // Default: ⚡ Extreme 3000Hz Piezo Buzzer
     var snoozeMinutes: Int = 0, // Default: Off (No Snooze)
-    var dismissMissionType: Int = 1, // Default: 🧠 5 Hard Math Questions (Random)
+    var dismissMissionType: Int = 0,
     var forceMaxVolume: Boolean = true,
     var heavyVibration: Boolean = true,
     var aiVoiceAnnouncement: Boolean = true,
-    var scanTargetItemId: Int = -1 // -1 = Random Item, or 0..7 for specific AlarmScanItem
+    var scanTargetItemId: Int = -1
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("id", id)

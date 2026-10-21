@@ -118,8 +118,7 @@ class AlarmFragment : Fragment() {
             val targetAlarm = alarms.firstOrNull() ?: SmartAlarm(
                 label = "Hardcore Wake Up Test",
                 soundId = 2,
-                snoozeMinutes = 0,
-                dismissMissionType = 1
+                snoozeMinutes = 0
             )
             testAlarmDirectly(targetAlarm)
         }
@@ -164,9 +163,6 @@ class AlarmFragment : Fragment() {
 
     private fun testAlarmDirectly(alarm: SmartAlarm) {
         val ctx = requireContext()
-        if (ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 102)
-        }
         AlarmRingingService.startAlarm(
             context = ctx,
             alarmId = alarm.id,
@@ -208,8 +204,7 @@ class AlarmFragment : Fragment() {
                 hour = cal.get(Calendar.HOUR_OF_DAY),
                 minute = cal.get(Calendar.MINUTE),
                 soundId = 2,
-                snoozeMinutes = 0,
-                dismissMissionType = 1
+                snoozeMinutes = 0
             )
         }
 
@@ -315,30 +310,12 @@ class AlarmFragment : Fragment() {
         val initialSnoozeIndex = snoozeOptions.indexOfFirst { it.first == alarm.snoozeMinutes }.let { if (it >= 0) it else 0 }
         dialogBinding.spinnerSnooze.setSelection(initialSnoozeIndex)
 
-        // 7. Mission Spinner
-        val missionOptions = listOf(
-            0 to "Standard Tap Dismiss",
-            1 to "🧠 5 Hard Math Questions (Random)",
-            2 to "⚡ Rapid 15-Tap Wake Check"
-        )
-        val missionAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, missionOptions.map { it.second })
-        dialogBinding.spinnerMission.adapter = missionAdapter
-        dialogBinding.spinnerMission.setSelection(alarm.dismissMissionType.coerceIn(0, 2))
-
-        // 7.1 Camera Scan Target Item Spinner
-        val scanTargetOptions = listOf(-1 to "🎲 Random Item (Laptop, Mouse, Mug, etc.)") +
-            AlarmScanItem.entries.map { it.id to it.displayName }
-        val scanTargetAdapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, scanTargetOptions.map { it.second })
-        dialogBinding.spinnerScanTargetItem.adapter = scanTargetAdapter
-        val initialScanTargetIndex = scanTargetOptions.indexOfFirst { it.first == alarm.scanTargetItemId }.let { if (it >= 0) it else 0 }
-        dialogBinding.spinnerScanTargetItem.setSelection(initialScanTargetIndex)
-
-        // 8. Switches
+        // 7. Switches
         dialogBinding.switchForceMaxVolume.isChecked = alarm.forceMaxVolume
         dialogBinding.switchHeavyVibration.isChecked = alarm.heavyVibration
         dialogBinding.switchAiVoice.isChecked = alarm.aiVoiceAnnouncement
 
-        // 9. Buttons
+        // 8. Buttons
         dialogBinding.btnCancelDialog.setOnClickListener {
             HardAlarmSoundEngine.stopPlaying(ctx)
             dialog.dismiss()
@@ -353,11 +330,9 @@ class AlarmFragment : Fragment() {
                 deleteAfterRinging = dialogBinding.switchDeleteAfterRinging.isChecked,
                 soundId = dialogBinding.spinnerAlarmSound.selectedItemPosition,
                 snoozeMinutes = snoozeOptions[dialogBinding.spinnerSnooze.selectedItemPosition].first,
-                dismissMissionType = missionOptions[dialogBinding.spinnerMission.selectedItemPosition].first,
                 forceMaxVolume = dialogBinding.switchForceMaxVolume.isChecked,
                 heavyVibration = dialogBinding.switchHeavyVibration.isChecked,
-                aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked,
-                scanTargetItemId = scanTargetOptions[dialogBinding.spinnerScanTargetItem.selectedItemPosition].first
+                aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked
             )
             testAlarmDirectly(testAlarm)
         }
@@ -374,11 +349,9 @@ class AlarmFragment : Fragment() {
             alarm.deleteAfterRinging = dialogBinding.switchDeleteAfterRinging.isChecked
             alarm.soundId = dialogBinding.spinnerAlarmSound.selectedItemPosition
             alarm.snoozeMinutes = snoozeOptions[dialogBinding.spinnerSnooze.selectedItemPosition].first
-            alarm.dismissMissionType = missionOptions[dialogBinding.spinnerMission.selectedItemPosition].first
             alarm.forceMaxVolume = dialogBinding.switchForceMaxVolume.isChecked
             alarm.heavyVibration = dialogBinding.switchHeavyVibration.isChecked
             alarm.aiVoiceAnnouncement = dialogBinding.switchAiVoice.isChecked
-            alarm.scanTargetItemId = scanTargetOptions[dialogBinding.spinnerScanTargetItem.selectedItemPosition].first
             alarm.enabled = true
 
             AlarmManagerHelper.saveAlarm(ctx, alarm)
@@ -464,11 +437,6 @@ class AlarmFragment : Fragment() {
                 // Badges
                 b.tvBadgeAutoDelete.visibility = if (alarm.deleteAfterRinging) View.VISIBLE else View.GONE
                 b.tvBadgeSnooze.text = if (alarm.snoozeMinutes > 0) "💤 ${alarm.snoozeMinutes}m" else "💤 Off"
-                b.tvBadgeMission.text = when (alarm.dismissMissionType) {
-                    1 -> "🧠 Math"
-                    2 -> "⚡ 15-Tap"
-                    else -> "Standard"
-                }
                 b.tvBadgeVolume.visibility = if (alarm.forceMaxVolume) View.VISIBLE else View.GONE
                 b.tvBadgeVoice.visibility = if (alarm.aiVoiceAnnouncement) View.VISIBLE else View.GONE
 

@@ -214,18 +214,6 @@
                 android:textSize="11sp" />
 
             <TextView
-                android:id="@+id/tvBadgeMission"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="6dp"
-                android:background="@drawable/bg_pill_version"
-                android:paddingHorizontal="7dp"
-                android:paddingVertical="2dp"
-                android:text="🧠 Math"
-                android:textColor="@color/accent_yellow"
-                android:textSize="11sp" />
-
-            <TextView
                 android:id="@+id/tvBadgeVolume"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
