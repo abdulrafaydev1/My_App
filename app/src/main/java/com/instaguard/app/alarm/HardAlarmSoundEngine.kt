@@ -50,9 +50,6 @@ object HardAlarmSoundEngine {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var previewStopRunnable: Runnable? = null
 
-    val isCurrentlyPlaying: Boolean
-        get() = isPlaying
-
     @Synchronized
     fun startPlaying(context: Context, soundId: Int, forceMaxVolume: Boolean, loop: Boolean = true) {
         stopPlaying(context)

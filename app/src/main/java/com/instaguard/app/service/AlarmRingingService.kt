@@ -94,7 +94,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         }
 
         // 5. Start mathematical audio synthesizer at 100% volume
-        if (!HardAlarmSoundEngine.isCurrentlyPlaying) {
+        if (!HardAlarmSoundEngine.isCurrentlyPlaying()) {
             HardAlarmSoundEngine.startPlaying(this, alarm.soundId, forceMaxVolume = alarm.forceMaxVolume)
         }
 
