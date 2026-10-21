@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v14.3 PRO"
+        binding.tvToolbarBadge.text = "v14.4 PRO"
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()

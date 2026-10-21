@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -44,6 +45,9 @@ object HardAlarmSoundEngine {
 
     @Volatile
     private var isPlaying = false
+    @Volatile
+    private var currentPlayingSoundId: Int = -1
+    private var audioWakeLock: PowerManager.WakeLock? = null
     private var playbackThread: Thread? = null
     private var audioTrack: AudioTrack? = null
     private var previousVolume: Int = -1
@@ -52,7 +56,24 @@ object HardAlarmSoundEngine {
 
     @Synchronized
     fun startPlaying(context: Context, soundId: Int, forceMaxVolume: Boolean, loop: Boolean = true) {
+        if (isPlaying && currentPlayingSoundId == soundId) {
+            // Keep existing audio stream playing smoothly without interrupting it
+            return
+        }
         stopPlaying(context)
+
+        // Acquire internal audio partial wake lock to keep synthesizer running on locked/closed screen
+        try {
+            val pm = context.applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (audioWakeLock == null || audioWakeLock?.isHeld != true) {
+                audioWakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "InstaGuard:AudioEngineWakeLock")?.apply {
+                    setReferenceCounted(false)
+                    acquire(15 * 60_000L) // 15 mins safety timeout
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         val audioManager = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         if (forceMaxVolume && audioManager != null) {
@@ -74,6 +95,7 @@ object HardAlarmSoundEngine {
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
             .build()
 
         val format = AudioFormat.Builder()
@@ -92,6 +114,7 @@ object HardAlarmSoundEngine {
 
         audioTrack = track
         isPlaying = true
+        currentPlayingSoundId = soundId
 
         playbackThread = Thread({
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
@@ -156,6 +179,7 @@ object HardAlarmSoundEngine {
         }
 
         isPlaying = false
+        currentPlayingSoundId = -1
         playbackThread?.interrupt()
         playbackThread = null
 
@@ -166,6 +190,15 @@ object HardAlarmSoundEngine {
             e.printStackTrace()
         }
         audioTrack = null
+
+        try {
+            if (audioWakeLock?.isHeld == true) {
+                audioWakeLock?.release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        audioWakeLock = null
 
         // Restore alarm volume if altered
         if (previousVolume >= 0 && context != null) {

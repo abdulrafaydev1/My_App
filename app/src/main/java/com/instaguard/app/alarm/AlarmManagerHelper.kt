@@ -224,12 +224,13 @@ object AlarmManagerHelper {
      */
     fun scheduleAlarm(context: Context, alarm: SmartAlarm) {
         val triggerMs = calculateNextTriggerMs(alarm)
+        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
+        val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra("alarm_label", alarm.label)
@@ -245,14 +246,13 @@ object AlarmManagerHelper {
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            alarm.id.hashCode(),
+            requestCode,
             triggerIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val showActivityIntent = Intent(context, AlarmRingingActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            data = android.net.Uri.parse("instaguard://show/${alarm.id}")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra("alarm_label", alarm.label)
@@ -267,7 +267,7 @@ object AlarmManagerHelper {
         }
         val showPendingIntent = PendingIntent.getActivity(
             context,
-            alarm.id.hashCode() + 10000,
+            (requestCode + 10000) and 0x7FFFFFFF,
             showActivityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -292,12 +292,13 @@ object AlarmManagerHelper {
      */
     fun scheduleSnooze(context: Context, alarm: SmartAlarm, snoozeMinutes: Int) {
         val triggerMs = System.currentTimeMillis() + (snoozeMinutes * 60_000L)
+        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
+        val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
-            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}/snooze")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra("alarm_label", alarm.label)
@@ -314,14 +315,13 @@ object AlarmManagerHelper {
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            alarm.id.hashCode(),
+            requestCode,
             triggerIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val showActivityIntent = Intent(context, AlarmRingingActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            data = android.net.Uri.parse("instaguard://show/${alarm.id}/snooze")
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra("alarm_label", alarm.label)
@@ -337,7 +337,7 @@ object AlarmManagerHelper {
         }
         val showPendingIntent = PendingIntent.getActivity(
             context,
-            alarm.id.hashCode() + 10000,
+            (requestCode + 10000) and 0x7FFFFFFF,
             showActivityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -351,16 +351,17 @@ object AlarmManagerHelper {
     }
 
     fun cancelAlarm(context: Context, alarmId: String) {
+        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").apply()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val requestCode = (alarmId.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
-            data = android.net.Uri.parse("instaguard://alarm/$alarmId")
             putExtra(EXTRA_ALARM_ID, alarmId)
             putExtra("alarm_id", alarmId)
         }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            alarmId.hashCode(),
+            requestCode,
             triggerIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -369,6 +370,14 @@ object AlarmManagerHelper {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun getAlarmNextEpoch(context: Context, alarmId: String): Long {
+        return getPrefs(context).getLong("alarm_next_epoch_$alarmId", 0L)
+    }
+
+    fun clearAlarmNextEpoch(context: Context, alarmId: String) {
+        getPrefs(context).edit().remove("alarm_next_epoch_$alarmId").apply()
     }
 
     /**

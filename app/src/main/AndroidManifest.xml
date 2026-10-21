@@ -115,10 +115,15 @@
         <!-- v13.0 Hardcore Smart Alarm Receiver -->
         <receiver
             android:name=".alarm.AlarmReceiver"
-            android:exported="true">
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
             <intent-filter>
                 <action android:name="com.instaguard.app.ACTION_TRIGGER_ALARM" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
 
