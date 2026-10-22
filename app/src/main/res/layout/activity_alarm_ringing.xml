@@ -4,7 +4,7 @@
     android:id="@+id/layoutRingingRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="@color/ig_bg_canvas"
     android:keepScreenOn="true">
 
     <ScrollView
@@ -19,30 +19,33 @@
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:paddingHorizontal="24dp"
-            android:paddingTop="36dp"
+            android:paddingTop="44dp"
             android:paddingBottom="48dp">
 
-            <!-- Alarm Status Header -->
+            <!-- Alarm Status Pill Header -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_input_surface"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="8dp">
 
                 <View
                     android:id="@+id/viewRingingDot"
-                    android:layout_width="12dp"
-                    android:layout_height="12dp"
-                    android:background="@drawable/ic_launcher_background"
-                    android:backgroundTint="@color/accent_red" />
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:background="@drawable/bg_day_circle_active"
+                    android:backgroundTint="@color/ig_accent_danger" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
                     android:text="HARDCORE SMART ALARM"
-                    android:textColor="@color/accent_red"
-                    android:textSize="13sp"
+                    android:textColor="@color/ig_accent_danger"
+                    android:textSize="12sp"
                     android:textStyle="bold"
                     android:letterSpacing="0.08" />
             </LinearLayout>
@@ -52,12 +55,12 @@
                 android:id="@+id/tvClockLive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="24dp"
                 android:text="06:30:00 AM"
-                android:textColor="@color/text_primary"
+                android:textColor="@color/ig_text_primary"
                 android:textSize="40sp"
                 android:textStyle="bold"
-                android:fontFamily="monospace" />
+                android:fontFamily="sans-serif-black" />
 
             <TextView
                 android:id="@+id/tvDateLive"
@@ -65,25 +68,26 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="Tuesday, October 20"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/ig_text_secondary"
                 android:textSize="15sp" />
 
-            <!-- Alarm Label Card -->
+            <!-- Alarm Label Bento Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                app:cardBackgroundColor="@color/surface_card"
-                app:cardCornerRadius="18dp"
+                android:layout_marginTop="28dp"
+                app:cardBackgroundColor="@color/ig_bg_card"
+                app:cardCornerRadius="26dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/accent_neon_blue"
+                app:strokeColor="#40D8FF3E"
                 app:strokeWidth="1.5dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card_hero_accent"
                     android:orientation="vertical"
-                    android:padding="20dp"
+                    android:padding="22dp"
                     android:gravity="center">
 
                     <TextView
@@ -91,7 +95,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="🏷️ Wake Up Mission"
-                        android:textColor="@color/accent_neon_blue"
+                        android:textColor="@color/ig_accent_primary"
                         android:textSize="20sp"
                         android:textStyle="bold"
                         android:gravity="center" />
@@ -102,8 +106,8 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:text="🚨 Nuclear Air-Raid Siren (Extreme)"
-                        android:textColor="@color/accent_yellow"
-                        android:textSize="13sp"
+                        android:textColor="@color/ig_accent_amber"
+                        android:textSize="13.5sp"
                         android:textStyle="bold"
                         android:gravity="center" />
 
@@ -111,45 +115,47 @@
                         android:id="@+id/tvAutoDeleteBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:background="@drawable/bg_pill_version"
-                        android:paddingHorizontal="10dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_input_surface"
+                        android:paddingHorizontal="12dp"
                         android:paddingVertical="4dp"
                         android:text="🗑️ Auto-Delete After Ringing"
-                        android:textColor="@color/accent_red"
+                        android:textColor="@color/ig_accent_danger"
                         android:textSize="11sp"
                         android:textStyle="bold"
                         android:visibility="gone" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Single Clean Stop / Dismiss Alarm Button -->
+            <!-- Single Clean Stop / Dismiss Alarm Pill Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnStopAlarm"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="28dp"
                 android:text="🛑 Stop / Dismiss Alarm"
-                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:textColor="@color/ig_text_on_accent"
                 android:textStyle="bold"
                 android:textSize="16sp"
-                app:cornerRadius="16dp"
-                app:backgroundTint="@color/accent_red" />
+                app:cornerRadius="28dp"
+                app:backgroundTint="@color/ig_accent_primary" />
 
-            <!-- Snooze Button -->
+            <!-- Snooze Pill Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSnooze"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="14dp"
                 android:text="💤 Snooze for 5 Min"
-                android:textColor="@color/text_primary"
+                android:textAllCaps="false"
+                android:textColor="@color/ig_accent_amber"
                 android:textStyle="bold"
                 android:textSize="14sp"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/accent_yellow"
-                app:strokeWidth="1.5dp"
-                app:backgroundTint="@color/surface_card" />
+                app:cornerRadius="26dp"
+                app:strokeColor="#40FF8A1E"
+                app:strokeWidth="1.2dp"
+                app:backgroundTint="#202530" />
 
             <!-- Emergency / Test Stop Button -->
             <com.google.android.material.button.MaterialButton
@@ -158,12 +164,12 @@
                 android:layout_height="40dp"
                 android:layout_marginTop="20dp"
                 android:text="🛑 Stop Test"
-                android:textColor="@color/text_secondary"
+                android:textColor="@color/ig_text_secondary"
                 android:textSize="12sp"
-                app:cornerRadius="10dp"
-                app:strokeColor="@color/surface_variant"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/ig_border_subtle"
                 app:strokeWidth="1dp"
-                app:backgroundTint="@color/bg_primary"
+                app:backgroundTint="#202530"
                 android:visibility="gone" />
 
         </LinearLayout>

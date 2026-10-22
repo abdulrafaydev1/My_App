@@ -15,12 +15,12 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * Tab 2: Analytics Fragment (v12.0)
+ * Tab 2: Analytics Fragment (v15.0 Obsidian & Volt-Lime Design System)
  * Modern Analytics & Weekly Insights Dashboard featuring:
  * - Today's Total Screen Time & Total Reels/Shorts Scrolled
  * - Per-App Screen Time Breakdown with Dynamic Progress Bars
+ * - 7-Day Usage Vertical Bar Chart (Reference D Financial Chart Style) + Historical Table
  * - Impulsive Urges & Weakness Log (Real-time blocked attempts tracking)
- * - 7-Day Historical Breakdown Table
  */
 class AnalyticsFragment : Fragment() {
 
@@ -50,7 +50,6 @@ class AnalyticsFragment : Fragment() {
 
     private fun applyMonospaceTypefaces() {
         val monospaceViews = listOf(
-            binding.tvAnalyticsTodayTotal,
             binding.tvAnalyticsScrollsTotal,
             binding.tvAnalyticsInstagram,
             binding.tvAnalyticsYouTube,
@@ -107,7 +106,7 @@ class AnalyticsFragment : Fragment() {
         // Weakness & Impulse Card
         updateWeaknessImpulseCard(ctx)
 
-        // 7-Day History Table (throttled to once every 1.5s for performance)
+        // 7-Day History Chart & Table (throttled to once every 1.5s for performance)
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - last7DayReportRenderMs > 1500L) {
             last7DayReportRenderMs = now
@@ -129,25 +128,30 @@ class AnalyticsFragment : Fragment() {
         val logText = AppBlockerService.getBlockedAttemptsLogToday(ctx)
         if (logText.isBlank() || totalBlockedToday == 0) {
             binding.tvWeaknessImpulseLog.text = "✅ 0 Blocked Attempts Today — 100% Pure Discipline!"
-            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#10B981"))
+            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#2EE59D"))
         } else {
             binding.tvWeaknessImpulseLog.text = logText
-            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#FCA5A5"))
+            binding.tvWeaknessImpulseLog.setTextColor(Color.parseColor("#FF8A1E"))
         }
     }
 
     private fun render7DayHistoryTable(guardManager: GuardManager, ctx: android.content.Context) {
         val sdfKey = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val sdfDay = SimpleDateFormat("EEE (dd)", Locale.US)
+        val sdfShort = SimpleDateFormat("EEE", Locale.US)
         val cal = Calendar.getInstance()
 
         val sb = StringBuilder()
         sb.append(String.format(Locale.US, "%-8s | %-4s | %-4s | %-4s | %-4s | %-6s\n", "DAY", "IG", "YT", "FB", "TT", "TOTAL"))
         sb.append("---------------------------------------\n")
 
+        val dayTotals = LongArray(7)
+        val shortLabels = Array(7) { "" }
+
         for (i in 0..6) {
             val dateKey = sdfKey.format(cal.time)
             val dayLabel = if (i == 0) "Today" else sdfDay.format(cal.time)
+            shortLabels[i] = if (i == 0) "Today" else sdfShort.format(cal.time)
 
             val ig = if (i == 0) AppBlockerService.getLiveDailyTotalMs("INSTAGRAM", ctx) else guardManager.prefs.getDailyTotal(dateKey, "INSTAGRAM")
             val yt = if (i == 0) AppBlockerService.getLiveDailyTotalMs("YOUTUBE", ctx) else guardManager.prefs.getDailyTotal(dateKey, "YOUTUBE")
@@ -155,6 +159,7 @@ class AnalyticsFragment : Fragment() {
             val tt = if (i == 0) AppBlockerService.getLiveDailyTotalMs("TIKTOK", ctx) else guardManager.prefs.getDailyTotal(dateKey, "TIKTOK")
 
             val dayTotal = ig + yt + fb + tt
+            dayTotals[i] = dayTotal
 
             sb.append(
                 String.format(
@@ -174,6 +179,26 @@ class AnalyticsFragment : Fragment() {
         }
 
         binding.tvAnalytics7DayReport.text = sb.toString()
+
+        // Update Reference D 7-Day Vertical Bar Chart Heights & Labels
+        val maxTotalMs = (dayTotals.maxOrNull() ?: 1L).coerceAtLeast(1_800_000L) // minimum 30m scale
+        val barViews = listOf(
+            binding.barDay0, binding.barDay1, binding.barDay2, binding.barDay3,
+            binding.barDay4, binding.barDay5, binding.barDay6
+        )
+        val labelViews = listOf(
+            binding.tvBarLabel0, binding.tvBarLabel1, binding.tvBarLabel2, binding.tvBarLabel3,
+            binding.tvBarLabel4, binding.tvBarLabel5, binding.tvBarLabel6
+        )
+        val density = resources.displayMetrics.density
+        for (i in 0..6) {
+            labelViews[i].text = shortLabels[i]
+            val ratio = (dayTotals[i].toFloat() / maxTotalMs.toFloat()).coerceIn(0.08f, 1.0f)
+            val heightPx = (ratio * 96f * density + 0.5f).toInt()
+            val lp = barViews[i].layoutParams
+            lp.height = heightPx
+            barViews[i].layoutParams = lp
+        }
     }
 
     private fun formatDuration(ms: Long): String {

@@ -1,30 +1,38 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base Application Theme -->
+    <!-- Base Application Theme (v15.0 Obsidian & Volt-Lime Design System) -->
     <style name="Theme.InstaGuard" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="colorPrimary">@color/accent_neon_blue</item>
+        <item name="colorPrimary">@color/ig_accent_primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>
-        <item name="colorOnPrimary">#0B0F19</item>
-        <item name="colorSecondary">@color/accent_yellow</item>
-        <item name="android:statusBarColor">@color/bg_primary</item>
-        <item name="android:navigationBarColor">@color/surface_card</item>
+        <item name="colorOnPrimary">@color/ig_text_on_accent</item>
+        <item name="colorSecondary">@color/ig_accent_amber</item>
+        <item name="android:statusBarColor">@color/ig_bg_canvas</item>
+        <item name="android:navigationBarColor">@color/ig_bg_canvas</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
-        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/ig_bg_canvas</item>
     </style>
 
     <!-- Fullscreen Focus Lock Screen Theme -->
     <style name="Theme.InstaGuard.LockScreen" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="android:windowBackground">@color/bg_primary</item>
-        <item name="android:statusBarColor">@color/bg_primary</item>
-        <item name="android:navigationBarColor">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/ig_bg_canvas</item>
+        <item name="android:statusBarColor">@color/ig_bg_canvas</item>
+        <item name="android:navigationBarColor">@color/ig_bg_canvas</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">false</item>
         <item name="android:windowAnimationStyle">@null</item>
     </style>
 
-    <!-- Bottom Navigation Bar Label Style -->
+    <!-- Floating Navigation Dock Label Styles (Reference A) -->
     <style name="BottomNavLabel" parent="@android:style/TextAppearance.Small">
-        <item name="android:textSize">10.5sp</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="BottomNavLabelActive" parent="@android:style/TextAppearance.Small">
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:maxLines">1</item>
     </style>
 </resources>

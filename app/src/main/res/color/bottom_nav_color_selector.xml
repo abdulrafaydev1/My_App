@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:color="@color/accent_neon_blue" android:state_checked="true" />
-    <item android:color="@color/accent_neon_blue" android:state_selected="true" />
-    <item android:color="@color/text_secondary" />
+    <!-- Active Tab: Warm vibrant accent (#FF8A1E) matching Reference A -->
+    <item android:color="@color/ig_accent_amber" android:state_checked="true" />
+    <item android:color="@color/ig_accent_amber" android:state_selected="true" />
+    <!-- Unselected Tabs: Crisp readable off-white/silver (#C9D1D9) -->
+    <item android:color="@color/ig_nav_inactive" />
 </selector>

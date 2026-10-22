@@ -5,12 +5,12 @@
     android:id="@+id/scrollSettings"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="@color/ig_bg_canvas"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingTop="12dp"
-    android:paddingBottom="96dp"
-    android:paddingHorizontal="16dp">
+    android:paddingBottom="@dimen/ig_dock_bottom_clearance"
+    android:paddingHorizontal="@dimen/ig_screen_padding_horizontal">
 
     <LinearLayout
         android:id="@+id/layoutSettingsContent"
@@ -18,17 +18,265 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Custom AI Voice Alert Card -->
+        <!-- 1. System Service Permissions Section Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:text="SYSTEM SERVICE PERMISSIONS"
+            android:textColor="@color/ig_text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
+
+        <!-- Usage Access Card (Row 1 — 2-Column Responsive Layout) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardUsageAccess"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:id="@+id/imgUsageStatus"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_check_circle"
+                        app:tint="@color/ig_accent_success"
+                        android:contentDescription="Usage Icon" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="10dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Usage Access"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:maxLines="2"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/tvUsageStatusBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="✓ Active"
+                        android:textColor="@color/ig_accent_success"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:maxLines="1" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGrantUsage"
+                    android:layout_width="128dp"
+                    android:layout_height="40dp"
+                    android:text="1. Grant Access"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_text_on_accent"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="10dp"
+                    app:cornerRadius="20dp"
+                    app:backgroundTint="@color/ig_accent_primary" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Accessibility Service Card (Row 2 — 2-Column Responsive Layout) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardAccessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:id="@+id/imgAccessibilityStatus"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_check_circle"
+                        app:tint="@color/ig_accent_success"
+                        android:contentDescription="Accessibility Icon" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="10dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Accessibility Service"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:maxLines="2"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/tvAccessibilityStatusBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="✓ Active"
+                        android:textColor="@color/ig_accent_success"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:maxLines="1" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnEnableAccessibility"
+                    android:layout_width="128dp"
+                    android:layout_height="40dp"
+                    android:text="2. Enable Service"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_text_on_accent"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="10dp"
+                    app:cornerRadius="20dp"
+                    app:backgroundTint="@color/ig_accent_primary" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Overlay Permission Card (Row 3 — 2-Column Responsive Layout) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardOverlayPermission"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/ig_section_spacing"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:id="@+id/imgOverlayStatus"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_check_circle"
+                        app:tint="@color/ig_accent_success"
+                        android:contentDescription="Overlay Icon" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="10dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Display Over Other Apps"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:maxLines="2"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/tvOverlayStatusBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="✓ Active"
+                        android:textColor="@color/ig_accent_success"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:maxLines="1" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGrantOverlay"
+                    android:layout_width="128dp"
+                    android:layout_height="40dp"
+                    android:text="3. Allow Overlay"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_text_on_accent"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="10dp"
+                    app:cornerRadius="20dp"
+                    app:backgroundTint="@color/ig_accent_primary" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 2. AI Voice Alert Configuration Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardCustomVoiceAlert"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="20dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -36,31 +284,60 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🗣️ Custom AI Voice Warning"
-                    android:textColor="@color/text_primary"
-                    android:textSize="17sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Spoken out loud via Android Text-To-Speech when you attempt to open a locked app."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_settings_gear"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="🗣️ Custom AI Voice Warning"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Spoken out loud via Android TTS when opening a locked app."
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvCurrentCustomVoice"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:background="@color/bg_primary"
-                    android:padding="12dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_input_surface"
+                    android:padding="14dp"
                     android:text="&quot;Time is up! Put your phone down and get back to work!&quot;"
-                    android:textColor="@color/accent_neon_blue"
+                    android:textColor="@color/ig_accent_primary"
                     android:textSize="13sp"
                     android:textStyle="italic" />
 
@@ -73,369 +350,157 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnEditCustomVoice"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
-                        android:text="✏️ Edit Voice"
-                        android:textColor="#0B0F19"
+                        android:text="💾 Edit / Save Voice"
+                        android:textAllCaps="false"
+                        android:textColor="@color/ig_text_on_accent"
                         android:textStyle="bold"
                         android:textSize="13sp"
-                        app:cornerRadius="12dp"
-                        app:backgroundTint="@color/accent_neon_blue" />
+                        app:cornerRadius="23dp"
+                        app:backgroundTint="@color/ig_accent_primary" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnTestCustomVoice"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
                         android:text="🔊 Test Voice"
-                        android:textColor="@color/text_primary"
+                        android:textAllCaps="false"
+                        android:textColor="@color/ig_text_primary"
                         android:textStyle="bold"
                         android:textSize="13sp"
-                        app:cornerRadius="12dp"
-                        app:strokeWidth="1.5dp"
-                        app:strokeColor="@color/accent_neon_blue"
-                        app:backgroundTint="@color/surface_variant" />
+                        app:cornerRadius="23dp"
+                        app:strokeWidth="1dp"
+                        app:strokeColor="#40D8FF3E"
+                        app:backgroundTint="#202530" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Maintenance Mode Button -->
+        <!-- Maintenance Mode Pill Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnMaintenanceMode"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="10dp"
             android:text="🛠️ 5-Minute Maintenance Mode (PIN Required)"
-            android:textColor="@color/accent_yellow"
+            android:textAllCaps="false"
+            android:textColor="@color/ig_accent_amber"
             android:textStyle="bold"
             android:textSize="13sp"
-            app:cornerRadius="14dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/accent_yellow"
-            app:backgroundTint="@color/surface_card" />
+            app:cornerRadius="24dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#40FF8A1E"
+            app:backgroundTint="@color/ig_bg_card" />
 
-        <!-- Add Custom App Button -->
+        <!-- Add Custom App Pill Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddCustomApp"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
             android:text="➕ Add Custom App to Shield"
-            android:textColor="@color/accent_neon_blue"
+            android:textAllCaps="false"
+            android:textColor="@color/ig_accent_primary"
             android:textStyle="bold"
             android:textSize="13sp"
-            app:cornerRadius="14dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/accent_neon_blue"
-            app:backgroundTint="@color/surface_card" />
+            app:cornerRadius="24dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#40D8FF3E"
+            app:backgroundTint="@color/ig_bg_card" />
 
-        <!-- Developer Test Mode Card -->
+        <!-- 3. Developer Test Mode Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardTestMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
+
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_timer"
+                        app:tint="@color/ig_accent_amber"
+                        android:contentDescription="@null" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="8dp"
                     android:orientation="vertical">
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="⚡ Developer Test Mode"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
+                        android:text="Developer Test Mode"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="16sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Temporarily reduces app limits to 2 minutes for testing."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:text="Temporarily reduces app limits to 1m / 2m lock for instant testing."
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="12.5sp" />
                 </LinearLayout>
 
                 <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/switchTestMode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    app:thumbTint="@color/accent_yellow"
-                    app:trackTint="@color/surface_variant" />
+                    app:thumbTint="@color/ig_accent_amber"
+                    app:trackTint="#252A34" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- System Permissions Section Title -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:text="🔒 System Service Permissions"
-            android:textColor="@color/text_primary"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <!-- Usage Access Card (Row 1) -->
+        <!-- 4. Version Footer Card -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardUsageAccess"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="14dp">
-
-                <ImageView
-                    android:id="@+id/imgUsageStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_check_circle"
-                    app:tint="@color/status_green"
-                    android:contentDescription="Usage Icon" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Usage Access"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:maxLines="2"
-                        android:ellipsize="end" />
-
-                    <TextView
-                        android:id="@+id/tvUsageStatusBadge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="GRANTED"
-                        android:textColor="@color/status_green"
-                        android:textSize="12.5sp"
-                        android:textStyle="bold"
-                        android:maxLines="1" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnGrantUsage"
-                    android:layout_width="wrap_content"
-                    android:minWidth="110dp"
-                    android:maxWidth="145dp"
-                    android:layout_height="40dp"
-                    android:text="1. Grant Access"
-                    android:textAllCaps="false"
-                    android:textColor="#0B0F19"
-                    android:textStyle="bold"
-                    android:textSize="12.5sp"
-                    android:paddingHorizontal="14dp"
-                    app:cornerRadius="10dp"
-                    app:backgroundTint="@color/accent_neon_blue" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Accessibility Service Card (Row 2) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardAccessibility"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="14dp">
-
-                <ImageView
-                    android:id="@+id/imgAccessibilityStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_check_circle"
-                    app:tint="@color/status_green"
-                    android:contentDescription="Accessibility Icon" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Accessibility Service"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:maxLines="2"
-                        android:ellipsize="end" />
-
-                    <TextView
-                        android:id="@+id/tvAccessibilityStatusBadge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="ENABLED"
-                        android:textColor="@color/status_green"
-                        android:textSize="12.5sp"
-                        android:textStyle="bold"
-                        android:maxLines="1" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnEnableAccessibility"
-                    android:layout_width="wrap_content"
-                    android:minWidth="110dp"
-                    android:maxWidth="145dp"
-                    android:layout_height="40dp"
-                    android:text="2. Enable Service"
-                    android:textAllCaps="false"
-                    android:textColor="#0B0F19"
-                    android:textStyle="bold"
-                    android:textSize="12.5sp"
-                    android:paddingHorizontal="14dp"
-                    app:cornerRadius="10dp"
-                    app:backgroundTint="@color/accent_neon_blue" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Overlay Permission Card (Row 3) -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardOverlayPermission"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="14dp">
-
-                <ImageView
-                    android:id="@+id/imgOverlayStatus"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_check_circle"
-                    app:tint="@color/status_green"
-                    android:contentDescription="Overlay Icon" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="12dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Display Over Other Apps"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:maxLines="2"
-                        android:ellipsize="end" />
-
-                    <TextView
-                        android:id="@+id/tvOverlayStatusBadge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="GRANTED"
-                        android:textColor="@color/status_green"
-                        android:textSize="12.5sp"
-                        android:textStyle="bold"
-                        android:maxLines="1" />
-                </LinearLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnGrantOverlay"
-                    android:layout_width="wrap_content"
-                    android:minWidth="110dp"
-                    android:maxWidth="145dp"
-                    android:layout_height="40dp"
-                    android:text="3. Allow Overlay"
-                    android:textAllCaps="false"
-                    android:textColor="#0B0F19"
-                    android:textStyle="bold"
-                    android:textSize="12.5sp"
-                    android:paddingHorizontal="14dp"
-                    app:cornerRadius="10dp"
-                    app:backgroundTint="@color/accent_neon_blue" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- App Version Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="InstaGuard Pro v12.1 - Premium Edition"
-                    android:textColor="@color/text_primary"
+                    android:text="InstaGuard Pro v15.0 • Obsidian &amp; Volt Design System"
+                    android:textColor="@color/ig_text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
@@ -443,8 +508,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="AI Visual &amp; Focus Shield • YouTube / Instagram Style Dark UI • Zero Cloud Latency"
-                    android:textColor="@color/text_secondary"
+                    android:text="Floating Translucent Pill Navigation Dock • Bento-Grid Precision • Zero Cloud Latency"
+                    android:textColor="@color/ig_text_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

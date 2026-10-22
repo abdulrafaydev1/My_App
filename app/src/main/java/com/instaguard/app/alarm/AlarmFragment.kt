@@ -9,11 +9,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
-import android.widget.TextView
 import android.widget.Toast
-import android.widget.ToggleButton
 import androidx.appcompat.app.AlertDialog
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,11 +22,11 @@ import com.instaguard.app.service.AlarmRingingService
 import java.util.Calendar
 
 /**
- * Tab 3: Alarm Fragment (v13.0)
+ * Tab 3: Alarm Fragment (v15.0 Obsidian & Volt-Lime Design System)
  * Hardcore Smart Alarm Manager with:
  * - 12+ Mathematical Sound Synthesizers
- * - Repeat Days & Delete After Ringing toggle
- * - Snooze & Pro Wake-Up Dismiss Missions (Math / Rapid Tap)
+ * - Circular M T W T F S S Repeat Days & Delete After Ringing toggle
+ * - Snooze & Reliable Screen-Off Ringing
  * - Live Instant Testing
  */
 class AlarmFragment : Fragment() {
@@ -150,14 +147,14 @@ class AlarmFragment : Fragment() {
         val enabledAlarms = alarms.filter { it.enabled }
         if (enabledAlarms.isEmpty()) {
             binding.tvHeroAlarmStatus.text = "No active alarms scheduled"
-            binding.tvHeroAlarmStatus.setTextColor(Color.parseColor("#8B949E"))
+            binding.tvHeroAlarmStatus.setTextColor(Color.parseColor("#9BA3B0"))
         } else {
             // Find alarm with nearest trigger time
             val nearest = enabledAlarms.minByOrNull { AlarmManagerHelper.calculateNextTriggerMs(it) }
             val countStr = if (enabledAlarms.size == 1) "1 Active Alarm" else "${enabledAlarms.size} Active Alarms"
             val nearestCountdown = nearest?.let { AlarmManagerHelper.formatNextRingCountdown(it) } ?: ""
             binding.tvHeroAlarmStatus.text = "$countStr • $nearestCountdown"
-            binding.tvHeroAlarmStatus.setTextColor(Color.parseColor("#00E5FF"))
+            binding.tvHeroAlarmStatus.setTextColor(Color.parseColor("#D8FF3E"))
         }
     }
 
@@ -225,7 +222,7 @@ class AlarmFragment : Fragment() {
         // 2. Label
         dialogBinding.etAlarmLabel.setText(alarm.label)
 
-        // 3. Repeat Days Chips
+        // 3. Circular Repeat Days Toggles (Active filled in #D8FF3E with dark text #0B0D10)
         val dayToggles = listOf(
             dialogBinding.toggleMon to 1,
             dialogBinding.toggleTue to 2,
@@ -236,10 +233,20 @@ class AlarmFragment : Fragment() {
             dialogBinding.toggleSun to 7
         )
 
+        fun styleDayToggle(toggle: android.widget.ToggleButton, isChecked: Boolean) {
+            if (isChecked) {
+                toggle.setBackgroundResource(R.drawable.bg_day_circle_active)
+                toggle.setTextColor(Color.parseColor("#0B0D10"))
+            } else {
+                toggle.setBackgroundResource(R.drawable.bg_day_circle_inactive)
+                toggle.setTextColor(Color.parseColor("#9BA3B0"))
+            }
+        }
+
         fun updateDayToggleButtons(activeDays: Set<Int>) {
             for ((toggle, dayNum) in dayToggles) {
                 toggle.isChecked = activeDays.contains(dayNum)
-                toggle.setTextColor(if (toggle.isChecked) Color.parseColor("#00E5FF") else Color.parseColor("#8B949E"))
+                styleDayToggle(toggle, toggle.isChecked)
             }
         }
 
@@ -250,7 +257,7 @@ class AlarmFragment : Fragment() {
                 val newDays = alarm.repeatDays.toMutableSet()
                 if (isChecked) newDays.add(dayNum) else newDays.remove(dayNum)
                 alarm.repeatDays = newDays
-                toggle.setTextColor(if (isChecked) Color.parseColor("#00E5FF") else Color.parseColor("#8B949E"))
+                styleDayToggle(toggle, isChecked)
             }
         }
 
@@ -366,7 +373,7 @@ class AlarmFragment : Fragment() {
     }
 
     /**
-     * RecyclerView Adapter for displaying Smart Alarms.
+     * RecyclerView Adapter for displaying Smart Alarms with Reference B/E circular day pills.
      */
     private inner class SmartAlarmAdapter(
         private val onToggleEnabled: (SmartAlarm, Boolean) -> Unit,
@@ -402,11 +409,11 @@ class AlarmFragment : Fragment() {
 
                 b.tvCountdownBadge.text = AlarmManagerHelper.formatNextRingCountdown(alarm)
                 if (alarm.enabled) {
-                    b.tvCountdownBadge.setTextColor(Color.parseColor("#00E5FF"))
+                    b.tvCountdownBadge.setTextColor(Color.parseColor("#D8FF3E"))
                     b.tvAlarmTime.alpha = 1.0f
                 } else {
                     b.tvCountdownBadge.text = "Disabled"
-                    b.tvCountdownBadge.setTextColor(Color.parseColor("#8B949E"))
+                    b.tvCountdownBadge.setTextColor(Color.parseColor("#9BA3B0"))
                     b.tvAlarmTime.alpha = 0.5f
                 }
 
@@ -418,7 +425,7 @@ class AlarmFragment : Fragment() {
                     bind(alarm)
                 }
 
-                // Days pills
+                // Circular M T W T F S S day indicators (active days filled in #D8FF3E with dark text #0B0D10)
                 val dayViews = listOf(
                     b.pillMon to 1,
                     b.pillTue to 2,
@@ -430,8 +437,15 @@ class AlarmFragment : Fragment() {
                 )
                 for ((view, dayNum) in dayViews) {
                     val isActive = alarm.repeatDays.contains(dayNum)
-                    view.alpha = if (isActive) 1.0f else 0.25f
-                    view.setTextColor(if (isActive) Color.parseColor("#00E5FF") else Color.parseColor("#8B949E"))
+                    if (isActive) {
+                        view.setBackgroundResource(R.drawable.bg_day_circle_active)
+                        view.setTextColor(Color.parseColor("#0B0D10"))
+                        view.alpha = 1.0f
+                    } else {
+                        view.setBackgroundResource(R.drawable.bg_day_circle_inactive)
+                        view.setTextColor(Color.parseColor("#9BA3B0"))
+                        view.alpha = 0.7f
+                    }
                 }
 
                 // Badges

@@ -5,12 +5,12 @@
     android:id="@+id/scrollDashboard"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="@color/ig_bg_canvas"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingTop="12dp"
-    android:paddingBottom="96dp"
-    android:paddingHorizontal="16dp">
+    android:paddingBottom="@dimen/ig_dock_bottom_clearance"
+    android:paddingHorizontal="@dimen/ig_screen_padding_horizontal">
 
     <LinearLayout
         android:id="@+id/layoutDashboardContent"
@@ -18,22 +18,23 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Top Hero Status & Allowance Card -->
+        <!-- 1. Hero Allowance & Timer Card (@drawable/bg_card_hero_accent — References B & E) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardOverallStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="20dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="@dimen/ig_card_radius_large"
             app:cardElevation="0dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeWidth="1.2dp"
+            app:strokeColor="#40D8FF3E"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:id="@+id/layoutOverallStatusBg"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_card_hero_accent"
                 android:orientation="vertical"
                 android:padding="20dp">
 
@@ -45,10 +46,10 @@
 
                     <View
                         android:id="@+id/viewStatusDot"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:background="@drawable/ic_launcher_background"
-                        android:backgroundTint="@color/status_green" />
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/bg_day_circle_active"
+                        android:backgroundTint="@color/ig_accent_primary" />
 
                     <TextView
                         android:id="@+id/tvOverallStatusTitle"
@@ -56,29 +57,37 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="10dp"
-                        android:text="AI Focus Shield Active"
-                        android:textColor="@color/text_primary"
-                        android:textSize="17sp"
-                        android:textStyle="bold" />
+                        android:text="AI FOCUS SHIELD ACTIVE"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.06" />
 
-                    <ImageView
-                        android:id="@+id/imgOverallStatus"
-                        android:layout_width="26dp"
-                        android:layout_height="26dp"
-                        android:src="@drawable/ic_shield_lock"
-                        app:tint="@color/accent_neon_blue"
-                        android:contentDescription="Status Icon" />
+                    <FrameLayout
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:id="@+id/imgOverallStatus"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_lock"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="Status Icon" />
+                    </FrameLayout>
                 </LinearLayout>
 
-                <!-- Big Bold Allowance Display -->
+                <!-- Large Tabular Display Typography (36sp, sans-serif-black, #F5F7FA) -->
                 <TextView
                     android:id="@+id/tvDailyRemaining"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="2h 15m Remaining"
-                    android:textColor="@color/accent_neon_blue"
-                    android:textSize="26sp"
+                    android:layout_marginTop="12dp"
+                    android:text="02h 00m 00s Left"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="34sp"
                     android:textStyle="bold"
                     android:fontFamily="sans-serif-black" />
 
@@ -86,17 +95,28 @@
                     android:id="@+id/tvOverallStatusDesc"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="Combined allowance across protected social apps."
-                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="4dp"
+                    android:text="Combined daily allowance across protected social apps."
+                    android:textColor="@color/ig_text_secondary"
                     android:textSize="13sp" />
 
-                <!-- Glow Total Scrolls Metric -->
-                <LinearLayout
+                <!-- Sleek Horizontal Progress Bar (#D8FF3E fill over #252A34 track) -->
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressHeroAllowance"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:paddingTop="12dp"
+                    android:max="1000"
+                    android:progress="850"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
+                    app:trackCornerRadius="6dp"
+                    app:trackThickness="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -104,31 +124,152 @@
                         android:id="@+id/tvTotalScrollsToday"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🎬 Scrolls Today: 84"
-                        android:textColor="@color/accent_yellow"
-                        android:textSize="15sp"
+                        android:text="🎬 Total Scrolls Today: 0"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12.5sp"
                         android:textStyle="bold" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Focus Streak & Discipline Score Card -->
+        <!-- 2. 2-Column Bento Metric Row (Reference E Heart Rate / Workout Time Style) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <!-- Left Bento Card: Today's Scrolls -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/bg_card_surface"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Scrolls Today"
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@drawable/bg_icon_circle_surface"
+                        android:gravity="center"
+                        android:text="🎬"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvBentoScrollsValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="sans-serif-black"
+                    android:text="0"
+                    android:textColor="@color/ig_accent_primary"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Reels &amp; Shorts Scrolled"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="11.5sp"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <!-- Right Bento Card: Blocked / Auto-Skipped Interventions -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_card_surface"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Interventions"
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@drawable/bg_icon_circle_surface"
+                        android:gravity="center"
+                        android:text="🛡️"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvBentoInterventionsValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:fontFamily="sans-serif-black"
+                    android:text="0"
+                    android:textColor="@color/ig_accent_amber"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Interventions Today"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="11.5sp"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 3. Focus Streak & Discipline Score Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardFocusStreak"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -142,7 +283,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="🔥 1-Day Active Streak"
-                        android:textColor="@color/accent_yellow"
+                        android:textColor="@color/ig_accent_amber"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
@@ -150,9 +291,11 @@
                         android:id="@+id/tvDisciplineRank"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🏆 Master Rank"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="🏆 Grandmaster Focus"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
@@ -160,9 +303,9 @@
                     android:id="@+id/tvDisciplineScore"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Discipline Score: 92 / 100"
-                    android:textColor="@color/text_primary"
+                    android:layout_marginTop="10dp"
+                    android:text="Discipline Score: 100%"
+                    android:textColor="@color/ig_text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
@@ -170,63 +313,92 @@
                     android:id="@+id/progressDisciplineScore"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:progress="92"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
+                    android:layout_marginTop="8dp"
+                    android:progress="100"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
                     app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
+                    app:trackThickness="7dp" />
 
                 <TextView
                     android:id="@+id/tvStreakSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:text="Maintain low scroll impulse to protect your streak."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12.5sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Deep Work Mode & Quick Toggles Card -->
+        <!-- 4. Focus & Deep Work Action Card (Reference B Task Card Style) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardDeepWorkMode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_section_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="⚡ Deep Work &amp; Focus Mode"
-                    android:textColor="@color/text_primary"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvDeepWorkStatus"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Ready for deep focus sessions"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_timer"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Instant Deep Work &amp; Study Lock"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvDeepWorkStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Ready for deep focus sessions"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="12.5sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
                     android:orientation="horizontal">
 
                     <com.google.android.material.button.MaterialButton
@@ -235,11 +407,13 @@
                         android:layout_height="48dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="6dp"
-                        android:text="📚 1 Hour"
-                        android:textColor="#0B0F19"
+                        android:text="⚡ 1 Hr Focus"
+                        android:textAllCaps="false"
+                        android:textColor="@color/ig_text_on_accent"
                         android:textStyle="bold"
-                        app:cornerRadius="12dp"
-                        app:backgroundTint="@color/accent_neon_blue" />
+                        android:textSize="13.5sp"
+                        app:cornerRadius="24dp"
+                        app:backgroundTint="@color/ig_accent_primary" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnDeepWork2Hour"
@@ -247,55 +421,61 @@
                         android:layout_height="48dp"
                         android:layout_weight="1"
                         android:layout_marginStart="6dp"
-                        android:text="🚀 2 Hours"
-                        android:textColor="#0B0F19"
+                        android:text="🚀 2 Hr Focus"
+                        android:textAllCaps="false"
+                        android:textColor="@color/ig_text_on_accent"
                         android:textStyle="bold"
-                        app:cornerRadius="12dp"
-                        app:backgroundTint="@color/accent_yellow" />
+                        android:textSize="13.5sp"
+                        app:cornerRadius="24dp"
+                        app:backgroundTint="@color/ig_accent_amber" />
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCancelStudyMode"
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:visibility="gone"
-                    android:text="❌ Cancel Study Mode"
-                    android:textColor="@color/text_primary"
-                    app:cornerRadius="12dp"
-                    app:strokeColor="@color/accent_red"
+                    android:text="✕ Cancel Active Study Lock"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="22dp"
+                    app:strokeColor="@color/ig_accent_danger"
                     app:strokeWidth="1dp"
-                    app:backgroundTint="@color/surface_variant" />
+                    app:backgroundTint="#202530" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Protected Apps Section Title -->
+        <!-- 5. Tracked Apps & Custom App Shield Section Header -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:text="📱 Protected Social Apps"
-            android:textColor="@color/text_primary"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_marginBottom="12dp"
+            android:text="PROTECTED SOCIAL APPS"
+            android:textColor="@color/ig_text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08" />
 
         <!-- Instagram Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardInstagram"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -303,13 +483,28 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_instagram"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <TextView
                         android:id="@+id/tvInstagramTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:text="Instagram"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -317,9 +512,11 @@
                         android:id="@+id/tvInstagramBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 30m"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="ALLOWED"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="11.5sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
@@ -327,16 +524,17 @@
                     android:id="@+id/progressInstagram"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
+                    android:layout_marginTop="12dp"
+                    android:max="1000"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
                     app:trackCornerRadius="4dp"
                     app:trackThickness="6dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
                     <TextView
@@ -344,16 +542,17 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="30m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:text="00:00:00.000"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvInstagramLimit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Daily: 30m"
-                        android:textColor="@color/text_secondary"
+                        android:text="/ 30m"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp" />
 
                     <TextView
@@ -361,8 +560,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
+                        android:text="30m left"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -371,11 +570,10 @@
                     android:id="@+id/tvInstagramScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Reels Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="6dp"
+                    android:text="🎬 Today: 0 scrolls  •  🚫 Blocked: 0"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -384,18 +582,18 @@
             android:id="@+id/cardYouTube"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -403,13 +601,28 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_reels_clapper"
+                            app:tint="@color/ig_accent_amber"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <TextView
                         android:id="@+id/tvYouTubeTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:text="YouTube"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -417,9 +630,11 @@
                         android:id="@+id/tvYouTubeBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 45m"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="ALLOWED"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="11.5sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
@@ -427,16 +642,17 @@
                     android:id="@+id/progressYouTube"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
+                    android:layout_marginTop="12dp"
+                    android:max="1000"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
                     app:trackCornerRadius="4dp"
                     app:trackThickness="6dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
                     <TextView
@@ -444,16 +660,17 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="45m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:text="00:00:00.000"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvYouTubeLimit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Daily: 45m"
-                        android:textColor="@color/text_secondary"
+                        android:text="/ 30m"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp" />
 
                     <TextView
@@ -461,8 +678,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
+                        android:text="30m left"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -471,11 +688,10 @@
                     android:id="@+id/tvYouTubeScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Shorts Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="6dp"
+                    android:text="🎬 Today: 0 scrolls  •  🚫 Blocked: 0"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -484,18 +700,18 @@
             android:id="@+id/cardFacebook"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -503,13 +719,28 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <TextView
                         android:id="@+id/tvFacebookTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:text="Facebook"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -517,9 +748,11 @@
                         android:id="@+id/tvFacebookBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 30m"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="ALLOWED"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="11.5sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
@@ -527,16 +760,17 @@
                     android:id="@+id/progressFacebook"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
+                    android:layout_marginTop="12dp"
+                    android:max="1000"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
                     app:trackCornerRadius="4dp"
                     app:trackThickness="6dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
                     <TextView
@@ -544,16 +778,17 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="30m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:text="00:00:00.000"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvFacebookLimit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Daily: 30m"
-                        android:textColor="@color/text_secondary"
+                        android:text="/ 30m"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp" />
 
                     <TextView
@@ -561,8 +796,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
+                        android:text="30m left"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -571,11 +806,10 @@
                     android:id="@+id/tvFacebookScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Reels Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="6dp"
+                    android:text="🎬 Today: 0 scrolls  •  🚫 Blocked: 0"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -584,18 +818,18 @@
             android:id="@+id/cardTikTok"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -603,13 +837,28 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_reels_clapper"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <TextView
                         android:id="@+id/tvTikTokTitle"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:text="TikTok"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -617,9 +866,11 @@
                         android:id="@+id/tvTikTokBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="00:00 / 20m"
-                        android:textColor="@color/accent_neon_blue"
-                        android:textSize="13sp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="ALLOWED"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="11.5sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
@@ -627,16 +878,17 @@
                     android:id="@+id/progressTikTok"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
+                    android:layout_marginTop="12dp"
+                    android:max="1000"
+                    app:trackColor="#252A34"
+                    app:indicatorColor="@color/ig_accent_primary"
                     app:trackCornerRadius="4dp"
                     app:trackThickness="6dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:orientation="horizontal">
 
                     <TextView
@@ -644,16 +896,17 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="20m remaining"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                        android:text="00:00:00.000"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/tvTikTokLimit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Daily: 20m"
-                        android:textColor="@color/text_secondary"
+                        android:text="/ 30m"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp" />
 
                     <TextView
@@ -661,8 +914,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="ACTIVE"
-                        android:textColor="@color/status_green"
+                        android:text="30m left"
+                        android:textColor="@color/ig_text_secondary"
                         android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -671,31 +924,30 @@
                     android:id="@+id/tvTikTokScrolls"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="🎬 Shorts Scrolled: 0"
-                    android:textColor="@color/accent_yellow"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="6dp"
+                    android:text="🎬 Today: 0 scrolls  •  🚫 Blocked: 0"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Custom Apps Card -->
+        <!-- Custom Apps Shield Card with Secondary Pill Button -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardCustomApps"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -703,12 +955,27 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_lock"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Other Custom Apps"
-                        android:textColor="@color/text_primary"
+                        android:layout_marginStart="12dp"
+                        android:text="Custom App Shield"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -716,19 +983,38 @@
                         android:id="@+id/tvCustomAppsCountBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0 Apps"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp" />
+                        android:background="@drawable/bg_pill_version"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="3dp"
+                        android:text="0 APPS"
+                        android:textColor="@color/ig_accent_primary"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvCustomAppsSummary"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Tap Settings to configure limits on any installed Android application."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:layout_marginTop="10dp"
+                    android:text="Monitor and enforce limits on any installed Android application."
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12.5sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDashboardAddCustomApp"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="12dp"
+                    android:text="+ Add Custom App to Shield"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_accent_primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="22dp"
+                    app:strokeWidth="1dp"
+                    app:strokeColor="#33D8FF3E"
+                    app:backgroundTint="#202530" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

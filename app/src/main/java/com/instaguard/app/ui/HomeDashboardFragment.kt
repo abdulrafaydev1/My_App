@@ -19,11 +19,14 @@ import com.instaguard.app.R
 import com.instaguard.app.databinding.FragmentHomeDashboardBinding
 import com.instaguard.app.service.AppBlockerService
 import com.instaguard.app.util.GuardManager
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /**
- * Tab 1: Home Dashboard Fragment (v12.0)
+ * Tab 1: Home Dashboard Fragment (v15.0 Obsidian & Volt-Lime Design System)
  * Displays Hero Protection Status & Combined Daily Allowance,
+ * 2-Column Bento Metric Grid (Scrolls Today & Interventions Today),
  * Focus Streak & Discipline Score Gamification,
  * Instant Deep Work / Study Mode with Cancel Support,
  * and Independent Real-Time 30 FPS Cards for Instagram, YouTube, Facebook, TikTok, & Custom Apps.
@@ -62,7 +65,6 @@ class HomeDashboardFragment : Fragment() {
             binding.tvFocusStreak,
             binding.tvDisciplineScore,
             binding.tvDeepWorkStatus,
-            binding.tvDailyRemaining,
             binding.tvTotalScrollsToday,
             binding.tvInstagramTimer, binding.tvInstagramLimit, binding.tvInstagramStatus, binding.tvInstagramScrolls,
             binding.tvYouTubeTimer, binding.tvYouTubeLimit, binding.tvYouTubeStatus, binding.tvYouTubeScrolls,
@@ -86,6 +88,10 @@ class HomeDashboardFragment : Fragment() {
 
         binding.btnCancelStudyMode.setOnClickListener {
             (activity as? MainActivity)?.confirmCancelStudyMode()
+        }
+
+        binding.btnDashboardAddCustomApp.setOnClickListener {
+            (activity as? MainActivity)?.showAddCustomAppDialog()
         }
     }
 
@@ -114,25 +120,26 @@ class HomeDashboardFragment : Fragment() {
         // 1. Overall Status Card & Combined Remaining Allowance
         val isServiceFullyActive = hasUsage && hasAccessibility
         if (isServiceFullyActive) {
-            binding.cardOverallStatus.strokeColor = Color.parseColor("#10B981")
-            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
+            binding.cardOverallStatus.strokeColor = Color.parseColor("#40D8FF3E")
+            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D8FF3E"))
             binding.imgOverallStatus.setImageResource(R.drawable.ic_check_circle)
-            binding.imgOverallStatus.setColorFilter(Color.parseColor("#10B981"))
+            binding.imgOverallStatus.setColorFilter(Color.parseColor("#D8FF3E"))
             binding.tvOverallStatusTitle.text = "AI FOCUS SHIELD ACTIVE"
-            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#10B981"))
+            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#D8FF3E"))
             binding.tvOverallStatusDesc.text = "Strict limits and cooldowns actively enforced for all social apps."
         } else {
-            binding.cardOverallStatus.strokeColor = Color.parseColor("#F59E0B")
-            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
+            binding.cardOverallStatus.strokeColor = Color.parseColor("#66FF8A1E")
+            binding.viewStatusDot.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF8A1E"))
             binding.imgOverallStatus.setImageResource(R.drawable.ic_warning)
-            binding.imgOverallStatus.setColorFilter(Color.parseColor("#F59E0B"))
+            binding.imgOverallStatus.setColorFilter(Color.parseColor("#FF8A1E"))
             binding.tvOverallStatusTitle.text = "SETUP REQUIRED"
-            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#F59E0B"))
+            binding.tvOverallStatusTitle.setTextColor(Color.parseColor("#FF8A1E"))
             binding.tvOverallStatusDesc.text = "Grant required permissions in Settings to activate full focus protection."
         }
 
         // Calculate combined allowance remaining across the 4 core apps
         var combinedRemainingMs = 0L
+        val totalCombinedLimitMs = limitMs * AppBlockerService.APP_KEYS.size
         for (key in AppBlockerService.APP_KEYS) {
             val used = AppBlockerService.getLiveUsageMs(key, ctx)
             val rem = maxOf(0L, limitMs - used)
@@ -140,8 +147,21 @@ class HomeDashboardFragment : Fragment() {
         }
         binding.tvDailyRemaining.text = formatAllowanceTime(combinedRemainingMs) + " Left"
 
+        val heroProgress = if (totalCombinedLimitMs > 0L) {
+            ((combinedRemainingMs.toFloat() / totalCombinedLimitMs) * 1000).toInt().coerceIn(0, 1000)
+        } else 0
+        binding.progressHeroAllowance.progress = heroProgress
+
         val totalScrollsToday = AppBlockerService.getTotalScrollsToday(ctx)
-        binding.tvTotalScrollsToday.text = "🔥 Total Scrolls Today: $totalScrollsToday"
+        binding.tvTotalScrollsToday.text = "🎬 Total Scrolls Today: $totalScrollsToday"
+
+        // 2-Column Bento Metric Row updates
+        binding.tvBentoScrollsValue.text = totalScrollsToday.toString()
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val totalInterventions = AppBlockerService.getTotalBlockedAttemptsToday(ctx) +
+            prefs.getAutoSkippedToday(todayStr) +
+            prefs.getBrowserBlockedToday(todayStr)
+        binding.tvBentoInterventionsValue.text = totalInterventions.toString()
 
         // 2. Focus Streak & Discipline Score
         updateFocusStreakAndDisciplineScore(guardManager, totalScrollsToday)
@@ -149,16 +169,16 @@ class HomeDashboardFragment : Fragment() {
         // 3. Deep Work / Study Mode
         if (AppBlockerService.isDeepWorkModeActive(ctx)) {
             val deepWorkRem = AppBlockerService.getDeepWorkRemainingMs(ctx)
-            binding.tvDeepWorkStatus.text = "🔥 ACTIVE STUDY LOCK: ${guardManager.formatWithMillis(deepWorkRem)} remaining"
-            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#FF1744"))
+            binding.tvDeepWorkStatus.text = "🔥 ACTIVE LOCK: ${guardManager.formatWithMillis(deepWorkRem)} left"
+            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#FF2E54"))
             binding.btnCancelStudyMode.visibility = View.VISIBLE
             binding.btnCancelStudyMode.isEnabled = true
             binding.btnCancelStudyMode.alpha = 1.0f
         } else {
             binding.tvDeepWorkStatus.text = "No active Study Mode session"
-            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#FFD600"))
+            binding.tvDeepWorkStatus.setTextColor(Color.parseColor("#9BA3B0"))
             binding.btnCancelStudyMode.visibility = View.VISIBLE
-            binding.btnCancelStudyMode.alpha = 0.5f
+            binding.btnCancelStudyMode.alpha = 0.55f
         }
 
         // 4. Per-App Cards
@@ -239,17 +259,17 @@ class HomeDashboardFragment : Fragment() {
         binding.progressDisciplineScore.progress = disciplineScore
 
         val (rankText, rankColor) = when {
-            disciplineScore >= 90 -> "🏆 Grandmaster Focus" to Color.parseColor("#10B981")
-            disciplineScore >= 75 -> "🧘 Focus Monk" to Color.parseColor("#00E5FF")
-            disciplineScore >= 50 -> "⚔️ Focus Warrior" to Color.parseColor("#FFD600")
-            else -> "📱 Reel Rookie" to Color.parseColor("#FF1744")
+            disciplineScore >= 90 -> "🏆 Grandmaster Focus" to Color.parseColor("#D8FF3E")
+            disciplineScore >= 75 -> "🧘 Focus Monk" to Color.parseColor("#2EE59D")
+            disciplineScore >= 50 -> "⚔️ Focus Warrior" to Color.parseColor("#FF8A1E")
+            else -> "📱 Reel Rookie" to Color.parseColor("#FF2E54")
         }
 
         binding.tvDisciplineRank.text = rankText
         binding.tvDisciplineRank.setTextColor(rankColor)
         val rankBg = GradientDrawable().apply {
-            cornerRadius = dpToPx(6f).toFloat()
-            setColor(Color.parseColor("#161B22"))
+            cornerRadius = dpToPx(50f).toFloat()
+            setColor(Color.parseColor("#202530"))
             setStroke(dpToPx(1f), rankColor)
         }
         binding.tvDisciplineRank.background = rankBg
@@ -287,56 +307,61 @@ class HomeDashboardFragment : Fragment() {
         tvScrolls.text = "🎬 Today: $todayScrolls scrolls  •  🚫 Blocked: $blockedToday  •  Total: $totalScrolls"
 
         if (lockRemaining > 0L) {
-            // LOCKED STATE (Crimson Red Border)
-            card.strokeColor = Color.parseColor("#FF1744")
+            // LOCKED STATE (Crimson Danger Border)
+            card.strokeColor = Color.parseColor("#FF2E54")
             card.strokeWidth = dpToPx(1.5f)
 
             tvBadge.text = "LOCKED (5H COOLDOWN)"
-            tvBadge.setTextColor(Color.parseColor("#FF1744"))
+            tvBadge.setTextColor(Color.parseColor("#FF2E54"))
             val badgeBg = GradientDrawable().apply {
-                cornerRadius = dpToPx(6f).toFloat()
-                setColor(Color.parseColor("#3F1212"))
+                cornerRadius = dpToPx(50f).toFloat()
+                setColor(Color.parseColor("#26FF2E54"))
+                setStroke(dpToPx(1f), Color.parseColor("#55FF2E54"))
             }
             tvBadge.background = badgeBg
 
             tvTimer.text = "Used: " + guardManager.formatWithMillis(limitMs)
-            tvTimer.setTextColor(Color.parseColor("#FF1744"))
+            tvTimer.setTextColor(Color.parseColor("#FF2E54"))
 
             tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
             tvStatus.text = "Unlocks in: " + guardManager.formatWithMillis(lockRemaining)
-            tvStatus.setTextColor(Color.parseColor("#FF8A80"))
+            tvStatus.setTextColor(Color.parseColor("#FF8A1E"))
 
             val drainProgress = if (cooldownMs > 0L) {
                 ((lockRemaining.toFloat() / cooldownMs) * 1000).toInt().coerceIn(0, 1000)
             } else 0
-            progressIndicator.setIndicatorColor(Color.parseColor("#FF1744"))
+            progressIndicator.setIndicatorColor(Color.parseColor("#FF2E54"))
             progressIndicator.progress = drainProgress
         } else {
             // ALLOWED STATE
             if (isForegroundActive) {
-                card.strokeColor = Color.parseColor("#10B981")
+                card.strokeColor = Color.parseColor("#D8FF3E")
                 card.strokeWidth = dpToPx(1.5f)
             } else {
-                card.strokeColor = Color.parseColor("#21262D")
+                card.strokeColor = Color.parseColor("#1FFFFFFF")
                 card.strokeWidth = dpToPx(1f)
             }
 
             tvBadge.text = if (isForegroundActive) "ACTIVE IN USE" else "ALLOWED"
-            tvBadge.setTextColor(Color.parseColor("#10B981"))
+            tvBadge.setTextColor(if (isForegroundActive) Color.parseColor("#D8FF3E") else Color.parseColor("#2EE59D"))
             val badgeBg = GradientDrawable().apply {
-                cornerRadius = dpToPx(6f).toFloat()
-                setColor(Color.parseColor("#064E3B"))
+                cornerRadius = dpToPx(50f).toFloat()
+                setColor(if (isForegroundActive) Color.parseColor("#26D8FF3E") else Color.parseColor("#262EE59D"))
+                setStroke(
+                    dpToPx(1f),
+                    if (isForegroundActive) Color.parseColor("#55D8FF3E") else Color.parseColor("#552EE59D")
+                )
             }
             tvBadge.background = badgeBg
 
             tvTimer.text = guardManager.formatWithMillis(usedMs)
-            tvTimer.setTextColor(Color.parseColor("#00E5FF")) // Neon Cyan
+            tvTimer.setTextColor(Color.parseColor("#D8FF3E"))
 
             tvLimit.text = "/ " + guardManager.formatWithMillis(limitMs)
 
             val remainingAllowance = maxOf(0L, limitMs - usedMs)
             tvStatus.text = guardManager.formatWithMillis(remainingAllowance) + " left"
-            tvStatus.setTextColor(Color.parseColor("#8B949E"))
+            tvStatus.setTextColor(Color.parseColor("#9BA3B0"))
 
             val progress = if (limitMs > 0L) {
                 ((usedMs.toFloat() / limitMs) * 1000).toInt().coerceIn(0, 1000)
@@ -344,9 +369,9 @@ class HomeDashboardFragment : Fragment() {
             progressIndicator.progress = progress
 
             when {
-                progress >= 950 -> progressIndicator.setIndicatorColor(Color.parseColor("#FF1744"))
-                progress >= 800 -> progressIndicator.setIndicatorColor(Color.parseColor("#FFD600"))
-                else -> progressIndicator.setIndicatorColor(Color.parseColor("#10B981"))
+                progress >= 950 -> progressIndicator.setIndicatorColor(Color.parseColor("#FF2E54"))
+                progress >= 800 -> progressIndicator.setIndicatorColor(Color.parseColor("#FF8A1E"))
+                else -> progressIndicator.setIndicatorColor(Color.parseColor("#D8FF3E"))
             }
         }
     }
@@ -356,7 +381,7 @@ class HomeDashboardFragment : Fragment() {
         binding.tvCustomAppsCountBadge.text = "${customPackages.size} APPS"
 
         if (customPackages.isEmpty()) {
-            binding.tvCustomAppsSummary.text = "No custom apps added yet. Go to Settings tab to monitor any installed app."
+            binding.tvCustomAppsSummary.text = "No custom apps added yet. Tap below or go to Settings to monitor any installed app."
         } else {
             val pm = ctx.packageManager
             val names = customPackages.map { pkg ->

@@ -1,5 +1,6 @@
 package com.instaguard.app.ui
 
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
@@ -18,13 +19,13 @@ import com.instaguard.app.util.GuardManager
 import com.instaguard.app.util.UsageStatsHelper
 
 /**
- * Tab 4: Settings Fragment (v12.0)
+ * Tab 5: Settings Fragment (v15.0 Obsidian & Volt-Lime Design System)
  * System Configuration & Preferences:
+ * - System Permissions Management (Usage Access, Accessibility, Overlay) with 2-column responsive layout
  * - Custom AI Voice Alert (Edit & Test Voice preview)
  * - 5-Minute PIN-Protected Maintenance Mode
  * - Custom App Selector (+ Add Custom Monitored App)
- * - Test Mode Toggle (1m Limit / 2m Lock) with Anti-Bypass Guard
- * - System Permissions Management (Accessibility, Usage Access, Overlay)
+ * - Developer Test Mode Toggle (1m Limit / 2m Lock) with Anti-Bypass Guard
  */
 class SettingsFragment : Fragment() {
 
@@ -141,57 +142,69 @@ class SettingsFragment : Fragment() {
         // 1. Usage Access (Row 1)
         if (hasUsage) {
             binding.imgUsageStatus.setImageResource(R.drawable.ic_check_circle)
-            binding.imgUsageStatus.setColorFilter(Color.parseColor("#10B981"))
-            binding.tvUsageStatusBadge.text = "Active"
-            binding.tvUsageStatusBadge.setTextColor(Color.parseColor("#10B981"))
+            binding.imgUsageStatus.setColorFilter(Color.parseColor("#2EE59D"))
+            binding.tvUsageStatusBadge.text = "✓ Active"
+            binding.tvUsageStatusBadge.setTextColor(Color.parseColor("#2EE59D"))
             binding.btnGrantUsage.isEnabled = false
-            binding.btnGrantUsage.text = "✓ Granted"
-            binding.btnGrantUsage.alpha = 0.6f
+            binding.btnGrantUsage.text = "✓ Active"
+            binding.btnGrantUsage.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#202530"))
+            binding.btnGrantUsage.setTextColor(Color.parseColor("#2EE59D"))
+            binding.btnGrantUsage.alpha = 0.85f
         } else {
             binding.imgUsageStatus.setImageResource(R.drawable.ic_warning)
-            binding.imgUsageStatus.setColorFilter(Color.parseColor("#FFD600"))
+            binding.imgUsageStatus.setColorFilter(Color.parseColor("#FF8A1E"))
             binding.tvUsageStatusBadge.text = "Tap to Enable"
-            binding.tvUsageStatusBadge.setTextColor(Color.parseColor("#FFD600"))
+            binding.tvUsageStatusBadge.setTextColor(Color.parseColor("#FF8A1E"))
             binding.btnGrantUsage.isEnabled = true
             binding.btnGrantUsage.text = "1. Grant Access"
+            binding.btnGrantUsage.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D8FF3E"))
+            binding.btnGrantUsage.setTextColor(Color.parseColor("#0B0D10"))
             binding.btnGrantUsage.alpha = 1.0f
         }
 
         // 2. Accessibility Service (Row 2)
         if (hasAccessibility) {
             binding.imgAccessibilityStatus.setImageResource(R.drawable.ic_check_circle)
-            binding.imgAccessibilityStatus.setColorFilter(Color.parseColor("#10B981"))
-            binding.tvAccessibilityStatusBadge.text = "Active"
-            binding.tvAccessibilityStatusBadge.setTextColor(Color.parseColor("#10B981"))
+            binding.imgAccessibilityStatus.setColorFilter(Color.parseColor("#2EE59D"))
+            binding.tvAccessibilityStatusBadge.text = "✓ Active"
+            binding.tvAccessibilityStatusBadge.setTextColor(Color.parseColor("#2EE59D"))
             binding.btnEnableAccessibility.isEnabled = false
-            binding.btnEnableAccessibility.text = "✓ Enabled"
-            binding.btnEnableAccessibility.alpha = 0.6f
+            binding.btnEnableAccessibility.text = "✓ Active"
+            binding.btnEnableAccessibility.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#202530"))
+            binding.btnEnableAccessibility.setTextColor(Color.parseColor("#2EE59D"))
+            binding.btnEnableAccessibility.alpha = 0.85f
         } else {
             binding.imgAccessibilityStatus.setImageResource(R.drawable.ic_warning)
-            binding.imgAccessibilityStatus.setColorFilter(Color.parseColor("#FFD600"))
+            binding.imgAccessibilityStatus.setColorFilter(Color.parseColor("#FF8A1E"))
             binding.tvAccessibilityStatusBadge.text = "Tap to Enable"
-            binding.tvAccessibilityStatusBadge.setTextColor(Color.parseColor("#FFD600"))
+            binding.tvAccessibilityStatusBadge.setTextColor(Color.parseColor("#FF8A1E"))
             binding.btnEnableAccessibility.isEnabled = true
             binding.btnEnableAccessibility.text = "2. Enable Service"
+            binding.btnEnableAccessibility.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D8FF3E"))
+            binding.btnEnableAccessibility.setTextColor(Color.parseColor("#0B0D10"))
             binding.btnEnableAccessibility.alpha = 1.0f
         }
 
         // 3. Display Over Other Apps (Row 3)
         if (hasOverlay) {
             binding.imgOverlayStatus.setImageResource(R.drawable.ic_check_circle)
-            binding.imgOverlayStatus.setColorFilter(Color.parseColor("#10B981"))
-            binding.tvOverlayStatusBadge.text = "Active"
-            binding.tvOverlayStatusBadge.setTextColor(Color.parseColor("#10B981"))
+            binding.imgOverlayStatus.setColorFilter(Color.parseColor("#2EE59D"))
+            binding.tvOverlayStatusBadge.text = "✓ Active"
+            binding.tvOverlayStatusBadge.setTextColor(Color.parseColor("#2EE59D"))
             binding.btnGrantOverlay.isEnabled = false
-            binding.btnGrantOverlay.text = "✓ Allowed"
-            binding.btnGrantOverlay.alpha = 0.6f
+            binding.btnGrantOverlay.text = "✓ Active"
+            binding.btnGrantOverlay.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#202530"))
+            binding.btnGrantOverlay.setTextColor(Color.parseColor("#2EE59D"))
+            binding.btnGrantOverlay.alpha = 0.85f
         } else {
             binding.imgOverlayStatus.setImageResource(R.drawable.ic_warning)
-            binding.imgOverlayStatus.setColorFilter(Color.parseColor("#FFD600"))
+            binding.imgOverlayStatus.setColorFilter(Color.parseColor("#FF8A1E"))
             binding.tvOverlayStatusBadge.text = "Tap to Enable"
-            binding.tvOverlayStatusBadge.setTextColor(Color.parseColor("#FFD600"))
+            binding.tvOverlayStatusBadge.setTextColor(Color.parseColor("#FF8A1E"))
             binding.btnGrantOverlay.isEnabled = true
             binding.btnGrantOverlay.text = "3. Allow Overlay"
+            binding.btnGrantOverlay.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D8FF3E"))
+            binding.btnGrantOverlay.setTextColor(Color.parseColor("#0B0D10"))
             binding.btnGrantOverlay.alpha = 1.0f
         }
     }

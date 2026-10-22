@@ -19,8 +19,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="🛡️ InstaGuard Pro v7.0"
-            android:textColor="#F8FAFC"
+            android:text="🛡️ InstaGuard Pro v15.0"
+            android:textColor="#F5F7FA"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -29,7 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="ACTIVE"
-            android:textColor="#10B981"
+            android:textColor="#D8FF3E"
             android:textSize="11sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -50,7 +50,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="🎬 Scrolls: 0"
-            android:textColor="#FFD600"
+            android:textColor="#D8FF3E"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -61,7 +61,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="⏱ Used: 0m"
-            android:textColor="#38BDF8"
+            android:textColor="#FF8A1E"
             android:textSize="12sp"
             android:textStyle="bold" />
 
@@ -72,7 +72,7 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="🏆 Score: 100%"
-            android:textColor="#10B981"
+            android:textColor="#2EE59D"
             android:textSize="12sp"
             android:textStyle="bold" />
     </LinearLayout>

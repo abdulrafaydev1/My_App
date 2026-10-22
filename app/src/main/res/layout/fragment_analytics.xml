@@ -5,12 +5,12 @@
     android:id="@+id/scrollAnalytics"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="@color/ig_bg_canvas"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingTop="12dp"
-    android:paddingBottom="96dp"
-    android:paddingHorizontal="16dp">
+    android:paddingBottom="@dimen/ig_dock_bottom_clearance"
+    android:paddingHorizontal="@dimen/ig_screen_padding_horizontal">
 
     <LinearLayout
         android:id="@+id/layoutAnalyticsContent"
@@ -18,17 +18,17 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Today's Focus & Usage Breakdown Card -->
+        <!-- 1. Today's Focus & Usage Breakdown Hero Card (Reference D Style) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardAnalyticsReport"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="20dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -36,67 +36,411 @@
                 android:orientation="vertical"
                 android:padding="20dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📊 Today's Focus Overview"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_analytics_chart"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TOTAL TIME USED"
-                            android:textColor="@color/text_secondary"
+                            android:text="TODAY'S FOCUS ANALYTICS"
+                            android:textColor="@color/ig_text_secondary"
                             android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08" />
 
                         <TextView
                             android:id="@+id/tvAnalyticsTodayTotal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="00:00"
-                            android:textColor="@color/accent_neon_blue"
-                            android:textSize="22sp"
+                            android:fontFamily="sans-serif-black"
+                            android:text="00h 00m 00s"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="28sp"
                             android:textStyle="bold" />
                     </LinearLayout>
+                </LinearLayout>
 
-                    <LinearLayout
+                <TextView
+                    android:id="@+id/tvAnalyticsScrollsTotal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_pill_version"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="5dp"
+                    android:text="🔥 Total Reels/Shorts Scrolled Today: 0"
+                    android:textColor="@color/ig_accent_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@color/ig_divider" />
+
+                <!-- Instagram Usage Bar -->
+                <TextView
+                    android:id="@+id/tvAnalyticsInstagram"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📷 Instagram: 0m (0%) • 🎬 0 scrolls"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="12.5sp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressAnalyticsInstagram"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
+                    app:trackColor="#232834"
+                    app:indicatorColor="@color/ig_accent_primary"
+                    app:trackCornerRadius="5dp"
+                    app:trackThickness="7dp" />
+
+                <!-- YouTube Usage Bar -->
+                <TextView
+                    android:id="@+id/tvAnalyticsYouTube"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="▶️ YouTube: 0m (0%) • 🎬 0 scrolls"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="12.5sp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressAnalyticsYouTube"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
+                    app:trackColor="#232834"
+                    app:indicatorColor="@color/ig_accent_amber"
+                    app:trackCornerRadius="5dp"
+                    app:trackThickness="7dp" />
+
+                <!-- Facebook Usage Bar -->
+                <TextView
+                    android:id="@+id/tvAnalyticsFacebook"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="👥 Facebook: 0m (0%) • 🎬 0 scrolls"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="12.5sp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressAnalyticsFacebook"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="14dp"
+                    app:trackColor="#232834"
+                    app:indicatorColor="@color/ig_accent_success"
+                    app:trackCornerRadius="5dp"
+                    app:trackThickness="7dp" />
+
+                <!-- TikTok Usage Bar -->
+                <TextView
+                    android:id="@+id/tvAnalyticsTikTok"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🎵 TikTok: 0m (0%) • 🎬 0 scrolls"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="12.5sp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressAnalyticsTikTok"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    app:trackColor="#232834"
+                    app:indicatorColor="@color/ig_accent_primary"
+                    app:trackCornerRadius="5dp"
+                    app:trackThickness="7dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 2. 7-Day Usage Vertical Bar Chart Card (Reference D Financial Chart Style) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:text="7-Day Usage Chart"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
 
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_pill_version"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="3dp"
+                        android:text="↗ WEEKLY TREND"
+                        android:textColor="@color/ig_accent_success"
+                        android:textSize="10.5sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 7 Vertical Bar Columns (#2EE59D / #D8FF3E fills over #232834 background columns) -->
+                <LinearLayout
+                    android:id="@+id/layout7DayChartBars"
+                    android:layout_width="match_parent"
+                    android:layout_height="130dp"
+                    android:layout_marginTop="16dp"
+                    android:gravity="bottom"
+                    android:orientation="horizontal"
+                    android:weightSum="7">
+
+                    <!-- Day -6 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay6"
+                                android:layout_width="match_parent"
+                                android:layout_height="20dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
                         <TextView
+                            android:id="@+id/tvBarLabel6"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TOTAL SCROLLS"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
+                            android:layout_marginTop="6dp"
+                            android:text="D-6"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
 
+                    <!-- Day -5 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay5"
+                                android:layout_width="match_parent"
+                                android:layout_height="35dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
                         <TextView
-                            android:id="@+id/tvAnalyticsScrollsTotal"
+                            android:id="@+id/tvBarLabel5"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="0"
-                            android:textColor="@color/accent_yellow"
-                            android:textSize="22sp"
+                            android:layout_marginTop="6dp"
+                            android:text="D-5"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Day -4 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay4"
+                                android:layout_width="match_parent"
+                                android:layout_height="50dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
+                        <TextView
+                            android:id="@+id/tvBarLabel4"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="D-4"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Day -3 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay3"
+                                android:layout_width="match_parent"
+                                android:layout_height="30dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
+                        <TextView
+                            android:id="@+id/tvBarLabel3"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="D-3"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Day -2 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay2"
+                                android:layout_width="match_parent"
+                                android:layout_height="25dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
+                        <TextView
+                            android:id="@+id/tvBarLabel2"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="D-2"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Day -1 -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay1"
+                                android:layout_width="match_parent"
+                                android:layout_height="40dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_success" />
+                        </FrameLayout>
+                        <TextView
+                            android:id="@+id/tvBarLabel1"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Yest"
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Today (Highlighted in Volt-Lime #D8FF3E) -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_horizontal|bottom"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="4dp">
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="100dp"
+                            android:background="@drawable/bg_input_surface">
+                            <View
+                                android:id="@+id/barDay0"
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:layout_gravity="bottom"
+                                android:background="@color/ig_accent_primary" />
+                        </FrameLayout>
+                        <TextView
+                            android:id="@+id/tvBarLabel0"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Today"
+                            android:textColor="@color/ig_accent_primary"
+                            android:textSize="10sp"
                             android:textStyle="bold" />
                     </LinearLayout>
                 </LinearLayout>
@@ -104,180 +448,106 @@
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:layout_marginTop="16dp"
-                    android:layout_marginBottom="16dp"
-                    android:background="@color/surface_variant" />
-
-                <!-- Instagram Usage Bar -->
-                <TextView
-                    android:id="@+id/tvAnalyticsInstagram"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Instagram: 0m / 30m"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressAnalyticsInstagram"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="14dp"
                     android:layout_marginBottom="12dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
-
-                <!-- YouTube Usage Bar -->
-                <TextView
-                    android:id="@+id/tvAnalyticsYouTube"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="YouTube: 0m / 45m"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressAnalyticsYouTube"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
-
-                <!-- Facebook Usage Bar -->
-                <TextView
-                    android:id="@+id/tvAnalyticsFacebook"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Facebook: 0m / 30m"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressAnalyticsFacebook"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="12dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
-
-                <!-- TikTok Usage Bar -->
-                <TextView
-                    android:id="@+id/tvAnalyticsTikTok"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="TikTok: 0m / 20m"
-                    android:textColor="@color/text_primary"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressAnalyticsTikTok"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    app:trackColor="@color/surface_variant"
-                    app:indicatorColor="@color/accent_neon_blue"
-                    app:trackCornerRadius="4dp"
-                    app:trackThickness="6dp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Weakness & Impulse Blocked Attempts Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardWeaknessLog"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="⚡ Impulse Attempts &amp; Weakness Log"
-                    android:textColor="@color/accent_red"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvWeaknessTotalToday"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="0 Blocked Attempts Today"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tvWeaknessAppBreakdown"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="No impulse violations detected yet."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/tvWeaknessImpulseLog"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Log: Clean focus streak active."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:fontFamily="monospace" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- 7-Day History Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="📅 7-Day Focus History"
-                    android:textColor="@color/text_primary"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
+                    android:background="@color/ig_divider" />
 
                 <TextView
                     android:id="@+id/tvAnalytics7DayReport"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input_surface"
+                    android:padding="12dp"
                     android:text="Loading 7-day focus report..."
-                    android:textColor="@color/text_secondary"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="11.5sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 3. Blocked Attempts & Weakness Log Card (Reference D Recent Transactions Style) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardWeaknessLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_lock"
+                            app:tint="@color/ig_accent_danger"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Blocked Attempts &amp; Weakness Log"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvWeaknessTotalToday"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="0 Blocked Attempts Today"
+                            android:textColor="@color/ig_accent_amber"
+                            android:textSize="13sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvWeaknessAppBreakdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="IG: 0  •  YT: 0  •  FB: 0  •  TT: 0"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/tvWeaknessImpulseLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input_surface"
+                    android:padding="12dp"
+                    android:text="✅ 0 Blocked Attempts Today — 100% Pure Discipline!"
+                    android:textColor="@color/ig_accent_success"
                     android:textSize="12sp"
                     android:fontFamily="monospace" />
             </LinearLayout>

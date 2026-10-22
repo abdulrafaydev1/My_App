@@ -4,91 +4,131 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary">
+    android:background="@color/ig_bg_canvas">
 
-    <!-- Top App Bar / Header -->
+    <!-- Top App Bar / Header (Inspired by References B & E) -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/bg_primary"
+        android:background="@color/ig_bg_canvas"
         app:elevation="0dp">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbarMain"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            app:contentInsetStart="16dp"
+            android:layout_height="68dp"
+            app:contentInsetStart="18dp"
+            app:contentInsetEnd="18dp"
             app:contentInsetStartWithNavigation="0dp"
             app:title=""
-            app:titleTextColor="@color/text_primary">
+            app:titleTextColor="@color/ig_text_primary">
 
+            <!-- Left Side: Status Subtitle above Bold Screen Title -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="start|center_vertical"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvToolbarSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ACTIVE PROTECTION SHIELD"
+                    android:textColor="@color/ig_text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08" />
 
                 <TextView
                     android:id="@+id/tvToolbarTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:fontFamily="sans-serif-black"
                     android:text="InstaGuard Pro"
-                    android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Right Side: v15.0 PRO Pill Badge + Circular 40dp Refresh Button -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tvToolbarBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginEnd="10dp"
                     android:background="@drawable/bg_pill_version"
-                    android:paddingHorizontal="8dp"
-                    android:paddingVertical="3dp"
-                    android:text="v12.1 PRO"
-                    android:textColor="@color/accent_neon_blue"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="v15.0 PRO"
+                    android:textColor="@color/ig_accent_primary"
                     android:textSize="11sp"
                     android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_circle_surface"
+                    android:contentDescription="@string/btn_refresh"
+                    android:padding="9dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_refresh"
+                    app:tint="@color/ig_accent_primary" />
             </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnRefresh"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_gravity="end"
-                android:layout_marginEnd="12dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_refresh"
-                app:tint="@color/accent_neon_blue"
-                android:contentDescription="@string/btn_refresh" />
         </androidx.appcompat.widget.Toolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Main Fragment / Tab Content Container -->
+    <!-- Main Fragment / Tab Content Container (Content scrolls smoothly underneath floating dock) -->
     <FrameLayout
         android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginBottom="68dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-    <!-- YouTube / Instagram Style Bottom Navigation Bar -->
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNavigationView"
+    <!-- Reference A Floating Translucent Pill Navigation Dock -->
+    <FrameLayout
+        android:id="@+id/floatingNavDockContainer"
         android:layout_width="match_parent"
-        android:layout_height="68dp"
+        android:layout_height="@dimen/ig_dock_height"
         android:layout_gravity="bottom"
-        android:background="@color/surface_card"
-        app:labelVisibilityMode="labeled"
-        app:itemIconSize="22dp"
-        app:itemTextAppearanceActive="@style/BottomNavLabel"
-        app:itemTextAppearanceInactive="@style/BottomNavLabel"
-        app:itemIconTint="@color/bottom_nav_color_selector"
-        app:itemTextColor="@color/bottom_nav_color_selector"
-        app:itemRippleColor="#3300E5FF"
-        app:elevation="16dp"
-        app:menu="@menu/bottom_nav_menu" />
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/bg_floating_nav_dock"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:elevation="20dp"
+        android:paddingHorizontal="6dp">
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNavigationView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            app:elevation="0dp"
+            app:itemActiveIndicatorStyle="@null"
+            app:itemBackground="@drawable/nav_item_pill_selector"
+            app:itemIconSize="22dp"
+            app:itemIconTint="@color/bottom_nav_color_selector"
+            app:itemPaddingBottom="8dp"
+            app:itemPaddingTop="8dp"
+            app:itemRippleColor="@android:color/transparent"
+            app:itemTextAppearanceActive="@style/BottomNavLabelActive"
+            app:itemTextAppearanceInactive="@style/BottomNavLabel"
+            app:itemTextColor="@color/bottom_nav_color_selector"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav_menu" />
+    </FrameLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

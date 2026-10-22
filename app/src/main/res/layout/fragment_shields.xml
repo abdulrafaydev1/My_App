@@ -5,12 +5,12 @@
     android:id="@+id/scrollShields"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="@color/ig_bg_canvas"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingTop="12dp"
-    android:paddingBottom="96dp"
-    android:paddingHorizontal="16dp">
+    android:paddingBottom="@dimen/ig_dock_bottom_clearance"
+    android:paddingHorizontal="@dimen/ig_screen_padding_horizontal">
 
     <LinearLayout
         android:id="@+id/layoutShieldsContent"
@@ -18,21 +18,22 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- AI Visual Shield Card -->
+        <!-- 1. AI Visual Auto-Skip Shield & Safe Browser Guard Hero Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardAiVisualShield"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="20dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1.5dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeWidth="1.2dp"
+            app:strokeColor="#40D8FF3E"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_card_hero_accent"
                 android:orientation="vertical"
                 android:padding="20dp">
 
@@ -42,19 +43,35 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield_lock"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="8dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:id="@+id/tvAiVisualShieldTitle"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="🛡️ AI Visual Shield"
-                            android:textColor="@color/text_primary"
-                            android:textSize="17sp"
+                            android:text="AI Visual &amp; Safe Browser Shield"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="16sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -63,7 +80,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="ACTIVE • TFLite Neural + ML Kit"
-                            android:textColor="@color/accent_neon_blue"
+                            android:textColor="@color/ig_accent_primary"
                             android:textSize="12sp"
                             android:textStyle="bold" />
                     </LinearLayout>
@@ -73,16 +90,16 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"
-                        app:thumbTint="@color/accent_neon_blue"
-                        app:trackTint="@color/surface_variant" />
+                        app:thumbTint="@color/ig_accent_primary"
+                        app:trackTint="#252A34" />
                 </LinearLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="On-device computer vision analyzes live video frames in real time with 0ms cloud latency."
-                    android:textColor="@color/text_secondary"
+                    android:layout_marginTop="10dp"
+                    android:text="On-device computer vision analyzes live video frames and Chrome/Google searches in real time with 0ms cloud latency."
+                    android:textColor="@color/ig_text_secondary"
                     android:textSize="13sp" />
 
                 <View
@@ -90,36 +107,52 @@
                     android:layout_height="1dp"
                     android:layout_marginTop="14dp"
                     android:layout_marginBottom="14dp"
-                    android:background="@color/surface_variant" />
+                    android:background="@color/ig_divider" />
 
-                <!-- Auto-Skip Toggle -->
+                <!-- Auto-Skip Suggestive Videos Toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_reels_clapper"
+                            app:tint="@color/ig_accent_amber"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="8dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="⏭️ Auto-Skip Suggestive Videos"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
+                            android:text="AI Visual Auto-Skip Shield"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="15sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Instantly swipes up on suggestive female content."
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
+                            android:text="Instantly swipes up on suggestive video content."
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <com.google.android.material.materialswitch.MaterialSwitch
@@ -127,16 +160,16 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"
-                        app:thumbTint="@color/accent_yellow"
-                        app:trackTint="@color/surface_variant" />
+                        app:thumbTint="@color/ig_accent_amber"
+                        app:trackTint="#252A34" />
                 </LinearLayout>
 
-                <!-- Live Diagnostic Status & Counters -->
+                <!-- Live Diagnostic Status & Chrome/Google Search Blocker Telemetry -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:background="@color/bg_primary"
+                    android:background="@drawable/bg_input_surface"
                     android:padding="12dp"
                     android:orientation="vertical">
 
@@ -144,8 +177,8 @@
                         android:id="@+id/tvScannerDiagnosticLive"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="⚡ Scanner Status: Normal Content Allowed"
-                        android:textColor="@color/text_primary"
+                        android:text="📡 HUD Status: Normal Content Allowed"
+                        android:textColor="@color/ig_text_primary"
                         android:textSize="12sp"
                         android:textStyle="bold" />
 
@@ -154,8 +187,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="⏭️ Videos Auto-Skipped Today: 0"
-                        android:textColor="@color/accent_yellow"
+                        android:text="🎬 Auto-Skipped Suggestive Reels: 0"
+                        android:textColor="@color/ig_accent_primary"
                         android:textSize="12sp" />
 
                     <TextView
@@ -163,144 +196,230 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="🚫 Explicit Searches Blocked Today: 0"
-                        android:textColor="@color/accent_red"
+                        android:text="🚫 Chrome &amp; Google Explicit Searches Blocked: 0"
+                        android:textColor="@color/ig_accent_amber"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Only Reels & Shorts Blocker Card -->
+        <!-- 2. Only Reels & Shorts Blocker Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardOnlyReelsShorts"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/ig_card_padding">
+
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_reels_clapper"
+                        app:tint="@color/ig_accent_primary"
+                        android:contentDescription="@null" />
+                </FrameLayout>
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="8dp"
+                    android:orientation="vertical">
 
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🎬 Only Reels &amp; Shorts Blocker"
-                            android:textColor="@color/text_primary"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Blocks addictive vertical shorts while allowing standard search, DMs, and long videos."
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchOnlyReelsShorts"
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        app:thumbTint="@color/accent_neon_blue"
-                        app:trackTint="@color/surface_variant" />
+                        android:text="Only Reels &amp; Shorts Blocker"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Blocks addictive vertical shorts while allowing standard DMs, search, and long-form videos."
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="13sp" />
                 </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchOnlyReelsShorts"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/ig_accent_primary"
+                    app:trackTint="#252A34" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Dopamine Dimmer Card -->
+        <!-- 3. Last 5-Minute Dopamine Killer Dimmer Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardDopamineDimmer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/ig_card_padding">
+
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_timer"
+                        app:tint="@color/ig_accent_amber"
+                        android:contentDescription="@null" />
+                </FrameLayout>
 
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="8dp"
+                    android:orientation="vertical">
 
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🎨 Dopamine Dimmer (Grayscale)"
-                            android:textColor="@color/text_primary"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Gradually desaturates screen to grayscale in the final 5 minutes of allowed app time."
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchDopamineDimmer"
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        app:thumbTint="@color/accent_neon_blue"
-                        app:trackTint="@color/surface_variant" />
+                        android:text="Last 5-Minute Dopamine Killer Dimmer"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Gradually dims and desaturates the screen in the final 5 minutes of allowed app time."
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="13sp" />
                 </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchDopamineDimmer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/ig_accent_primary"
+                    app:trackTint="#252A34" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Night Sleep Guard Card -->
+        <!-- 4. Night Sleep Guard (11:30 PM – 6:00 AM) Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardNightSleepGuard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="14dp"
-            app:cardCornerRadius="18dp"
+            android:layout_marginBottom="@dimen/ig_card_spacing"
+            app:cardCornerRadius="24dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/ig_card_padding">
+
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_icon_circle_surface">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_lock"
+                        app:tint="@color/ig_accent_primary"
+                        android:contentDescription="@null" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="8dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Night Sleep Guard (11:30 PM – 6:00 AM)"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Enforces strict lockdown during sleep hours. Requires 3-Stage Math Challenge + PIN to unlock."
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchNightSleepGuard"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbTint="@color/ig_accent_primary"
+                    app:trackTint="#252A34" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 5. Security & Master PIN Management Bento Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/ig_card_padding">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -308,82 +427,57 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
+                    <FrameLayout
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="@drawable/bg_icon_circle_surface">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/ic_shield"
+                            app:tint="@color/ig_accent_primary"
+                            android:contentDescription="@null" />
+                    </FrameLayout>
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
+                        android:layout_marginStart="12dp"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="🌙 Night Sleep Guard (11PM - 6AM)"
-                            android:textColor="@color/text_primary"
-                            android:textSize="15sp"
+                            android:text="Master Security PIN &amp; Anti-Cheat"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="16sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Enforces strict lockdown during bed hours. Requires Math Challenge or PIN to unlock."
-                            android:textColor="@color/text_secondary"
-                            android:textSize="12sp" />
+                            android:layout_marginTop="2dp"
+                            android:text="Set a 4-digit Master PIN to prevent impulse tampering or early unblocks."
+                            android:textColor="@color/ig_text_secondary"
+                            android:textSize="13sp" />
                     </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchNightSleepGuard"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        app:thumbTint="@color/accent_neon_blue"
-                        app:trackTint="@color/surface_variant" />
                 </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Security & PIN Management Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="24dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="@color/surface_variant"
-            app:cardBackgroundColor="@color/surface_card">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🔐 Master Security PIN &amp; Math Puzzles"
-                    android:textColor="@color/text_primary"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Set a 4-digit Master PIN to prevent impulse tampering, early unblocks, or setting changes."
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMasterPinSettings"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:text="⚙️ Configure Master PIN"
-                    android:textColor="#0B0F19"
+                    android:textAllCaps="false"
+                    android:textColor="@color/ig_text_on_accent"
                     android:textStyle="bold"
-                    app:cornerRadius="12dp"
-                    app:backgroundTint="@color/accent_neon_blue" />
+                    android:textSize="14sp"
+                    app:cornerRadius="24dp"
+                    app:backgroundTint="@color/ig_accent_primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

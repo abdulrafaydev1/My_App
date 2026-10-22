@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true">
+        <inset
+            android:drawable="@drawable/bg_floating_nav_item_active"
+            android:insetLeft="3dp"
+            android:insetTop="5dp"
+            android:insetRight="3dp"
+            android:insetBottom="5dp" />
+    </item>
+    <item android:state_selected="true">
+        <inset
+            android:drawable="@drawable/bg_floating_nav_item_active"
+            android:insetLeft="3dp"
+            android:insetTop="5dp"
+            android:insetRight="3dp"
+            android:insetBottom="5dp" />
+    </item>
+    <item android:drawable="@android:color/transparent" />
+</selector>

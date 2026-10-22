@@ -16,12 +16,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Tab 3: Shields Fragment (v12.0)
+ * Tab 4: Shields Fragment (v15.0 Obsidian & Volt-Lime Design System)
  * Central Command for All Active Defenses:
  * - AI Visual Shield & Safe Browser Guard (with Live HUD diagnostic)
  * - Auto-Skip Suggestive Content Switch
  * - Only Reels & Shorts Blocker (Allows IG DMs & YT Long Form)
- * - Last 5-Min Dopamine Dimmer Tint
+ * - Last 5-Min Dopamine Killer Dimmer
  * - Night Sleep Guard (11:30 PM – 6:00 AM) with Math + PIN Anti-Cheat
  * - Master PIN Setup & Management
  */
@@ -61,7 +61,7 @@ class ShieldsFragment : Fragment() {
             (activity as? MainActivity)?.showMasterPinSettingsDialog()
         }
 
-        binding.switchAiVisualShield.setOnCheckedChangeListener { buttonView, isChecked ->
+        binding.switchAiVisualShield.setOnCheckedChangeListener { _, isChecked ->
             val mainActivity = activity as? MainActivity ?: return@setOnCheckedChangeListener
             val guardManager = mainActivity.guardManager
             if (!isChecked) {
@@ -130,8 +130,7 @@ class ShieldsFragment : Fragment() {
     }
 
     fun refreshShieldsUI(guardManager: GuardManager) {
-        val ctx = context ?: return
-        if (_binding == null) return
+        if (context == null || _binding == null) return
 
         val isVisualEnabled = guardManager.prefs.isAiVisualShieldEnabled
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -159,14 +158,14 @@ class ShieldsFragment : Fragment() {
 
         if (isVisualEnabled) {
             binding.tvAiVisualShieldStatus.text = "ACTIVE • Auto-skips suggestive content & terminates adult searches"
-            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#00E5FF"))
+            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#D8FF3E"))
         } else {
             binding.tvAiVisualShieldStatus.text = "PAUSED • Protection disabled"
-            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#8B949E"))
+            binding.tvAiVisualShieldStatus.setTextColor(Color.parseColor("#9BA3B0"))
         }
 
         binding.tvAutoSkippedCount.text = "🎬 Auto-Skipped Suggestive Reels: $autoSkipped"
-        binding.tvBrowserBlockedCount.text = "🚫 Blocked Browser Searches/Videos: $browserBlocked"
+        binding.tvBrowserBlockedCount.text = "🚫 Chrome & Google Explicit Searches Blocked: $browserBlocked"
         binding.tvScannerDiagnosticLive.text = "📡 HUD Status: ${AppBlockerService.currentScannerDiagnosticText}"
     }
 

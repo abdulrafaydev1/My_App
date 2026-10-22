@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="@color/lock_bg">
+    android:background="@color/ig_bg_canvas">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -13,16 +13,15 @@
         android:orientation="vertical"
         android:gravity="center_horizontal"
         android:paddingHorizontal="18dp"
-        android:paddingVertical="20dp">
+        android:paddingVertical="24dp">
 
-        <!-- Top Badge -->
+        <!-- Top Pill Badge -->
         <LinearLayout
             android:id="@+id/layoutTopBadge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/ic_launcher_background"
-            android:backgroundTint="@color/lock_surface"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input_surface"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="14dp"
@@ -32,7 +31,7 @@
                 android:layout_width="16dp"
                 android:layout_height="16dp"
                 android:src="@drawable/ic_shield"
-                app:tint="@color/lock_accent_red"
+                app:tint="@color/ig_accent_primary"
                 android:contentDescription="@null" />
 
             <TextView
@@ -41,23 +40,23 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="INSTAGUARD FOCUS SHIELD"
-                android:textColor="@color/lock_text_secondary"
+                android:textColor="@color/ig_accent_primary"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.08" />
         </LinearLayout>
 
-        <!-- Centered Glass-Style Lock Card -->
+        <!-- Centered Obsidian Bento Lock Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardLockContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            app:cardCornerRadius="24dp"
+            app:cardCornerRadius="26dp"
             app:cardElevation="0dp"
             app:strokeWidth="1.5dp"
-            app:strokeColor="@color/lock_accent_red"
-            app:cardBackgroundColor="@color/lock_surface">
+            app:strokeColor="@color/ig_accent_danger"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -70,10 +69,9 @@
                 <!-- Pulsing Lock Icon Container -->
                 <FrameLayout
                     android:id="@+id/frameLockIcon"
-                    android:layout_width="88dp"
-                    android:layout_height="88dp"
-                    android:background="@drawable/ic_launcher_background"
-                    android:backgroundTint="#261A1D"
+                    android:layout_width="84dp"
+                    android:layout_height="84dp"
+                    android:background="@drawable/bg_icon_circle_surface"
                     android:padding="20dp">
 
                     <ImageView
@@ -81,7 +79,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:src="@drawable/ic_lock"
-                        app:tint="@color/lock_accent_red"
+                        app:tint="@color/ig_accent_danger"
                         android:contentDescription="@string/lock_screen_title" />
                 </FrameLayout>
 
@@ -90,11 +88,12 @@
                     android:id="@+id/tvLockTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginTop="18dp"
+                    android:fontFamily="sans-serif-black"
                     android:text="App is Locked!"
                     android:textAlignment="center"
-                    android:textColor="@color/lock_text_primary"
-                    android:textSize="22sp"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="24sp"
                     android:textStyle="bold" />
 
                 <!-- Subtitle -->
@@ -106,7 +105,7 @@
                     android:paddingHorizontal="12dp"
                     android:text="30-Minute limit reached. Take a 5-Hour focus break."
                     android:textAlignment="center"
-                    android:textColor="@color/lock_text_secondary"
+                    android:textColor="@color/ig_text_secondary"
                     android:textSize="13sp"
                     android:lineSpacingExtra="3dp" />
 
@@ -114,12 +113,12 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="22dp"
-                    app:cardCornerRadius="18dp"
+                    android:layout_marginTop="20dp"
+                    app:cardCornerRadius="20dp"
                     app:cardElevation="0dp"
                     app:strokeWidth="1dp"
-                    app:strokeColor="#2A364F"
-                    app:cardBackgroundColor="@color/lock_timer_bg">
+                    app:strokeColor="@color/ig_border_subtle"
+                    app:cardBackgroundColor="#14171D">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -127,18 +126,18 @@
                         android:gravity="center"
                         android:orientation="vertical"
                         android:paddingVertical="18dp"
-                        android:paddingHorizontal="10dp">
+                        android:paddingHorizontal="12dp">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="REMAINING 5-HOUR COOLDOWN"
-                            android:textColor="@color/lock_text_secondary"
+                            android:text="REMAINING FOCUS COOLDOWN"
+                            android:textColor="@color/ig_text_secondary"
                             android:textSize="11sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.08" />
 
-                        <!-- Countdown Display in Coral Red -->
+                        <!-- Countdown Display -->
                         <TextView
                             android:id="@+id/tvCountdownTimer"
                             android:layout_width="match_parent"
@@ -150,7 +149,7 @@
                             android:singleLine="true"
                             android:ellipsize="none"
                             android:text="04:59:59.980"
-                            android:textColor="#F87171"
+                            android:textColor="@color/ig_accent_danger"
                             android:textSize="28sp"
                             android:textStyle="bold"
                             app:autoSizeTextType="uniform"
@@ -164,50 +163,52 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="6dp"
                             android:text="Unlocks at 08:30 PM"
-                            android:textColor="#FCA5A5"
-                            android:textSize="12sp" />
+                            android:textColor="@color/ig_accent_amber"
+                            android:textSize="12.5sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- v8.0 Feature 4: Blocked Attempts Today Badge -->
+                <!-- Blocked Attempts Today Badge -->
                 <TextView
                     android:id="@+id/tvBlockedAttemptsBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_input_surface"
                     android:fontFamily="monospace"
-                    android:paddingHorizontal="12dp"
+                    android:paddingHorizontal="14dp"
                     android:paddingVertical="6dp"
                     android:text="🚫 Blocked Attempts Today for App: 0"
-                    android:textColor="#FCA5A5"
+                    android:textColor="@color/ig_accent_amber"
                     android:textSize="11.5sp"
                     android:textStyle="bold" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Feature 4: Motivational & Focus Quotes Card -->
+        <!-- Motivational & Focus Quotes Bento Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardMotivationalQuote"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="14dp"
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="22dp"
             app:cardElevation="0dp"
             app:strokeWidth="1dp"
-            app:strokeColor="#2A364F"
-            app:cardBackgroundColor="@color/lock_surface">
+            app:strokeColor="@color/ig_border_subtle"
+            app:cardBackgroundColor="@color/ig_bg_card">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:gravity="center_horizontal"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="14dp">
+                android:paddingHorizontal="18dp"
+                android:paddingVertical="16dp">
 
                 <TextView
                     android:id="@+id/tvMotivationalQuote"
@@ -215,8 +216,8 @@
                     android:layout_height="wrap_content"
                     android:text="“Discipline is choosing between what you want now and what you want most.”"
                     android:textAlignment="center"
-                    android:textColor="#E2E8F0"
-                    android:textSize="13sp"
+                    android:textColor="@color/ig_text_primary"
+                    android:textSize="13.5sp"
                     android:textStyle="italic"
                     android:lineSpacingExtra="2dp" />
 
@@ -224,33 +225,34 @@
                     android:id="@+id/tvQuoteAuthor"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:text="💡 FOCUS WISDOM • TAP FOR NEXT"
-                    android:textColor="#94A3B8"
-                    android:textSize="10sp"
+                    android:textColor="@color/ig_accent_primary"
+                    android:textSize="10.5sp"
                     android:letterSpacing="0.08"
                     android:textStyle="bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Primary Action Button: Go Back to Home -->
+        <!-- Primary Action Pill Button: Go Back to Home (#D8FF3E Volt-Lime with #0B0D10 dark text) -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnGoHome"
             android:layout_width="match_parent"
             android:layout_height="54dp"
             android:layout_marginTop="18dp"
             android:text="@string/btn_go_home"
-            android:textColor="#FFFFFF"
+            android:textAllCaps="false"
+            android:textColor="@color/ig_text_on_accent"
             android:textSize="15sp"
             android:textStyle="bold"
-            app:backgroundTint="@color/lock_accent_red"
-            app:cornerRadius="16dp"
+            app:backgroundTint="@color/ig_accent_primary"
+            app:cornerRadius="27dp"
             app:icon="@drawable/ic_home"
             app:iconGravity="textStart"
             app:iconPadding="10dp"
-            app:iconTint="#FFFFFF" />
+            app:iconTint="@color/ig_text_on_accent" />
 
-        <!-- Feature 3: Secondary Emergency Bypass Button -->
+        <!-- Secondary Emergency Bypass Pill Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnEmergencyUnlock"
             style="@style/Widget.Material3.Button.OutlinedButton"
@@ -259,12 +261,14 @@
             android:layout_marginTop="10dp"
             android:layout_marginBottom="16dp"
             android:text="🚨 Emergency 5-Min Unlock (1/Day)"
-            android:textColor="#FCA5A5"
+            android:textAllCaps="false"
+            android:textColor="@color/ig_accent_danger"
             android:textSize="13sp"
             android:textStyle="bold"
-            app:strokeColor="#7F1D1D"
+            app:backgroundTint="#202530"
+            app:strokeColor="#40FF2E54"
             app:strokeWidth="1.2dp"
-            app:cornerRadius="16dp" />
+            app:cornerRadius="24dp" />
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

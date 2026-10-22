@@ -1,60 +1,96 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Modern OLED Dark Glass Theme Palette (v12.0) -->
-    <color name="bg_primary">#0B0F19</color>
-    <color name="surface_card">#161B22</color>
-    <color name="surface_variant">#21262D</color>
-    <color name="accent_red">#FF1744</color>
-    <color name="accent_yellow">#FFD600</color>
-    <color name="accent_neon_blue">#00E5FF</color>
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#8B949E</color>
-    <color name="text_tertiary">#6E7681</color>
+    <!-- ========================================================================= -->
+    <!-- v15.0 Master Design System Palette: Obsidian, Matte Graphite & Volt-Lime  -->
+    <!-- ========================================================================= -->
+
+    <!-- Core Obsidian & Graphite Surfaces (References B, D, E) -->
+    <color name="ig_bg_canvas">#0B0D10</color>
+    <color name="ig_bg_elevated">#14171D</color>
+    <color name="ig_bg_card">#161920</color>
+    <color name="ig_bg_card_secondary">#1E222B</color>
+    <color name="ig_bg_floating_dock">#E61C1F26</color>
+    <color name="ig_bg_dock_active_pill">#2E333E</color>
+
+    <!-- Borders & Dividers -->
+    <color name="ig_border_subtle">#1FFFFFFF</color>
+    <color name="ig_border_dock">#33FFFFFF</color>
+    <color name="ig_divider">#14FFFFFF</color>
+
+    <!-- Typography Hierarchy -->
+    <color name="ig_text_primary">#F5F7FA</color>
+    <color name="ig_text_secondary">#9BA3B0</color>
+    <color name="ig_text_muted">#636B78</color>
+    <color name="ig_text_on_accent">#0B0D10</color>
+    <color name="ig_nav_inactive">#C9D1D9</color>
+
+    <!-- Unified Accent System (Volt-Lime Primary + Warm Amber & Crimson Status) -->
+    <color name="ig_accent_primary">#D8FF3E</color>
+    <color name="ig_accent_primary_dim">#26D8FF3E</color>
+    <color name="ig_accent_amber">#FF8A1E</color>
+    <color name="ig_accent_amber_dim">#26FF8A1E</color>
+    <color name="ig_accent_danger">#FF2E54</color>
+    <color name="ig_accent_danger_dim">#26FF2E54</color>
+    <color name="ig_accent_success">#2EE59D</color>
+    <color name="ig_accent_success_dim">#262EE59D</color>
+
+    <!-- ========================================================================= -->
+    <!-- Backward-Compatible Aliases Mapped to v15.0 Design Tokens                 -->
+    <!-- ========================================================================= -->
+    <color name="bg_primary">#0B0D10</color>
+    <color name="surface_card">#161920</color>
+    <color name="surface_variant">#232834</color>
+    <color name="accent_red">#FF2E54</color>
+    <color name="accent_yellow">#FF8A1E</color>
+    <color name="accent_neon_blue">#D8FF3E</color>
+    <color name="text_primary">#F5F7FA</color>
+    <color name="text_secondary">#9BA3B0</color>
+    <color name="text_tertiary">#636B78</color>
 
     <!-- Border & Divider Tokens -->
-    <color name="border_subtle">#21262D</color>
-    <color name="border_card">#30363D</color>
-    <color name="divider">#21262D</color>
-    <color name="surface_elevated">#1C2128</color>
+    <color name="border_subtle">#1FFFFFFF</color>
+    <color name="border_card">#29FFFFFF</color>
+    <color name="divider">#14FFFFFF</color>
+    <color name="surface_elevated">#1E222B</color>
 
     <!-- Brand / Primary -->
-    <color name="primary">#00E5FF</color>
-    <color name="primary_dark">#00B0FF</color>
-    <color name="primary_light">#E0F7FA</color>
-    <color name="accent">#FFD600</color>
+    <color name="primary">#D8FF3E</color>
+    <color name="primary_dark">#B8E020</color>
+    <color name="primary_light">#F2FFB8</color>
+    <color name="accent">#FF8A1E</color>
 
     <!-- Status Colors -->
-    <color name="status_green">#10B981</color>
-    <color name="status_green_bg">#064E3B</color>
-    <color name="status_red">#FF1744</color>
-    <color name="status_red_bg">#7F1D1D</color>
-    <color name="status_amber">#FFD600</color>
-    <color name="status_amber_bg">#78350F</color>
+    <color name="status_green">#2EE59D</color>
+    <color name="status_green_bg">#262EE59D</color>
+    <color name="status_red">#FF2E54</color>
+    <color name="status_red_bg">#26FF2E54</color>
+    <color name="status_amber">#FF8A1E</color>
+    <color name="status_amber_bg">#26FF8A1E</color>
 
-    <!-- Cyber-Dark Theme Palette -->
-    <color name="cyber_bg">#0B0F19</color>
-    <color name="cyber_surface">#161B22</color>
-    <color name="cyber_stroke">#21262D</color>
-    <color name="cyber_text_primary">#FFFFFF</color>
-    <color name="cyber_text_secondary">#8B949E</color>
-    <color name="cyber_timer_allowed">#00E5FF</color>
-    <color name="cyber_timer_locked">#FF1744</color>
-    <color name="cyber_accent_green">#10B981</color>
-    <color name="cyber_accent_red">#FF1744</color>
-    <color name="cyber_accent_amber">#FFD600</color>
+    <!-- Cyber-Dark Theme Palette Aliases -->
+    <color name="cyber_bg">#0B0D10</color>
+    <color name="cyber_surface">#161920</color>
+    <color name="cyber_stroke">#232834</color>
+    <color name="cyber_text_primary">#F5F7FA</color>
+    <color name="cyber_text_secondary">#9BA3B0</color>
+    <color name="cyber_timer_allowed">#D8FF3E</color>
+    <color name="cyber_timer_locked">#FF2E54</color>
+    <color name="cyber_accent_green">#2EE59D</color>
+    <color name="cyber_accent_red">#FF2E54</color>
+    <color name="cyber_accent_amber">#FF8A1E</color>
 
-    <!-- Backward Compatibility Colors -->
-    <color name="background_light">#0B0F19</color>
-    <color name="surface_light">#161B22</color>
-    <color name="text_primary_light">#FFFFFF</color>
-    <color name="text_secondary_light">#8B949E</color>
-    <color name="divider_light">#21262D</color>
+    <!-- Legacy Light Aliases -->
+    <color name="background_light">#0B0D10</color>
+    <color name="surface_light">#161920</color>
+    <color name="text_primary_light">#F5F7FA</color>
+    <color name="text_secondary_light">#9BA3B0</color>
+    <color name="divider_light">#14FFFFFF</color>
 
-    <!-- Lock Screen (Pure Deep Focus Dark Theme) -->
-    <color name="lock_bg">#0B0F19</color>
-    <color name="lock_surface">#161B22</color>
-    <color name="lock_accent_red">#FF1744</color>
-    <color name="lock_text_primary">#FFFFFF</color>
-    <color name="lock_text_secondary">#8B949E</color>
-    <color name="lock_timer_bg">#111827</color>
+    <!-- Lock Screen (Obsidian Focus Theme) -->
+    <color name="lock_bg">#0B0D10</color>
+    <color name="lock_surface">#161920</color>
+    <color name="lock_accent_red">#FF2E54</color>
+    <color name="lock_text_primary">#F5F7FA</color>
+    <color name="lock_text_secondary">#9BA3B0</color>
+    <color name="lock_timer_bg">#14171D</color>
 </resources>

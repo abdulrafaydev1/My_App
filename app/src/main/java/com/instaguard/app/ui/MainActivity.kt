@@ -16,15 +16,19 @@ import android.speech.tts.TextToSpeech
 import android.text.InputFilter
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.instaguard.app.InstaGuardWidgetProvider
 import com.instaguard.app.R
 import com.instaguard.app.alarm.AlarmFragment
@@ -36,9 +40,9 @@ import com.instaguard.app.util.UsageStatsHelper
 import java.util.Locale
 
 /**
- * Main Activity for InstaGuard Pro v12.1 (Premium UI Suite).
- * Features a YouTube/Instagram-inspired persistent Bottom Navigation Bar,
- * OLED Dark-Glass theme, seamless 0-lag fragment caching,
+ * Main Activity for InstaGuard Pro v15.0 (Obsidian & Volt-Lime Design System).
+ * Features a Floating Translucent Pill Navigation Dock (Reference A),
+ * Bento-Grid screen layouts, smooth 220ms FastOutSlowInInterpolator transitions,
  * real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
  */
 class MainActivity : AppCompatActivity() {
@@ -48,6 +52,7 @@ class MainActivity : AppCompatActivity() {
         private set
 
     private val uiHandler = Handler(Looper.getMainLooper())
+    private val navInterpolator = FastOutSlowInInterpolator()
     private var previewTts: TextToSpeech? = null
     private var isPreviewTtsReady = false
 
@@ -116,6 +121,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupBottomNavigation() {
         binding.bottomNavigationView.setOnItemSelectedListener { item ->
+            // Animate selected tab capsule with 200ms scale pulse (0.94f -> 1.0f)
+            animateSelectedDockTab(item.itemId)
+
             val targetFragment = when (item.itemId) {
                 R.id.nav_home -> homeFragment
                 R.id.nav_analytics -> analyticsFragment
@@ -128,11 +136,13 @@ class MainActivity : AppCompatActivity() {
             if (targetFragment != null && targetFragment != activeFragment) {
                 val current = activeFragment ?: homeFragment
                 supportFragmentManager.beginTransaction()
-                    .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
                     .hide(current)
                     .show(targetFragment)
-                    .commit()
+                    .commitNowAllowingStateLoss()
                 activeFragment = targetFragment
+
+                // Smooth 220ms incoming screen transition (alpha 0f -> 1f, translationY 12dp -> 0dp)
+                animateIncomingFragmentContent(targetFragment)
 
                 // Refresh target fragment immediately on tab switch
                 if (targetFragment == alarmFragment) {
@@ -144,13 +154,56 @@ class MainActivity : AppCompatActivity() {
                 true
             }
         }
+
+        // Reselecting the already-active tab smoothly scrolls the current screen to the top without resetting state
+        binding.bottomNavigationView.setOnItemReselectedListener { item ->
+            animateSelectedDockTab(item.itemId)
+            scrollActiveFragmentToTop()
+        }
+    }
+
+    private fun animateSelectedDockTab(itemId: Int) {
+        binding.bottomNavigationView.findViewById<View>(itemId)?.let { tabView ->
+            tabView.animate().cancel()
+            tabView.scaleX = 0.94f
+            tabView.scaleY = 0.94f
+            tabView.animate()
+                .scaleX(1.0f)
+                .scaleY(1.0f)
+                .setDuration(200L)
+                .setInterpolator(navInterpolator)
+                .start()
+        }
+    }
+
+    private fun animateIncomingFragmentContent(fragment: Fragment) {
+        fragment.view?.let { rootView ->
+            rootView.animate().cancel()
+            rootView.alpha = 0f
+            rootView.translationY = dpToPx(12f).toFloat()
+            rootView.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220L)
+                .setInterpolator(navInterpolator)
+                .start()
+        }
+    }
+
+    private fun scrollActiveFragmentToTop() {
+        val rootView = activeFragment?.view ?: return
+        when (rootView) {
+            is NestedScrollView -> rootView.smoothScrollTo(0, 0)
+            is ScrollView -> rootView.smoothScrollTo(0, 0)
+        }
     }
 
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v14.7 PRO"
+        binding.tvToolbarBadge.text = "v15.0 PRO"
         binding.btnRefresh.setOnClickListener {
+            it.animate().rotationBy(360f).setDuration(350L).setInterpolator(navInterpolator).start()
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()
             InstaGuardWidgetProvider.updateAllWidgets(this)
@@ -340,16 +393,16 @@ class MainActivity : AppCompatActivity() {
 
         val tvInfo = TextView(this).apply {
             text = "Enter your 4-digit Master PIN to disable AI Visual Shield & Safe Browser Guard."
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 13f
         }
 
         val etPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(4))
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
         }
 
         container.addView(tvInfo)
@@ -402,9 +455,9 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             textSize = 22f
             typeface = Typeface.MONOSPACE
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "Answer"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
         }
         container.addView(input)
 
@@ -440,9 +493,9 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             textSize = 22f
             typeface = Typeface.MONOSPACE
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
             filters = arrayOf(InputFilter.LengthFilter(4))
         }
         container.addView(input)
@@ -482,43 +535,43 @@ class MainActivity : AppCompatActivity() {
 
         val tvCurrentLabel = TextView(this).apply {
             text = "Current 4-Digit PIN:"
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 13f
         }
         val etCurrentPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(4))
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
         }
 
         val tvNewLabel = TextView(this).apply {
             text = "New 4-Digit PIN:"
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 13f
             setPadding(0, dpToPx(12f), 0, 0)
         }
         val etNewPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(4))
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
         }
 
         val tvConfirmLabel = TextView(this).apply {
             text = "Confirm New PIN:"
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 13f
             setPadding(0, dpToPx(12f), 0, 0)
         }
         val etConfirmPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(4))
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
         }
 
         container.addView(tvCurrentLabel)
@@ -622,16 +675,16 @@ class MainActivity : AppCompatActivity() {
 
         val tvInfo = TextView(this).apply {
             text = "Enter your 4-digit Master PIN to unlock a 5-minute Maintenance Window. This temporarily pauses anti-tamper shields for uninstallation or system management."
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 13f
         }
 
         val etPin = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             filters = arrayOf(InputFilter.LengthFilter(4))
-            setTextColor(Color.WHITE)
+            setTextColor(Color.parseColor("#F5F7FA"))
             hint = "••••"
-            setHintTextColor(Color.parseColor("#484F58"))
+            setHintTextColor(Color.parseColor("#636B78"))
             setPadding(0, dpToPx(12f), 0, dpToPx(8f))
         }
 
@@ -664,28 +717,28 @@ class MainActivity : AppCompatActivity() {
 
         val tvBlockedLabel = TextView(this).apply {
             text = "Voice Message When App Is Blocked / Locked:"
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 12.5f
         }
         val etBlockedVoice = EditText(this).apply {
             setText(guardManager.prefs.customVoiceBlockedMsg)
             hint = "Voice message when app is blocked..."
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#484F58"))
+            setTextColor(Color.parseColor("#F5F7FA"))
+            setHintTextColor(Color.parseColor("#636B78"))
             textSize = 14f
         }
 
         val tvWarningLabel = TextView(this).apply {
             text = "Extra Message on 10m / 5m / 1m Warning:"
-            setTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.parseColor("#9BA3B0"))
             textSize = 12.5f
             setPadding(0, dpToPx(12f), 0, 0)
         }
         val etWarningVoice = EditText(this).apply {
             setText(guardManager.prefs.customVoiceWarningMsg)
             hint = "Extra message on 10m/5m/1m warning..."
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#484F58"))
+            setTextColor(Color.parseColor("#F5F7FA"))
+            setHintTextColor(Color.parseColor("#636B78"))
             textSize = 14f
         }
 
