@@ -120,6 +120,8 @@
                 <action android:name="com.instaguard.app.ACTION_TRIGGER_ALARM" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
@@ -134,7 +136,7 @@
             android:showWhenLocked="true"
             android:excludeFromRecents="true"
             android:taskAffinity="com.instaguard.app.alarm"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Material3.Dark.NoActionBar" />
 
         <!-- v13.2 Dedicated Foreground Alarm Ringing Service -->

@@ -149,7 +149,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v14.6 PRO"
+        binding.tvToolbarBadge.text = "v14.7 PRO"
         binding.btnRefresh.setOnClickListener {
             AppBlockerService.syncFromPrefs(this)
             refreshAllFragments()
@@ -174,6 +174,18 @@ class MainActivity : AppCompatActivity() {
             if (am != null && !am.canScheduleExactAlarms()) {
                 try {
                     val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+            if (nm != null && !nm.canUseFullScreenIntent()) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
                         data = Uri.parse("package:$packageName")
                     }
                     startActivity(intent)

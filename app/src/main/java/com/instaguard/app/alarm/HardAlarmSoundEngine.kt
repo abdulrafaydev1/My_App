@@ -5,9 +5,12 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -50,6 +53,7 @@ object HardAlarmSoundEngine {
     private var audioWakeLock: PowerManager.WakeLock? = null
     private var playbackThread: Thread? = null
     private var audioTrack: AudioTrack? = null
+    private var fallbackMediaPlayer: MediaPlayer? = null
     private var previousVolume: Int = -1
     private val mainHandler = Handler(Looper.getMainLooper())
     private var previewStopRunnable: Runnable? = null
@@ -104,13 +108,23 @@ object HardAlarmSoundEngine {
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
             .build()
 
-        val track = AudioTrack(
-            attributes,
-            format,
-            minBufSize,
-            AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-        )
+        var track: AudioTrack? = null
+        try {
+            track = AudioTrack(
+                attributes,
+                format,
+                minBufSize,
+                AudioTrack.MODE_STREAM,
+                AudioManager.AUDIO_SESSION_ID_GENERATE
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        if (track == null || track.state != AudioTrack.STATE_INITIALIZED) {
+            startFallbackMediaPlayer(context, loop)
+            return
+        }
 
         audioTrack = track
         isPlaying = true
@@ -122,6 +136,9 @@ object HardAlarmSoundEngine {
                 track.play()
             } catch (e: Exception) {
                 e.printStackTrace()
+                mainHandler.post {
+                    startFallbackMediaPlayer(context, loop)
+                }
                 return@Thread
             }
 
@@ -191,6 +208,8 @@ object HardAlarmSoundEngine {
         }
         audioTrack = null
 
+        stopFallbackMediaPlayer()
+
         try {
             if (audioWakeLock?.isHeld == true) {
                 audioWakeLock?.release()
@@ -210,6 +229,41 @@ object HardAlarmSoundEngine {
             }
             previousVolume = -1
         }
+    }
+
+    private fun startFallbackMediaPlayer(context: Context, loop: Boolean) {
+        try {
+            stopFallbackMediaPlayer()
+            val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: Settings.System.DEFAULT_ALARM_ALERT_URI
+
+            fallbackMediaPlayer = MediaPlayer().apply {
+                setDataSource(context.applicationContext, alarmUri)
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                isLooping = loop
+                prepare()
+                start()
+            }
+            isPlaying = true
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopFallbackMediaPlayer() {
+        try {
+            fallbackMediaPlayer?.stop()
+            fallbackMediaPlayer?.release()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        fallbackMediaPlayer = null
     }
 
     fun isCurrentlyPlaying(): Boolean = isPlaying

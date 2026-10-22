@@ -11,8 +11,8 @@ android {
         applicationId "com.instaguard.app"
         minSdk 26
         targetSdk 34
-        versionCode 50
-        versionName "14.6"
+        versionCode 51
+        versionName "14.7"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

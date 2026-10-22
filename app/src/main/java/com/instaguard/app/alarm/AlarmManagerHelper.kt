@@ -173,7 +173,7 @@ object AlarmManagerHelper {
      * Calculates the exact next millisecond epoch trigger time for an alarm.
      */
     fun calculateNextTriggerMs(alarm: SmartAlarm): Long {
-        val now = Calendar.getInstance()
+        val now = System.currentTimeMillis()
         val target = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, alarm.hour)
             set(Calendar.MINUTE, alarm.minute)
@@ -183,7 +183,7 @@ object AlarmManagerHelper {
 
         if (alarm.repeatDays.isEmpty()) {
             // One-time alarm
-            if (target.timeInMillis <= now.timeInMillis) {
+            if (target.timeInMillis <= now) {
                 target.add(Calendar.DAY_OF_YEAR, 1)
             }
             return target.timeInMillis
@@ -206,14 +206,14 @@ object AlarmManagerHelper {
             }
 
             if (alarm.repeatDays.contains(mappedDay)) {
-                if (checkCal.timeInMillis > now.timeInMillis) {
+                if (checkCal.timeInMillis > now) {
                     return checkCal.timeInMillis
                 }
             }
         }
 
         // Fallback
-        if (target.timeInMillis <= now.timeInMillis) {
+        if (target.timeInMillis <= now) {
             target.add(Calendar.DAY_OF_YEAR, 1)
         }
         return target.timeInMillis
@@ -230,6 +230,7 @@ object AlarmManagerHelper {
         val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}")
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
@@ -273,9 +274,15 @@ object AlarmManagerHelper {
         )
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    android.util.Log.w("AlarmManagerHelper", "Exact alarm permission check false for alarm ${alarm.id}")
+                }
+            }
             val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, showPendingIntent)
             alarmManager.setAlarmClock(clockInfo, pendingIntent)
         } catch (e: SecurityException) {
+            android.util.Log.e("AlarmManagerHelper", "SecurityException on setAlarmClock: ${e.message}")
             // In case exact alarm permission is missing on Android 12+
             try {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
@@ -298,6 +305,7 @@ object AlarmManagerHelper {
         val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/${alarm.id}/snooze")
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND or Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             putExtra(EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
@@ -343,10 +351,21 @@ object AlarmManagerHelper {
         )
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    android.util.Log.w("AlarmManagerHelper", "Exact alarm permission check false for snooze alarm ${alarm.id}")
+                }
+            }
             val clockInfo = AlarmManager.AlarmClockInfo(triggerMs, showPendingIntent)
             alarmManager.setAlarmClock(clockInfo, pendingIntent)
+        } catch (e: SecurityException) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+            } catch (ex: Exception) {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+            }
         } catch (e: Exception) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+            e.printStackTrace()
         }
     }
 
@@ -356,6 +375,7 @@ object AlarmManagerHelper {
         val requestCode = (alarmId.hashCode() and 0x7FFFFFFF)
         val triggerIntent = Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_TRIGGER_ALARM
+            data = android.net.Uri.parse("instaguard://alarm/$alarmId")
             putExtra(EXTRA_ALARM_ID, alarmId)
             putExtra("alarm_id", alarmId)
         }
