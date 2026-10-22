@@ -1,9 +1,14 @@
 package com.instaguard.app.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -17,15 +22,20 @@ import android.text.InputFilter
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.doOnLayout
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
@@ -40,10 +50,10 @@ import com.instaguard.app.util.UsageStatsHelper
 import java.util.Locale
 
 /**
- * Main Activity for InstaGuard Pro v15.0 (Obsidian & Volt-Lime Design System).
- * Features a Floating Translucent Pill Navigation Dock (Reference A),
- * Bento-Grid screen layouts, smooth 220ms FastOutSlowInInterpolator transitions,
- * real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
+ * Main Activity for InstaGuard Pro v15.1 (Obsidian & Volt-Lime Design System).
+ * Features a Floating Translucent Pill Navigation Dock with synchronized continuous
+ * directional dual-screen horizontal sliding and gliding active pill indicator (iOS App Store Style),
+ * Bento-Grid screen layouts, real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -62,6 +72,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var shieldsFragment: ShieldsFragment
     private lateinit var settingsFragment: SettingsFragment
     private var activeFragment: Fragment? = null
+
+    private lateinit var tabContainers: Array<View>
+    private lateinit var navTabItemViews: Array<View>
+    private var activeNavAnimator: ValueAnimator? = null
+    private var currentTabIndex: Int = 0
+    private var isProgrammaticNavSelection: Boolean = false
+    private val iosSmoothInterpolator = PathInterpolator(0.22f, 1.0f, 0.36f, 1.0f)
+    private val argbEvaluator = ArgbEvaluator()
 
     private val liveTickerRunnable = object : Runnable {
         override fun run() {
@@ -89,6 +107,7 @@ class MainActivity : AppCompatActivity() {
         setupFragments(savedInstanceState)
         setupBottomNavigation()
         setupToolbar()
+        setupBackNavigation()
     }
 
     private fun setupFragments(savedInstanceState: Bundle?) {
@@ -102,106 +121,371 @@ class MainActivity : AppCompatActivity() {
 
             fm.beginTransaction()
                 .add(R.id.fragmentContainer, homeFragment, "HOME")
-                .add(R.id.fragmentContainer, analyticsFragment, "ANALYTICS").hide(analyticsFragment)
-                .add(R.id.fragmentContainer, alarmFragment, "ALARM").hide(alarmFragment)
-                .add(R.id.fragmentContainer, shieldsFragment, "SHIELDS").hide(shieldsFragment)
-                .add(R.id.fragmentContainer, settingsFragment, "SETTINGS").hide(settingsFragment)
-                .commit()
-
-            activeFragment = homeFragment
+                .add(R.id.fragmentContainer, analyticsFragment, "ANALYTICS")
+                .add(R.id.fragmentContainer, alarmFragment, "ALARM")
+                .add(R.id.fragmentContainer, shieldsFragment, "SHIELDS")
+                .add(R.id.fragmentContainer, settingsFragment, "SETTINGS")
+                .commitNowAllowingStateLoss()
         } else {
             homeFragment = fm.findFragmentByTag("HOME") as? HomeDashboardFragment ?: HomeDashboardFragment()
             analyticsFragment = fm.findFragmentByTag("ANALYTICS") as? AnalyticsFragment ?: AnalyticsFragment()
             alarmFragment = fm.findFragmentByTag("ALARM") as? AlarmFragment ?: AlarmFragment()
             shieldsFragment = fm.findFragmentByTag("SHIELDS") as? ShieldsFragment ?: ShieldsFragment()
             settingsFragment = fm.findFragmentByTag("SETTINGS") as? SettingsFragment ?: SettingsFragment()
-            activeFragment = homeFragment
+            fm.executePendingTransactions()
+        }
+
+        activeFragment = homeFragment
+        tabContainers = arrayOf(
+            homeFragment.requireView(),
+            analyticsFragment.requireView(),
+            alarmFragment.requireView(),
+            shieldsFragment.requireView(),
+            settingsFragment.requireView()
+        )
+
+        for (i in tabContainers.indices) {
+            val v = tabContainers[i]
+            v.translationX = 0f
+            v.alpha = 1f
+            v.setLayerType(View.LAYER_TYPE_NONE, null)
+            v.visibility = if (i == currentTabIndex) View.VISIBLE else View.GONE
         }
     }
 
     private fun setupBottomNavigation() {
-        binding.bottomNavigationView.setOnItemSelectedListener { item ->
-            // Animate selected tab capsule with 200ms scale pulse (0.94f -> 1.0f)
-            animateSelectedDockTab(item.itemId)
+        navTabItemViews = arrayOf(
+            binding.bottomNavigationView.findViewById(R.id.nav_home),
+            binding.bottomNavigationView.findViewById(R.id.nav_analytics),
+            binding.bottomNavigationView.findViewById(R.id.nav_alarm),
+            binding.bottomNavigationView.findViewById(R.id.nav_shields),
+            binding.bottomNavigationView.findViewById(R.id.nav_settings)
+        )
 
-            val targetFragment = when (item.itemId) {
-                R.id.nav_home -> homeFragment
-                R.id.nav_analytics -> analyticsFragment
-                R.id.nav_alarm -> alarmFragment
-                R.id.nav_shields -> shieldsFragment
-                R.id.nav_settings -> settingsFragment
-                else -> null
-            }
-
-            if (targetFragment != null && targetFragment != activeFragment) {
-                val current = activeFragment ?: homeFragment
-                supportFragmentManager.beginTransaction()
-                    .hide(current)
-                    .show(targetFragment)
-                    .commitNowAllowingStateLoss()
-                activeFragment = targetFragment
-
-                // Smooth 220ms incoming screen transition (alpha 0f -> 1f, translationY 12dp -> 0dp)
-                animateIncomingFragmentContent(targetFragment)
-
-                // Refresh target fragment immediately on tab switch
-                if (targetFragment == alarmFragment) {
-                    checkAndRequestAlarmOptimizations()
+        binding.bottomNavigationView.doOnLayout {
+            val initialTab = navTabItemViews.getOrNull(currentTabIndex)
+            if (initialTab != null && initialTab.width > 0) {
+                binding.navSlidingPillIndicator.layoutParams = binding.navSlidingPillIndicator.layoutParams.apply {
+                    width = initialTab.width
                 }
-                refreshActiveTab(targetFragment)
-                true
-            } else {
-                true
+                binding.navSlidingPillIndicator.translationX = getTabPillX(currentTabIndex)
+            }
+            updateTabColorsImmediate(currentTabIndex)
+        }
+
+        binding.bottomNavigationView.setOnItemSelectedListener { item ->
+            if (isProgrammaticNavSelection) return@setOnItemSelectedListener true
+            val targetIndex = getIndexForMenuId(item.itemId)
+            if (targetIndex != -1) {
+                switchTabWithContinuousSlide(targetIndex, animate = true)
+            }
+            true
+        }
+
+        binding.bottomNavigationView.setOnItemReselectedListener { item ->
+            val index = getIndexForMenuId(item.itemId)
+            if (index != -1) {
+                scrollActiveTabToTop(index)
+            }
+        }
+    }
+
+    private fun setupBackNavigation() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (currentTabIndex != 0) {
+                    switchTabWithContinuousSlide(0, animate = true)
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+    }
+
+    private fun switchTabWithContinuousSlide(targetIndex: Int, animate: Boolean = true) {
+        if (!::tabContainers.isInitialized || targetIndex !in tabContainers.indices) return
+
+        if (targetIndex == currentTabIndex && activeNavAnimator?.isRunning != true) {
+            // Reselected current tab: keep state and smoothly scroll to top
+            scrollActiveTabToTop(targetIndex)
+            return
+        }
+
+        val previousIndex = currentTabIndex
+        val outgoingView = tabContainers[previousIndex]
+        val incomingView = tabContainers[targetIndex]
+        val direction = if (targetIndex > previousIndex) 1f else -1f
+
+        // 1. Capture live in-flight pill position before cancelling any running animation
+        val startPillX = binding.navSlidingPillIndicator.translationX
+        val startPillWidth = binding.navSlidingPillIndicator.width.takeIf { it > 0 }
+            ?: navTabItemViews.getOrNull(previousIndex)?.width ?: 0
+
+        activeNavAnimator?.cancel()
+
+        // 2. Ensure any other non-participating tab views are cleanly hidden and reset
+        for (i in tabContainers.indices) {
+            if (i != previousIndex && i != targetIndex) {
+                tabContainers[i].visibility = View.GONE
+                tabContainers[i].translationX = 0f
+                tabContainers[i].alpha = 1f
+                tabContainers[i].setLayerType(View.LAYER_TYPE_NONE, null)
             }
         }
 
-        // Reselecting the already-active tab smoothly scrolls the current screen to the top without resetting state
-        binding.bottomNavigationView.setOnItemReselectedListener { item ->
-            animateSelectedDockTab(item.itemId)
-            scrollActiveFragmentToTop()
+        currentTabIndex = targetIndex
+        val targetTabView = navTabItemViews[targetIndex]
+        val targetPillX = getTabPillX(targetIndex)
+        val targetPillWidth = targetTabView.width
+
+        // Keep BottomNavigationView selectedItemId in sync without re-triggering listener
+        isProgrammaticNavSelection = true
+        binding.bottomNavigationView.selectedItemId = getMenuIdForIndex(targetIndex)
+        isProgrammaticNavSelection = false
+
+        // Update activeFragment reference immediately
+        activeFragment = when (targetIndex) {
+            0 -> homeFragment
+            1 -> analyticsFragment
+            2 -> alarmFragment
+            3 -> shieldsFragment
+            4 -> settingsFragment
+            else -> homeFragment
+        }
+
+        val viewportWidth = (binding.fragmentContainer.width.takeIf { it > 0 }
+            ?: resources.displayMetrics.widthPixels).toFloat()
+
+        if (!animate || viewportWidth <= 0f) {
+            outgoingView.visibility = View.GONE
+            outgoingView.translationX = 0f
+            outgoingView.alpha = 1f
+            outgoingView.setLayerType(View.LAYER_TYPE_NONE, null)
+
+            incomingView.visibility = View.VISIBLE
+            incomingView.translationX = 0f
+            incomingView.alpha = 1f
+            incomingView.setLayerType(View.LAYER_TYPE_NONE, null)
+
+            binding.navSlidingPillIndicator.translationX = targetPillX
+            if (targetPillWidth > 0) {
+                binding.navSlidingPillIndicator.layoutParams = binding.navSlidingPillIndicator.layoutParams.apply {
+                    width = targetPillWidth
+                }
+            }
+            updateTabColorsImmediate(targetIndex)
+            onTabDestinationEntered(targetIndex)
+            return
+        }
+
+        // 3. Prepare both screens for simultaneous hardware-accelerated horizontal slide
+        outgoingView.visibility = View.VISIBLE
+        incomingView.visibility = View.VISIBLE
+        incomingView.bringToFront()
+
+        outgoingView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        incomingView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+        val startOutgoingX = outgoingView.translationX
+        val endOutgoingX = -direction * viewportWidth
+        val startIncomingX = direction * viewportWidth
+        val endIncomingX = 0f
+
+        outgoingView.translationX = startOutgoingX
+        incomingView.translationX = startIncomingX
+        incomingView.alpha = 1f
+
+        // Scale duration slightly if skipping multiple tabs (250ms for adjacent, 290ms for multi-tab jump)
+        val tabDistance = kotlin.math.abs(targetIndex - previousIndex)
+        val durationMs = if (tabDistance > 1) 290L else 250L
+
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs
+            interpolator = iosSmoothInterpolator
+
+            addUpdateListener { anim ->
+                val fraction = anim.animatedValue as Float
+
+                // A. Synchronized Dual-Screen Horizontal Slide
+                outgoingView.translationX = startOutgoingX + (endOutgoingX - startOutgoingX) * fraction
+                incomingView.translationX = startIncomingX + (endIncomingX - startIncomingX) * fraction
+
+                // Subtle depth dimming on outgoing screen so transition feels 3D & effortless
+                outgoingView.alpha = 1f - (0.18f * fraction)
+
+                // B. Synchronized Gliding Pill Indicator Position & Width
+                binding.navSlidingPillIndicator.translationX = startPillX + (targetPillX - startPillX) * fraction
+                if (startPillWidth != targetPillWidth && targetPillWidth > 0) {
+                    val currentW = (startPillWidth + (targetPillWidth - startPillWidth) * fraction).toInt()
+                    if (binding.navSlidingPillIndicator.layoutParams.width != currentW) {
+                        binding.navSlidingPillIndicator.layoutParams.width = currentW
+                        binding.navSlidingPillIndicator.requestLayout()
+                    }
+                }
+
+                // C. Smooth Color Cross-Fade on Tab Icons & Labels
+                blendTabColors(previousIndex, targetIndex, fraction)
+            }
+
+            addListener(object : AnimatorListenerAdapter() {
+                private var wasCancelled = false
+
+                override fun onAnimationCancel(animation: Animator) {
+                    wasCancelled = true
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    outgoingView.setLayerType(View.LAYER_TYPE_NONE, null)
+                    incomingView.setLayerType(View.LAYER_TYPE_NONE, null)
+
+                    if (!wasCancelled) {
+                        outgoingView.visibility = View.GONE
+                        outgoingView.translationX = 0f
+                        outgoingView.alpha = 1f
+
+                        incomingView.visibility = View.VISIBLE
+                        incomingView.translationX = 0f
+                        incomingView.alpha = 1f
+
+                        binding.navSlidingPillIndicator.translationX = targetPillX
+                        updateTabColorsImmediate(targetIndex)
+                        onTabDestinationEntered(targetIndex)
+                    }
+                }
+            })
+        }
+
+        activeNavAnimator = animator
+        animator.start()
+    }
+
+    private fun getTabPillX(index: Int): Float {
+        val tabView = navTabItemViews.getOrNull(index) ?: return 0f
+        var x = tabView.left.toFloat()
+        var parent = tabView.parent as? View
+        while (parent != null && parent != binding.bottomNavigationView && parent != binding.floatingNavDockContainer) {
+            x += parent.left.toFloat()
+            parent = parent.parent as? View
+        }
+        return x
+    }
+
+    private fun getMenuIdForIndex(index: Int): Int {
+        return when (index) {
+            0 -> R.id.nav_home
+            1 -> R.id.nav_analytics
+            2 -> R.id.nav_alarm
+            3 -> R.id.nav_shields
+            4 -> R.id.nav_settings
+            else -> R.id.nav_home
         }
     }
 
-    private fun animateSelectedDockTab(itemId: Int) {
-        binding.bottomNavigationView.findViewById<View>(itemId)?.let { tabView ->
-            tabView.animate().cancel()
-            tabView.scaleX = 0.94f
-            tabView.scaleY = 0.94f
-            tabView.animate()
-                .scaleX(1.0f)
-                .scaleY(1.0f)
-                .setDuration(200L)
-                .setInterpolator(navInterpolator)
-                .start()
+    private fun getIndexForMenuId(menuId: Int): Int {
+        return when (menuId) {
+            R.id.nav_home -> 0
+            R.id.nav_analytics -> 1
+            R.id.nav_alarm -> 2
+            R.id.nav_shields -> 3
+            R.id.nav_settings -> 4
+            else -> -1
         }
     }
 
-    private fun animateIncomingFragmentContent(fragment: Fragment) {
-        fragment.view?.let { rootView ->
-            rootView.animate().cancel()
-            rootView.alpha = 0f
-            rootView.translationY = dpToPx(12f).toFloat()
-            rootView.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(220L)
-                .setInterpolator(navInterpolator)
-                .start()
+    private fun applyTabColor(tabIndex: Int, color: Int) {
+        val tabItem = navTabItemViews.getOrNull(tabIndex) as? ViewGroup ?: return
+        fun applyRecursively(view: View) {
+            when (view) {
+                is ImageView -> {
+                    view.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+                }
+                is TextView -> {
+                    view.setTextColor(color)
+                }
+                is ViewGroup -> {
+                    for (c in 0 until view.childCount) {
+                        applyRecursively(view.getChildAt(c))
+                    }
+                }
+            }
+        }
+        applyRecursively(tabItem)
+    }
+
+    private fun updateTabColorsImmediate(targetIndex: Int) {
+        val activeColor = ContextCompat.getColor(this, R.color.ig_accent_amber)
+        val inactiveColor = ContextCompat.getColor(this, R.color.ig_nav_inactive)
+
+        for (i in navTabItemViews.indices) {
+            val color = if (i == targetIndex) activeColor else inactiveColor
+            applyTabColor(i, color)
         }
     }
 
-    private fun scrollActiveFragmentToTop() {
-        val rootView = activeFragment?.view ?: return
+    private fun blendTabColors(previousIndex: Int, targetIndex: Int, fraction: Float) {
+        val activeColor = ContextCompat.getColor(this, R.color.ig_accent_amber)
+        val inactiveColor = ContextCompat.getColor(this, R.color.ig_nav_inactive)
+
+        val outgoingColor = argbEvaluator.evaluate(fraction, activeColor, inactiveColor) as Int
+        val incomingColor = argbEvaluator.evaluate(fraction, inactiveColor, activeColor) as Int
+
+        applyTabColor(previousIndex, outgoingColor)
+        applyTabColor(targetIndex, incomingColor)
+
+        for (i in navTabItemViews.indices) {
+            if (i != previousIndex && i != targetIndex) {
+                applyTabColor(i, inactiveColor)
+            }
+        }
+    }
+
+    private fun scrollActiveTabToTop(tabIndex: Int) {
+        val rootView = tabContainers.getOrNull(tabIndex) ?: return
         when (rootView) {
             is NestedScrollView -> rootView.smoothScrollTo(0, 0)
             is ScrollView -> rootView.smoothScrollTo(0, 0)
+            is ViewGroup -> {
+                val nested = findScrollView(rootView)
+                if (nested is NestedScrollView) nested.smoothScrollTo(0, 0)
+                else if (nested is ScrollView) nested.smoothScrollTo(0, 0)
+            }
         }
+    }
+
+    private fun findScrollView(view: View): View? {
+        if (view is NestedScrollView || view is ScrollView) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val found = findScrollView(view.getChildAt(i))
+                if (found != null) return found
+            }
+        }
+        return null
+    }
+
+    private fun onTabDestinationEntered(targetIndex: Int) {
+        val targetFragment = when (targetIndex) {
+            0 -> homeFragment
+            1 -> analyticsFragment
+            2 -> alarmFragment
+            3 -> shieldsFragment
+            4 -> settingsFragment
+            else -> homeFragment
+        }
+        activeFragment = targetFragment
+
+        if (targetFragment == alarmFragment) {
+            checkAndRequestAlarmOptimizations()
+        }
+        refreshActiveTab(targetFragment)
     }
 
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v15.0 PRO"
+        binding.tvToolbarBadge.text = "v15.1 PRO"
         binding.btnRefresh.setOnClickListener {
             it.animate().rotationBy(360f).setDuration(350L).setInterpolator(navInterpolator).start()
             AppBlockerService.syncFromPrefs(this)

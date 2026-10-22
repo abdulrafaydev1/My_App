@@ -70,7 +70,7 @@
                     android:background="@drawable/bg_pill_version"
                     android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
-                    android:text="v15.0 PRO"
+                    android:text="v15.1 PRO"
                     android:textColor="@color/ig_accent_primary"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -90,11 +90,13 @@
         </androidx.appcompat.widget.Toolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Main Fragment / Tab Content Container (Content scrolls smoothly underneath floating dock) -->
+    <!-- Main Fragment / Tab Content Container (Hardware-clipped horizontal screen viewport) -->
     <FrameLayout
         android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="true"
+        android:clipToPadding="true"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <!-- Reference A Floating Translucent Pill Navigation Dock -->
@@ -111,6 +113,15 @@
         android:elevation="20dp"
         android:paddingHorizontal="6dp">
 
+        <!-- Dedicated Gliding Pill Indicator (Single shared background capsule positioned behind the 5 tab items) -->
+        <View
+            android:id="@+id/navSlidingPillIndicator"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="start|center_vertical"
+            android:layout_marginVertical="6dp"
+            android:background="@drawable/bg_floating_nav_item_active" />
+
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/bottomNavigationView"
             android:layout_width="match_parent"
@@ -118,7 +129,7 @@
             android:background="@android:color/transparent"
             app:elevation="0dp"
             app:itemActiveIndicatorStyle="@null"
-            app:itemBackground="@drawable/nav_item_pill_selector"
+            app:itemBackground="@null"
             app:itemIconSize="22dp"
             app:itemIconTint="@color/bottom_nav_color_selector"
             app:itemPaddingBottom="8dp"
