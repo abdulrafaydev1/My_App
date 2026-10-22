@@ -80,7 +80,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 // 3. Start the Foreground Service that immediately plays the alarm sound
                 val serviceIntent = Intent(context, AlarmRingingService::class.java).apply {
-                    action = AlarmRingingService.ACTION_START_ALARM
+                    this.action = AlarmRingingService.ACTION_START_ALARM
                     putExtras(intent)
                 }
                 ContextCompat.startForegroundService(context, serviceIntent)

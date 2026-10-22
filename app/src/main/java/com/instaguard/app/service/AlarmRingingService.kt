@@ -146,7 +146,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
 
         // 6. Launch full-screen AlarmRingingActivity
         val ringingIntent = Intent(this, AlarmRingingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra(AlarmManagerHelper.EXTRA_IS_TEST, isTest)
@@ -197,7 +197,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
 
     private fun buildForegroundNotification(alarm: SmartAlarm, isTest: Boolean, isSnooze: Boolean): Notification {
         val fullScreenIntent = Intent(this, AlarmRingingActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
             putExtra(AlarmManagerHelper.EXTRA_IS_TEST, isTest)
@@ -211,7 +211,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         )
 
         val dismissIntent = Intent(this, AlarmRingingService::class.java).apply {
-            action = ACTION_DISMISS_ALARM
+            this.action = ACTION_DISMISS_ALARM
             putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
         }
@@ -234,7 +234,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setContentIntent(fullScreenPendingIntent)
             .addAction(
-                R.drawable.ic_stop_hand,
+                R.drawable.ic_alarm_clock,
                 "Dismiss / Stop Alarm",
                 dismissPendingIntent
             )
