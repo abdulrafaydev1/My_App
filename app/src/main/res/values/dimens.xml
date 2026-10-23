@@ -8,7 +8,7 @@
     <dimen name="ig_card_radius_large">26dp</dimen>
     <dimen name="ig_card_radius_medium">20dp</dimen>
     <dimen name="ig_card_radius_small">14dp</dimen>
-    <dimen name="ig_dock_height">68dp</dimen>
-    <dimen name="ig_dock_radius">34dp</dimen>
+    <dimen name="ig_dock_height">64dp</dimen>
+    <dimen name="ig_dock_radius">32dp</dimen>
     <dimen name="ig_dock_bottom_clearance">104dp</dimen>
 </resources>

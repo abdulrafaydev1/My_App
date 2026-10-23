@@ -50,7 +50,7 @@ import com.instaguard.app.util.UsageStatsHelper
 import java.util.Locale
 
 /**
- * Main Activity for InstaGuard Pro v15.2 (Obsidian & Volt-Lime Design System).
+ * Main Activity for InstaGuard Pro v15.3 (Obsidian & Volt-Lime Design System).
  * Features a Floating Translucent Pill Navigation Dock with synchronized continuous
  * directional dual-screen horizontal sliding and gliding active pill indicator (iOS App Store Style),
  * Bento-Grid screen layouts, real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
@@ -213,14 +213,18 @@ class MainActivity : AppCompatActivity() {
     private fun setupBottomNavigation() {
         binding.floatingNavDockContainer.post {
             try {
+                adjustBottomNavLabels()
                 val initialTab = getNavTabItemView(currentTabIndex)
                 if (initialTab != null && initialTab.width > 0) {
+                    val insetX = dpToPx(4f)
+                    val insetW = dpToPx(8f)
+                    val pillWidth = maxOf(0, initialTab.width - insetW)
                     val lp = binding.navSlidingPillIndicator.layoutParams
                     if (lp != null) {
-                        lp.width = initialTab.width
+                        lp.width = pillWidth
                         binding.navSlidingPillIndicator.layoutParams = lp
                     }
-                    binding.navSlidingPillIndicator.translationX = getTabPillX(currentTabIndex)
+                    binding.navSlidingPillIndicator.translationX = getTabPillX(currentTabIndex) + insetX
                 }
                 updateTabColorsImmediate(currentTabIndex)
                 ensureTabScreensVisibility()
@@ -242,6 +246,29 @@ class MainActivity : AppCompatActivity() {
             val index = getIndexForMenuId(item.itemId)
             if (index != -1) {
                 scrollActiveTabToTop(index)
+            }
+        }
+    }
+
+    private fun adjustBottomNavLabels() {
+        try {
+            val shiftY = -3f * resources.displayMetrics.density
+            for (i in 0..4) {
+                val tabItem = getNavTabItemView(i) as? ViewGroup ?: continue
+                adjustLabelsInView(tabItem, shiftY)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun adjustLabelsInView(view: View, shiftY: Float) {
+        if (view is TextView) {
+            view.includeFontPadding = false
+            view.translationY = shiftY
+        } else if (view is ViewGroup) {
+            for (c in 0 until view.childCount) {
+                adjustLabelsInView(view.getChildAt(c), shiftY)
             }
         }
     }
@@ -283,11 +310,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val direction = if (targetIndex > previousIndex) 1f else -1f
+        val insetX = dpToPx(4f)
+        val insetW = dpToPx(8f)
 
         // 1. Capture live in-flight pill position before cancelling running animation
         val startPillX = binding.navSlidingPillIndicator.translationX
         val startPillWidth = binding.navSlidingPillIndicator.width.takeIf { it > 0 }
-            ?: (getNavTabItemView(previousIndex)?.width ?: 0)
+            ?: maxOf(0, (getNavTabItemView(previousIndex)?.width ?: 0) - insetW)
 
         try {
             activeNavAnimator?.cancel()
@@ -309,8 +338,8 @@ class MainActivity : AppCompatActivity() {
 
         currentTabIndex = targetIndex
         val targetTabView = getNavTabItemView(targetIndex)
-        val targetPillX = getTabPillX(targetIndex)
-        val targetPillWidth = targetTabView?.width ?: 0
+        val targetPillX = getTabPillX(targetIndex) + insetX
+        val targetPillWidth = maxOf(0, (targetTabView?.width ?: 0) - insetW)
 
         // Keep BottomNavigationView selectedItemId in sync without re-triggering listener
         isProgrammaticNavSelection = true
@@ -344,6 +373,7 @@ class MainActivity : AppCompatActivity() {
                     binding.navSlidingPillIndicator.layoutParams = lp
                 }
             }
+            adjustBottomNavLabels()
             updateTabColorsImmediate(targetIndex)
             onTabDestinationEntered(targetIndex)
             return
@@ -414,6 +444,7 @@ class MainActivity : AppCompatActivity() {
                         incomingView.alpha = 1f
 
                         binding.navSlidingPillIndicator.translationX = targetPillX
+                        adjustBottomNavLabels()
                         updateTabColorsImmediate(targetIndex)
                         onTabDestinationEntered(targetIndex)
                     }
@@ -562,7 +593,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v15.2 PRO"
+        binding.tvToolbarBadge.text = "v15.3 PRO"
         binding.btnRefresh.setOnClickListener {
             it.animate().rotationBy(360f).setDuration(350L).setInterpolator(navInterpolator).start()
             AppBlockerService.syncFromPrefs(this)
@@ -684,6 +715,7 @@ class MainActivity : AppCompatActivity() {
             refreshAllFragments()
             InstaGuardWidgetProvider.updateAllWidgets(this)
             ensureTabScreensVisibility()
+            adjustBottomNavLabels()
             updateTabColorsImmediate(currentTabIndex)
         } catch (e: Exception) {
             e.printStackTrace()

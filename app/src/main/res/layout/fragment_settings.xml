@@ -499,7 +499,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="InstaGuard Pro v15.2 • Obsidian &amp; Volt Design System"
+                    android:text="InstaGuard Pro v15.3 • Obsidian &amp; Volt Design System"
                     android:textColor="@color/ig_text_primary"
                     android:textSize="14sp"
                     android:textStyle="bold" />
