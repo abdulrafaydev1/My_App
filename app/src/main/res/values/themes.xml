@@ -35,4 +35,9 @@
         <item name="android:textStyle">bold</item>
         <item name="android:maxLines">1</item>
     </style>
+
+    <!-- Transparent BottomNavigationView Active Indicator Style -->
+    <style name="Widget.InstaGuard.BottomNavigationView.ActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@android:color/transparent</item>
+    </style>
 </resources>

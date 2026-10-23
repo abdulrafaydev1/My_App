@@ -129,7 +129,7 @@
             android:background="@android:color/transparent"
             app:elevation="0dp"
             app:itemBackground="@android:color/transparent"
-            app:itemActiveIndicatorColor="@android:color/transparent"
+            app:itemActiveIndicatorStyle="@style/Widget.InstaGuard.BottomNavigationView.ActiveIndicator"
             app:itemIconSize="22dp"
             app:itemIconTint="@color/bottom_nav_color_selector"
             app:itemPaddingBottom="8dp"
