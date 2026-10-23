@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InstaGuard Pro v15.3 — Live Interactive Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ig-canvas: #0B0D10;
+      --ig-elevated: #14171D;
+      --ig-card: #161920;
+      --ig-card-secondary: #1E222B;
+      --ig-dock-bg: rgba(28, 31, 38, 0.92);
+      --ig-dock-pill: #2E333F;
+      --ig-accent: #D8FF3E;
+      --ig-amber: #FF8A1E;
+      --ig-danger: #FF2E54;
+      --ig-success: #2EE59D;
+      --ig-text-primary: #F5F7FA;
+      --ig-text-secondary: #9BA3B0;
+      --ig-border: rgba(255, 255, 255, 0.08);
+      --ig-border-strong: rgba(255, 255, 255, 0.16);
+      --ig-dock-border: rgba(255, 255, 255, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 20%, #151922 0%, #080A0D 100%);
+      color: var(--ig-text-primary);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      overflow-x: hidden;
+    }
+
+    /* Outer Studio Frame */
+    .studio-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+      max-width: 900px;
+    }
+
+    .studio-header {
+      text-align: center;
+    }
+
+    .studio-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(216, 255, 62, 0.12);
+      border: 1px solid rgba(216, 255, 62, 0.3);
+      color: var(--ig-accent);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .studio-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+    }
+
+    .studio-subtitle {
+      font-size: 13px;
+      color: var(--ig-text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Device Mockup Wrapper (iPhone 14 / Pixel 8 Form Factor: 390px x 844px) */
+    .device-chassis {
+      position: relative;
+      width: 390px;
+      height: 844px;
+      background: #000000;
+      border-radius: 54px;
+      box-shadow:
+        0 0 0 3px #2A2E38,
+        0 0 0 10px #12141A,
+        0 24px 60px rgba(0, 0, 0, 0.85),
+        0 8px 24px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Dynamic Island */
+    .dynamic-island {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 116px;
+      height: 28px;
+      background: #000000;
+      border-radius: 20px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+    }
+
+    .island-camera {
+      width: 10px;
+      height: 10px;
+      background: #0E1015;
+      border-radius: 50%;
+      box-shadow: inset 0 0 2px rgba(255,255,255,0.4);
+    }
+
+    .island-sensor {
+      width: 6px;
+      height: 6px;
+      background: #080A0D;
+      border-radius: 50%;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      height: 44px;
+      padding: 12px 24px 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 700;
+      color: #FFFFFF;
+      z-index: 90;
+      background: var(--ig-canvas);
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    /* App Header / Toolbar */
+    .app-toolbar {
+      height: 64px;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--ig-canvas);
+      z-index: 50;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .toolbar-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toolbar-subtitle {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: var(--ig-text-secondary);
+      text-transform: uppercase;
+    }
+
+    .toolbar-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ig-text-primary);
+      margin-top: 1px;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .toolbar-badge {
+      background: rgba(216, 255, 62, 0.15);
+      border: 1px solid rgba(216, 255, 62, 0.3);
+      color: var(--ig-accent);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+
+    .btn-refresh {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #232834;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ig-accent);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .btn-refresh:active {
+      transform: scale(0.92) rotate(180deg);
+    }
+
+    /* Main Viewport Container (Dual-Screen Sliding Viewport) */
+    .viewport-container {
+      position: relative;
+      flex: 1;
+      overflow: hidden; /* android:clipChildren="true" */
+      background: var(--ig-canvas);
+    }
+
+    .screen-tab {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 14px 18px 104px 18px; /* 104dp bottom clearance for floating dock */
+      display: none;
+      scrollbar-width: none;
+    }
+
+    .screen-tab::-webkit-scrollbar {
+      display: none;
+    }
+
+    .screen-tab.active {
+      display: block;
+      transform: translateX(0);
+    }
+
+    /* Common Card Styles */
+    .ig-card {
+      background: var(--ig-card);
+      border-radius: 24px;
+      border: 1px solid var(--ig-border);
+      padding: 18px;
+      margin-bottom: 12px;
+      transition: transform 0.15s ease;
+    }
+
+    .hero-card {
+      background: linear-gradient(135deg, #1B2114 0%, #14171D 100%);
+      border: 1.2px solid rgba(216, 255, 62, 0.28);
+      border-radius: 26px;
+      padding: 20px;
+    }
+
+    .badge-pill {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .badge-volt {
+      background: rgba(216, 255, 62, 0.15);
+      border: 1px solid rgba(216, 255, 62, 0.3);
+      color: var(--ig-accent);
+    }
+
+    .badge-emerald {
+      background: rgba(46, 229, 157, 0.15);
+      border: 1px solid rgba(46, 229, 157, 0.3);
+      color: var(--ig-success);
+    }
+
+    .badge-amber {
+      background: rgba(255, 138, 30, 0.15);
+      border: 1px solid rgba(255, 138, 30, 0.3);
+      color: var(--ig-amber);
+    }
+
+    /* Metric Bento Grid */
+    .bento-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .bento-tile {
+      background: var(--ig-card);
+      border: 1px solid var(--ig-border);
+      border-radius: 20px;
+      padding: 16px;
+    }
+
+    .bento-number {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #FFFFFF;
+      margin-top: 4px;
+    }
+
+    .bento-label {
+      font-size: 12px;
+      color: var(--ig-text-secondary);
+      font-weight: 600;
+    }
+
+    /* App Rows */
+    .app-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .app-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .app-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #232834;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .app-info {
+      flex: 1;
+      margin-left: 12px;
+    }
+
+    .app-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    .app-usage {
+      font-size: 12px;
+      color: var(--ig-text-secondary);
+    }
+
+    /* Switch Component */
+    .ig-switch {
+      position: relative;
+      width: 48px;
+      height: 28px;
+      background: #2A2F3D;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .ig-switch.active {
+      background: var(--ig-accent);
+    }
+
+    .ig-switch-thumb {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    }
+
+    .ig-switch.active .ig-switch-thumb {
+      transform: translateX(20px);
+      background: #0B0D10;
+    }
+
+    /* Pill Buttons */
+    .btn-pill-primary {
+      background: var(--ig-accent);
+      color: #0B0D10;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 12px 20px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: transform 0.15s ease, filter 0.15s ease;
+      width: 100%;
+    }
+
+    .btn-pill-primary:active {
+      transform: scale(0.97);
+      filter: brightness(0.9);
+    }
+
+    .btn-pill-secondary {
+      background: #202530;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .btn-pill-secondary:active {
+      background: #282E3C;
+    }
+
+    /* Day Circles */
+    .day-circle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .day-circle {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      background: #202530;
+      color: #8C94A0;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .day-circle.active {
+      background: var(--ig-accent);
+      color: #0B0D10;
+      border: 1px solid rgba(216, 255, 62, 0.5);
+    }
+
+    /* 7-Day Bar Chart */
+    .chart-container {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      height: 120px;
+      padding: 14px 6px 4px 6px;
+      gap: 8px;
+    }
+
+    .chart-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .chart-bar {
+      width: 100%;
+      border-radius: 6px;
+      background: #242935;
+      transition: height 0.4s ease, background 0.3s ease;
+    }
+
+    .chart-bar.today {
+      background: var(--ig-accent);
+      box-shadow: 0 0 14px rgba(216, 255, 62, 0.4);
+    }
+
+    .chart-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ig-text-secondary);
+    }
+
+    .chart-label.today {
+      color: var(--ig-accent);
+    }
+
+    /* ============================================================
+       v15.3 FLOATING TRANSLUCENT PILL NAVIGATION DOCK (EXACT SPECS)
+       Height: 64px, Radius: 32px, Translucent Blur, Centered
+       ============================================================ */
+    .floating-dock-container {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      height: 64px;
+      border-radius: 32px;
+      background: var(--ig-dock-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--ig-dock-border);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      padding: 0 6px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* 52dp Active Pill Indicator with 26dp Radius & 4dp Horizontal Inset */
+    .dock-sliding-pill {
+      position: absolute;
+      top: 6px; /* Exactly (64 - 52) / 2 = 6px top clearance */
+      left: 0;
+      height: 52px;
+      border-radius: 26px;
+      background: var(--ig-dock-pill);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+      z-index: 1;
+      /* Smooth 250ms iOS cubic-bezier easing */
+      transition: transform 0.25s cubic-bezier(0.22, 1.0, 0.36, 1.0), width 0.25s cubic-bezier(0.22, 1.0, 0.36, 1.0);
+    }
+
+    /* 5 Navigation Items */
+    .dock-menu {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      z-index: 2;
+    }
+
+    .dock-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #C9D1D9; /* @color/ig_nav_inactive */
+      transition: color 0.25s ease;
+      padding-top: 6px;
+      padding-bottom: 8px;
+    }
+
+    .dock-item.active {
+      color: var(--ig-amber); /* @color/ig_accent_amber #FF8A1E */
+    }
+
+    .dock-icon {
+      width: 20px;
+      height: 20px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .dock-item:active .dock-icon {
+      transform: scale(0.88);
+    }
+
+    /* Raised text with translationY -3px & compact vertical rhythm */
+    .dock-label {
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      transform: translateY(-3px); /* Exact v15.3 upward shift */
+      white-space: nowrap;
+    }
+
+    .dock-item.active .dock-label {
+      font-weight: 700;
+    }
+
+    /* Interactive Notification Toast */
+    .toast-overlay {
+      position: absolute;
+      top: 56px;
+      left: 20px;
+      right: 20px;
+      background: rgba(22, 27, 34, 0.96);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(216, 255, 62, 0.35);
+      border-radius: 18px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 200;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.8);
+      transform: translateY(-80px);
+      opacity: 0;
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .toast-overlay.show {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Live Studio Controls Panel */
+    .controls-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(22, 27, 34, 0.85);
+      border: 1px solid var(--ig-border);
+      border-radius: 20px;
+      padding: 10px 18px;
+      backdrop-filter: blur(12px);
+    }
+
+    .control-btn {
+      background: #1C212B;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #F0F6FC;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .control-btn:hover {
+      background: #262C38;
+      border-color: rgba(216, 255, 62, 0.4);
+    }
+
+    .control-btn.active {
+      background: rgba(216, 255, 62, 0.15);
+      border-color: var(--ig-accent);
+      color: var(--ig-accent);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="studio-container">
+    <div class="studio-header">
+      <div class="studio-tag">⚡ Live Interactive Preview</div>
+      <h1 class="studio-title">InstaGuard Pro v15.3 — Mobile Simulator</h1>
+      <p class="studio-subtitle">Pixel-accurate 390px × 844px phone frame • Click floating dock tabs below to experience the continuous slide &amp; gliding pill</p>
+    </div>
+
+    <!-- Interactive Phone Chassis -->
+    <div class="device-chassis">
+      <!-- Dynamic Island -->
+      <div class="dynamic-island">
+        <div class="island-camera"></div>
+        <div class="island-sensor"></div>
+      </div>
+
+      <!-- Top Status Bar -->
+      <div class="status-bar">
+        <span id="liveTime">09:41</span>
+        <div class="status-icons">
+          <span>5G</span>
+          <span>●●●</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      <!-- Top Header / Toolbar -->
+      <div class="app-toolbar">
+        <div class="toolbar-left">
+          <span class="toolbar-subtitle">ACTIVE PROTECTION SHIELD</span>
+          <span class="toolbar-title">InstaGuard Pro</span>
+        </div>
+        <div class="toolbar-right">
+          <span class="toolbar-badge">v15.3 PRO</span>
+          <div class="btn-refresh" id="btnRefresh" title="Refresh Live State">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notification Toast -->
+      <div class="toast-overlay" id="toastOverlay">
+        <span style="font-size: 20px;">🛡️</span>
+        <div>
+          <div style="font-weight: 700; font-size: 13px; color: #FFFFFF;" id="toastTitle">InstaGuard Pro</div>
+          <div style="font-size: 11px; color: var(--ig-text-secondary);" id="toastDesc">Status updated</div>
+        </div>
+      </div>
+
+      <!-- Dual-Screen Sliding Viewport -->
+      <div class="viewport-container" id="viewportContainer">
+
+        <!-- TAB 0: DASHBOARD -->
+        <div class="screen-tab active" id="tab0">
+          <!-- Hero Allowance Card -->
+          <div class="hero-card ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--ig-accent); box-shadow: 0 0 8px var(--ig-accent);"></div>
+                <span style="font-size: 11px; font-weight: 800; color: var(--ig-accent); letter-spacing: 0.06em;">AI FOCUS SHIELD ACTIVE</span>
+              </div>
+              <div style="width: 32px; height: 32px; border-radius: 50%; background: #232834; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 14px;">🛡️</span>
+              </div>
+            </div>
+
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin-top: 10px; font-family: 'JetBrains Mono', monospace;" id="timerDisplay">
+              01h 48m 22s
+            </div>
+            <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">
+              Remaining social media allowance for today
+            </div>
+
+            <!-- Progress Bar -->
+            <div style="width: 100%; height: 8px; background: #232834; border-radius: 4px; margin-top: 14px; overflow: hidden;">
+              <div style="width: 82%; height: 100%; background: var(--ig-accent); border-radius: 4px;"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;">
+              <button class="btn-pill-secondary" onclick="showToast('Allowance Limit', 'Daily limit adjusted to 2 hours')">⚙️ Set Limit</button>
+              <button class="btn-pill-secondary" onclick="showToast('Reset Today', 'Usage counters reset to 0')">🔄 Reset Today</button>
+            </div>
+          </div>
+
+          <!-- 2-Column Bento Row -->
+          <div class="bento-row">
+            <div class="bento-tile">
+              <span class="bento-label">Scrolls Today</span>
+              <div class="bento-number" id="scrollsCounter">42</div>
+              <span class="badge-pill badge-emerald" style="margin-top: 6px; display: inline-block;">-64% vs Avg</span>
+            </div>
+            <div class="bento-tile">
+              <span class="bento-label">Interventions</span>
+              <div class="bento-number">18</div>
+              <span class="badge-pill badge-volt" style="margin-top: 6px; display: inline-block;">100% Blocked</span>
+            </div>
+          </div>
+
+          <!-- Deep Work / Focus Streak -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">🔥 7-Day Focus Streak</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Top 5% of productive users this week</div>
+              </div>
+              <span class="badge-pill badge-volt">ACTIVE</span>
+            </div>
+          </div>
+
+          <!-- Tracked Apps -->
+          <div class="ig-card">
+            <div style="font-size: 14px; font-weight: 800; margin-bottom: 12px;">Tracked Social Apps</div>
+            <div class="app-row">
+              <div class="app-icon">📸</div>
+              <div class="app-info">
+                <div class="app-name">Instagram</div>
+                <div class="app-usage">24m / 45m used today</div>
+              </div>
+              <span class="badge-pill badge-volt">SHIELDED</span>
+            </div>
+            <div class="app-row">
+              <div class="app-icon">▶️</div>
+              <div class="app-info">
+                <div class="app-name">YouTube</div>
+                <div class="app-usage">18m / 30m used today</div>
+              </div>
+              <span class="badge-pill badge-volt">SHIELDED</span>
+            </div>
+            <div class="app-row">
+              <div class="app-icon">🌐</div>
+              <div class="app-info">
+                <div class="app-name">Chrome Browser</div>
+                <div class="app-usage">Anti-Cheat Guard Active</div>
+              </div>
+              <span class="badge-pill badge-emerald">PROTECTED</span>
+            </div>
+          </div>
+
+          <!-- Custom App Shield -->
+          <button class="btn-pill-primary" onclick="showToast('Add Custom App', 'Choose package from installed apps list')">
+            + Add Custom App to Shield
+          </button>
+        </div>
+
+        <!-- TAB 1: ANALYTICS -->
+        <div class="screen-tab" id="tab1">
+          <!-- Summary Card -->
+          <div class="ig-card">
+            <span class="badge-pill badge-volt">WEEKLY FOCUS PULSE</span>
+            <div style="font-size: 26px; font-weight: 800; margin-top: 8px;">2h 14m Saved</div>
+            <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Total doomscrolling time prevented this week.</div>
+          </div>
+
+          <!-- 7-Day Bar Chart -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <span style="font-size: 14px; font-weight: 800;">7-Day Screen Time</span>
+              <span class="badge-pill badge-emerald">Today: 42m</span>
+            </div>
+            <div class="chart-container">
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 48px;"></div>
+                <span class="chart-label">M</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 72px;"></div>
+                <span class="chart-label">T</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 60px;"></div>
+                <span class="chart-label">W</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 90px;"></div>
+                <span class="chart-label">T</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 38px;"></div>
+                <span class="chart-label">F</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar" style="height: 84px;"></div>
+                <span class="chart-label">S</span>
+              </div>
+              <div class="chart-col">
+                <div class="chart-bar today" style="height: 42px;"></div>
+                <span class="chart-label today">S</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Blocked Temptations Log -->
+          <div class="ig-card">
+            <span style="font-size: 14px; font-weight: 800;">Blocked Attempts Log</span>
+            <div style="margin-top: 10px;">
+              <div class="app-row">
+                <div class="app-icon" style="color: var(--ig-danger);">⛔</div>
+                <div class="app-info">
+                  <div class="app-name">Instagram Reels Blocked</div>
+                  <div class="app-usage">11:42 PM • Late-Night Defense</div>
+                </div>
+                <span style="font-size: 11px; color: var(--ig-danger); font-weight: 700;">BLOCKED</span>
+              </div>
+              <div class="app-row">
+                <div class="app-icon" style="color: var(--ig-amber);">⚡</div>
+                <div class="app-info">
+                  <div class="app-name">YouTube Shorts Skipped</div>
+                  <div class="app-usage">03:15 PM • Study Mode</div>
+                </div>
+                <span style="font-size: 11px; color: var(--ig-amber); font-weight: 700;">AUTO-SKIPPED</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: ALARM -->
+        <div class="screen-tab" id="tab2">
+          <!-- Hero Alarm Card -->
+          <div class="hero-card ig-card">
+            <div style="font-size: 11px; font-weight: 800; color: var(--ig-accent); letter-spacing: 0.06em;">HARDCORE SMART ALARM</div>
+            <div style="font-size: 20px; font-weight: 800; margin-top: 4px;">Unstoppable Wakeup Guard</div>
+            <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">
+              Wakes device from deep sleep &amp; blocks calculator anti-cheat.
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px;">
+              <button class="btn-pill-primary" onclick="showToast('New Alarm', 'Alarm created for 06:30 AM')">+ ADD ALARM</button>
+              <button class="btn-pill-secondary" onclick="showToast('Live Test Alarm', 'Simulating unstoppable alarm audio...')">TEST ALARM</button>
+            </div>
+          </div>
+
+          <!-- Saved Alarm 1 -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 32px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #FFFFFF;">06:30 <span style="font-size: 16px; font-weight: 700; color: var(--ig-accent);">AM</span></div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Morning Hardcore Focus • Siren #3</div>
+              </div>
+              <div class="ig-switch active" onclick="toggleSwitch(this)">
+                <div class="ig-switch-thumb"></div>
+              </div>
+            </div>
+            <!-- Days row -->
+            <div class="day-circle-row">
+              <div class="day-circle active">M</div>
+              <div class="day-circle active">T</div>
+              <div class="day-circle active">W</div>
+              <div class="day-circle active">T</div>
+              <div class="day-circle active">F</div>
+              <div class="day-circle">S</div>
+              <div class="day-circle">S</div>
+            </div>
+          </div>
+
+          <!-- Saved Alarm 2 -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 32px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #FFFFFF;">08:15 <span style="font-size: 16px; font-weight: 700; color: var(--ig-accent);">AM</span></div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Weekend Study Sprint • Pulse Alarm</div>
+              </div>
+              <div class="ig-switch" onclick="toggleSwitch(this)">
+                <div class="ig-switch-thumb"></div>
+              </div>
+            </div>
+            <div class="day-circle-row">
+              <div class="day-circle">M</div>
+              <div class="day-circle">T</div>
+              <div class="day-circle">W</div>
+              <div class="day-circle">T</div>
+              <div class="day-circle">F</div>
+              <div class="day-circle active">S</div>
+              <div class="day-circle active">S</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: SHIELDS -->
+        <div class="screen-tab" id="tab3">
+          <div class="ig-card">
+            <span class="badge-pill badge-volt">PROTECTION CONTROLS</span>
+            <div style="font-size: 20px; font-weight: 800; margin-top: 6px;">Active Defensive Shields</div>
+            <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Real-time on-device accessibility &amp; vision filters.</div>
+          </div>
+
+          <!-- Shield 1 -->
+          <div class="ig-card" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="app-icon" style="color: var(--ig-accent);">⚡</div>
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">Instagram Reels Blocker</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary);">Auto-skips short-form addictive feeds</div>
+              </div>
+            </div>
+            <div class="ig-switch active" onclick="toggleSwitch(this)">
+              <div class="ig-switch-thumb"></div>
+            </div>
+          </div>
+
+          <!-- Shield 2 -->
+          <div class="ig-card" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="app-icon" style="color: var(--ig-accent);">🎬</div>
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">YouTube Shorts Blocker</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary);">Redirects immediately to subscriptions</div>
+              </div>
+            </div>
+            <div class="ig-switch active" onclick="toggleSwitch(this)">
+              <div class="ig-switch-thumb"></div>
+            </div>
+          </div>
+
+          <!-- Shield 3 -->
+          <div class="ig-card" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="app-icon" style="color: var(--ig-accent);">👁️</div>
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">AI Visual Shield</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary);">On-device ML Kit adult blur engine</div>
+              </div>
+            </div>
+            <div class="ig-switch active" onclick="toggleSwitch(this)">
+              <div class="ig-switch-thumb"></div>
+            </div>
+          </div>
+
+          <!-- Shield 4 -->
+          <div class="ig-card" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="app-icon" style="color: var(--ig-danger);">🛡️</div>
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">Anti-Power-Off Lock</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary);">Prevents turning phone off during active alarm</div>
+              </div>
+            </div>
+            <div class="ig-switch active" onclick="toggleSwitch(this)">
+              <div class="ig-switch-thumb"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: SETTINGS -->
+        <div class="screen-tab" id="tab4">
+          <!-- Permissions Bento Card -->
+          <div class="ig-card">
+            <span class="badge-pill badge-emerald">SYSTEM SERVICE PERMISSIONS</span>
+            <div style="margin-top: 12px;">
+              <div class="app-row">
+                <div>
+                  <div style="font-size: 13px; font-weight: 700;">1. Usage Stats Access</div>
+                  <div style="font-size: 11px; color: var(--ig-text-secondary);">Required for real-time tracking</div>
+                </div>
+                <span class="badge-pill badge-emerald">✓ Active</span>
+              </div>
+              <div class="app-row">
+                <div>
+                  <div style="font-size: 13px; font-weight: 700;">2. Accessibility Service</div>
+                  <div style="font-size: 11px; color: var(--ig-text-secondary);">Reels &amp; PiP blocker overlay</div>
+                </div>
+                <span class="badge-pill badge-emerald">✓ Active</span>
+              </div>
+              <div class="app-row">
+                <div>
+                  <div style="font-size: 13px; font-weight: 700;">3. Display Over Other Apps</div>
+                  <div style="font-size: 11px; color: var(--ig-text-secondary);">Focus lockscreen overlay</div>
+                </div>
+                <span class="badge-pill badge-emerald">✓ Active</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Master PIN -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">4-Digit Master PIN</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">Protects shield settings &amp; maintenance</div>
+              </div>
+              <button class="btn-pill-secondary" onclick="showToast('Master PIN', 'PIN is set to ••••')">Change</button>
+            </div>
+          </div>
+
+          <!-- AI Voice Alert -->
+          <div class="ig-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 14px; font-weight: 700;">Custom AI Voice Alert</div>
+                <div style="font-size: 12px; color: var(--ig-text-secondary); margin-top: 2px;">"Stop scrolling and get back to work!"</div>
+              </div>
+              <button class="btn-pill-secondary" onclick="showToast('Voice Alert', '🔊 Speaking: Stop scrolling and get back to work!')">Test</button>
+            </div>
+          </div>
+
+          <!-- Version Footer -->
+          <div style="text-align: center; padding: 16px 0; color: var(--ig-text-secondary); font-size: 12px;">
+            <div style="font-weight: 700; color: #FFFFFF;">InstaGuard Pro v15.3 • Obsidian &amp; Volt</div>
+            <div style="margin-top: 4px; font-size: 11px;">Floating Dock • 250ms Dual-Screen Slide • Zero Cloud Latency</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============================================================
+           v15.3 FLOATING TRANSLUCENT PILL NAVIGATION DOCK
+           64px Height, 32px Radius, 52px Sliding Pill with 26px Radius
+           Raised Text (-3px), Compact Icon (20px), Vertical Center
+           ============================================================ -->
+      <div class="floating-dock-container" id="floatingNavDockContainer">
+        <!-- 52px Gliding Pill Indicator -->
+        <div class="dock-sliding-pill" id="navSlidingPillIndicator"></div>
+
+        <!-- 5 Navigation Items -->
+        <div class="dock-menu" id="bottomNavigationView">
+          <div class="dock-item active" onclick="switchTab(0)">
+            <div class="dock-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </div>
+            <span class="dock-label">Dashboard</span>
+          </div>
+
+          <div class="dock-item" onclick="switchTab(1)">
+            <div class="dock-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </div>
+            <span class="dock-label">Analytics</span>
+          </div>
+
+          <div class="dock-item" onclick="switchTab(2)">
+            <div class="dock-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="13" r="8"/>
+                <path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3M6.38 18.7 4 21M17.64 18.67 20 21"/>
+              </svg>
+            </div>
+            <span class="dock-label">Alarm</span>
+          </div>
+
+          <div class="dock-item" onclick="switchTab(3)">
+            <div class="dock-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+              </svg>
+            </div>
+            <span class="dock-label">Shields</span>
+          </div>
+
+          <div class="dock-item" onclick="switchTab(4)">
+            <div class="dock-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </div>
+            <span class="dock-label">Settings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Controls Bar (Laptop Browser Convenience) -->
+    <div class="controls-panel">
+      <button class="control-btn active" onclick="switchTab(0)">📱 Dashboard (0)</button>
+      <button class="control-btn" onclick="switchTab(1)">📊 Analytics (1)</button>
+      <button class="control-btn" onclick="switchTab(2)">⏰ Alarm (2)</button>
+      <button class="control-btn" onclick="switchTab(3)">🛡️ Shields (3)</button>
+      <button class="control-btn" onclick="switchTab(4)">⚙️ Settings (4)</button>
+      <button class="control-btn" onclick="triggerRapidTest()">⚡ Rapid Switching Test</button>
+    </div>
+  </div>
+
+  <script>
+    // Live Phone Clock
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      const el = document.getElementById('liveTime');
+      if (el) el.textContent = `${hours}:${mins}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // -------------------------------------------------------------
+    // v15.3 Continuous Dual-Screen Slide + Gliding Pill Animator
+    // -------------------------------------------------------------
+    let currentTabIndex = 0;
+    let isAnimating = false;
+
+    const tabs = [
+      document.getElementById('tab0'),
+      document.getElementById('tab1'),
+      document.getElementById('tab2'),
+      document.getElementById('tab3'),
+      document.getElementById('tab4')
+    ];
+
+    const dockItems = document.querySelectorAll('.dock-item');
+    const pill = document.getElementById('navSlidingPillIndicator');
+    const dockContainer = document.getElementById('floatingNavDockContainer');
+    const controlBtns = document.querySelectorAll('.controls-panel .control-btn');
+
+    function updatePillPosition(index, animate = true) {
+      if (!dockItems[index] || !pill) return;
+      const targetItem = dockItems[index];
+      const dockRect = dockContainer.getBoundingClientRect();
+      const itemRect = targetItem.getBoundingClientRect();
+
+      // Exact v15.3 Inset: +4px horizontal offset, width - 8px
+      const targetLeft = (itemRect.left - dockRect.left) + 4;
+      const targetWidth = itemRect.width - 8;
+
+      if (!animate) {
+        pill.style.transition = 'none';
+      } else {
+        pill.style.transition = 'transform 0.26s cubic-bezier(0.22, 1.0, 0.36, 1.0), width 0.26s cubic-bezier(0.22, 1.0, 0.36, 1.0)';
+      }
+
+      pill.style.transform = `translateX(${targetLeft}px)`;
+      pill.style.width = `${targetWidth}px`;
+    }
+
+    // Initial Pill Layout
+    window.addEventListener('load', () => {
+      setTimeout(() => updatePillPosition(0, false), 50);
+    });
+
+    window.addEventListener('resize', () => {
+      updatePillPosition(currentTabIndex, false);
+    });
+
+    function switchTab(targetIndex) {
+      if (targetIndex === currentTabIndex) {
+        // Reselection case: smooth scroll active screen to top
+        const activeTab = tabs[currentTabIndex];
+        if (activeTab) {
+          activeTab.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
+      }
+
+      const previousIndex = currentTabIndex;
+      const direction = targetIndex > previousIndex ? 1 : -1;
+      const outgoingView = tabs[previousIndex];
+      const incomingView = tabs[targetIndex];
+
+      currentTabIndex = targetIndex;
+
+      // Update Dock Colors & Pill Position
+      dockItems.forEach((item, idx) => {
+        if (idx === targetIndex) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+
+      controlBtns.forEach((btn, idx) => {
+        if (idx === targetIndex) {
+          btn.classList.add('active');
+        } else if (idx < 5) {
+          btn.classList.remove('active');
+        }
+      });
+
+      updatePillPosition(targetIndex, true);
+
+      // Dual-Screen Continuous Horizontal Slide
+      const viewportWidth = 390;
+      const durationMs = Math.abs(targetIndex - previousIndex) > 1 ? 290 : 250;
+
+      // Prepare incoming screen
+      incomingView.style.display = 'block';
+      incomingView.style.transition = 'none';
+      incomingView.style.transform = `translateX(${direction * viewportWidth}px)`;
+      incomingView.style.opacity = '1';
+
+      outgoingView.style.display = 'block';
+      outgoingView.style.transition = 'none';
+      outgoingView.style.transform = 'translateX(0px)';
+      outgoingView.style.opacity = '1';
+
+      // Force Reflow
+      incomingView.offsetHeight;
+
+      const easing = 'cubic-bezier(0.22, 1.0, 0.36, 1.0)';
+      incomingView.style.transition = `transform ${durationMs}ms ${easing}, opacity ${durationMs}ms ease`;
+      outgoingView.style.transition = `transform ${durationMs}ms ${easing}, opacity ${durationMs}ms ease`;
+
+      incomingView.style.transform = 'translateX(0px)';
+      outgoingView.style.transform = `translateX(${-direction * viewportWidth}px)`;
+      outgoingView.style.opacity = '0.82'; // subtle depth dimming
+
+      setTimeout(() => {
+        outgoingView.style.display = 'none';
+        outgoingView.style.transform = 'translateX(0px)';
+        outgoingView.style.opacity = '1';
+        incomingView.classList.add('active');
+        tabs.forEach((t, i) => {
+          if (i !== targetIndex) {
+            t.classList.remove('active');
+            t.style.display = 'none';
+          }
+        });
+      }, durationMs);
+    }
+
+    // Rapid Switching Test
+    function triggerRapidTest() {
+      showToast('Rapid Navigation Test', 'Testing mid-flight retargeting: 0 → 2 → 4 → 1 → 0');
+      const sequence = [0, 2, 4, 1, 0];
+      sequence.forEach((tabId, idx) => {
+        setTimeout(() => {
+          switchTab(tabId);
+        }, idx * 120); // click every 120ms (before previous 250ms finishes)
+      });
+    }
+
+    // Toggle Switches
+    function toggleSwitch(element) {
+      element.classList.toggle('active');
+      const isActive = element.classList.contains('active');
+      showToast('Defensive Shield', isActive ? 'Shield Activated' : 'Shield Temporarily Paused');
+    }
+
+    // Toast Notification
+    let toastTimeout;
+    function showToast(title, desc) {
+      const toast = document.getElementById('toastOverlay');
+      const tTitle = document.getElementById('toastTitle');
+      const tDesc = document.getElementById('toastDesc');
+      if (!toast) return;
+
+      tTitle.textContent = title;
+      tDesc.textContent = desc;
+
+      toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2400);
+    }
+
+    // Refresh Button Animation
+    const btnRefresh = document.getElementById('btnRefresh');
+    if (btnRefresh) {
+      btnRefresh.addEventListener('click', () => {
+        btnRefresh.style.transform = 'rotate(360deg)';
+        showToast('Live State Sync', 'All stats and preferences refreshed from storage');
+        setTimeout(() => {
+          btnRefresh.style.transform = 'none';
+        }, 350);
+      });
+    }
+  </script>
+</body>
+</html>

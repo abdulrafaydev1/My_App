@@ -78,10 +78,26 @@ class AlarmReceiver : BroadcastReceiver() {
                     screenWake?.acquire(10_000L)
                 } catch (_: Exception) {}
 
-                // 3. Start the Foreground Service that immediately plays the alarm sound
+                // 3. Fallback lookup from AlarmManagerHelper if any Intent extra is missing
+                val alarmId = intent.getStringExtra(AlarmManagerHelper.EXTRA_ALARM_ID)
+                    ?: intent.getStringExtra("alarm_id") ?: ""
+                val savedAlarm = if (alarmId.isNotBlank()) AlarmManagerHelper.getAlarmById(context, alarmId) else null
+
+                // 4. Start the Foreground Service that immediately plays the alarm sound
                 val serviceIntent = Intent(context, AlarmRingingService::class.java).apply {
                     this.action = AlarmRingingService.ACTION_START_ALARM
                     putExtras(intent)
+                    if (savedAlarm != null) {
+                        if (!hasExtra(AlarmManagerHelper.EXTRA_ALARM_ID)) putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, savedAlarm.id)
+                        if (!hasExtra("alarm_id")) putExtra("alarm_id", savedAlarm.id)
+                        if (!hasExtra("alarm_label")) putExtra("alarm_label", savedAlarm.label)
+                        if (!hasExtra("sound_id")) putExtra("sound_id", savedAlarm.soundId)
+                        if (!hasExtra("snooze_minutes")) putExtra("snooze_minutes", savedAlarm.snoozeMinutes)
+                        if (!hasExtra("delete_after_ringing")) putExtra("delete_after_ringing", savedAlarm.deleteAfterRinging)
+                        if (!hasExtra("force_max_volume")) putExtra("force_max_volume", savedAlarm.forceMaxVolume)
+                        if (!hasExtra("heavy_vibration")) putExtra("heavy_vibration", savedAlarm.heavyVibration)
+                        if (!hasExtra("ai_voice")) putExtra("ai_voice", savedAlarm.aiVoiceAnnouncement)
+                    }
                 }
                 ContextCompat.startForegroundService(context, serviceIntent)
             }

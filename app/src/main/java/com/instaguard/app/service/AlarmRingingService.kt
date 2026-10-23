@@ -83,6 +83,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             label = intent.getStringExtra("alarm_label") ?: if (isTest) "Test Wake-Up Mission" else "Wake Up Mission",
             soundId = intent.getIntExtra("sound_id", 2),
             snoozeMinutes = intent.getIntExtra("snooze_minutes", 0),
+            deleteAfterRinging = deleteAfter,
             forceMaxVolume = intent.getBooleanExtra("force_max_volume", true),
             heavyVibration = intent.getBooleanExtra("heavy_vibration", true),
             aiVoiceAnnouncement = intent.getBooleanExtra("ai_voice", true)
@@ -93,7 +94,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         val sp = getSharedPreferences("InstaGuardPrefs", Context.MODE_PRIVATE)
         sp.edit()
             .putString("active_ringing_alarm_id", alarm.id)
-            .putBoolean("active_ringing_delete_after", alarm.deleteAfterRinging || deleteAfter)
+            .putBoolean("active_ringing_delete_after", alarm.deleteAfterRinging)
             .putBoolean("alarm_currently_ringing", true)
             .putLong("last_actual_alarm_ring_epoch", System.currentTimeMillis())
             .commit()

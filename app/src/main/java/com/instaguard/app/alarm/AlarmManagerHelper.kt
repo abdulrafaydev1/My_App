@@ -135,7 +135,7 @@ object AlarmManagerHelper {
     fun saveAlarms(context: Context, alarms: List<SmartAlarm>) {
         val array = JSONArray()
         alarms.forEach { array.put(it.toJsonObject()) }
-        getPrefs(context).edit().putString(KEY_ALARMS_JSON, array.toString()).apply()
+        getPrefs(context).edit().putString(KEY_ALARMS_JSON, array.toString()).commit()
         AppBlockerService.triggerAlarmWakeLockUpdate(context)
     }
 
@@ -223,8 +223,9 @@ object AlarmManagerHelper {
      * Schedules the alarm using AlarmManager.setAlarmClock for 100% exact delivery in Doze mode.
      */
     fun scheduleAlarm(context: Context, alarm: SmartAlarm) {
+        alarm.enabled = true
         val triggerMs = calculateNextTriggerMs(alarm)
-        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).apply()
+        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).commit()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
         val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)
@@ -299,7 +300,7 @@ object AlarmManagerHelper {
      */
     fun scheduleSnooze(context: Context, alarm: SmartAlarm, snoozeMinutes: Int) {
         val triggerMs = System.currentTimeMillis() + (snoozeMinutes * 60_000L)
-        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).apply()
+        getPrefs(context).edit().putLong("alarm_next_epoch_${alarm.id}", triggerMs).commit()
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
 
         val requestCode = (alarm.id.hashCode() and 0x7FFFFFFF)

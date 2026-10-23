@@ -18,8 +18,8 @@
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:paddingHorizontal="24dp"
-            android:paddingTop="44dp"
+            android:paddingHorizontal="20dp"
+            android:paddingTop="36dp"
             android:paddingBottom="48dp">
 
             <!-- Alarm Status Pill Header -->
@@ -55,10 +55,10 @@
                 android:id="@+id/tvClockLive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="18dp"
                 android:text="06:30:00 AM"
                 android:textColor="@color/ig_text_primary"
-                android:textSize="40sp"
+                android:textSize="36sp"
                 android:textStyle="bold"
                 android:fontFamily="sans-serif-black" />
 
@@ -66,28 +66,29 @@
                 android:id="@+id/tvDateLive"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:text="Tuesday, October 20"
                 android:textColor="@color/ig_text_secondary"
-                android:textSize="15sp" />
+                android:textSize="14sp" />
 
-            <!-- Alarm Label Bento Card -->
+            <!-- Alarm Label & Sound Bento Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
+                android:layout_marginTop="16dp"
                 app:cardBackgroundColor="@color/ig_bg_card"
-                app:cardCornerRadius="26dp"
+                app:cardCornerRadius="20dp"
                 app:cardElevation="0dp"
-                app:strokeColor="#40D8FF3E"
-                app:strokeWidth="1.5dp">
+                app:strokeColor="#30D8FF3E"
+                app:strokeWidth="1.2dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@drawable/bg_card_hero_accent"
                     android:orientation="vertical"
-                    android:padding="22dp"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="14dp"
                     android:gravity="center">
 
                     <TextView
@@ -96,7 +97,7 @@
                         android:layout_height="wrap_content"
                         android:text="🏷️ Wake Up Mission"
                         android:textColor="@color/ig_accent_primary"
-                        android:textSize="20sp"
+                        android:textSize="17sp"
                         android:textStyle="bold"
                         android:gravity="center" />
 
@@ -104,10 +105,10 @@
                         android:id="@+id/tvSoundTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="🚨 Nuclear Air-Raid Siren (Extreme)"
+                        android:layout_marginTop="4dp"
+                        android:text="🚨 Nuclear Air-Raid Siren"
                         android:textColor="@color/ig_accent_amber"
-                        android:textSize="13.5sp"
+                        android:textSize="12.5sp"
                         android:textStyle="bold"
                         android:gravity="center" />
 
@@ -115,62 +116,236 @@
                         android:id="@+id/tvAutoDeleteBadge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
+                        android:layout_marginTop="6dp"
                         android:background="@drawable/bg_input_surface"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="4dp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="3dp"
                         android:text="🗑️ Auto-Delete After Ringing"
                         android:textColor="@color/ig_accent_danger"
-                        android:textSize="11sp"
+                        android:textSize="10.5sp"
                         android:textStyle="bold"
                         android:visibility="gone" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Single Clean Stop / Dismiss Alarm Pill Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnStopAlarm"
+            <!-- 5-Question Dismissal Mission Bento Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardQuestionMission"
                 android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="28dp"
-                android:text="🛑 Stop / Dismiss Alarm"
-                android:textAllCaps="false"
-                android:textColor="@color/ig_text_on_accent"
-                android:textStyle="bold"
-                android:textSize="16sp"
-                app:cornerRadius="28dp"
-                app:backgroundTint="@color/ig_accent_primary" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                app:cardBackgroundColor="@color/ig_bg_card"
+                app:cardCornerRadius="22dp"
+                app:cardElevation="0dp"
+                app:strokeColor="#40D8FF3E"
+                app:strokeWidth="1.5dp">
 
-            <!-- Snooze Pill Button -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <!-- Question Progress & Category Badge Header -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvQuestionProgress"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Question 1 of 5"
+                            android:textColor="@color/ig_accent_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvCategoryBadge"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/bg_input_surface"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="5dp"
+                            android:text="🧮 MATH CHALLENGE"
+                            android:textColor="@color/ig_accent_success"
+                            android:textSize="11.5sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- Question Text -->
+                    <TextView
+                        android:id="@+id/tvQuestionText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:text="(18 × 6) + 25 = ?"
+                        android:textColor="@color/ig_text_primary"
+                        android:textSize="19sp"
+                        android:textStyle="bold"
+                        android:lineSpacingExtra="4dp" />
+
+                    <!-- Quick Tap 4 Choices (for City/Country/GK) -->
+                    <LinearLayout
+                        android:id="@+id/layoutChoices"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnChoice1"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp"
+                            android:layout_marginBottom="8dp"
+                            android:text="Option 1"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="13.5sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="14dp"
+                            app:strokeColor="@color/ig_border_subtle"
+                            app:strokeWidth="1dp"
+                            app:backgroundTint="@color/ig_bg_elevated" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnChoice2"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp"
+                            android:layout_marginBottom="8dp"
+                            android:text="Option 2"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="13.5sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="14dp"
+                            app:strokeColor="@color/ig_border_subtle"
+                            app:strokeWidth="1dp"
+                            app:backgroundTint="@color/ig_bg_elevated" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnChoice3"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp"
+                            android:layout_marginBottom="8dp"
+                            android:text="Option 3"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="13.5sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="14dp"
+                            app:strokeColor="@color/ig_border_subtle"
+                            app:strokeWidth="1dp"
+                            app:backgroundTint="@color/ig_bg_elevated" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnChoice4"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp"
+                            android:layout_marginBottom="6dp"
+                            android:text="Option 4"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="13.5sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="14dp"
+                            app:strokeColor="@color/ig_border_subtle"
+                            app:strokeWidth="1dp"
+                            app:backgroundTint="@color/ig_bg_elevated" />
+                    </LinearLayout>
+
+                    <!-- Answer Input & Submit Row -->
+                    <LinearLayout
+                        android:id="@+id/layoutAnswerInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/etAnswer"
+                            android:layout_width="0dp"
+                            android:layout_height="50dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_input_surface"
+                            android:hint="Type answer..."
+                            android:textColorHint="@color/ig_text_muted"
+                            android:textColor="@color/ig_text_primary"
+                            android:textSize="15sp"
+                            android:paddingHorizontal="14dp"
+                            android:singleLine="true"
+                            android:imeOptions="actionDone"
+                            android:inputType="text" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSubmitAnswer"
+                            android:layout_width="wrap_content"
+                            android:layout_height="50dp"
+                            android:layout_marginStart="10dp"
+                            android:text="✓ Submit"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ig_text_on_accent"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            app:cornerRadius="25dp"
+                            app:backgroundTint="@color/ig_accent_primary" />
+                    </LinearLayout>
+
+                    <!-- Rule 3 & 4: Change / Skip Question Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnChangeQuestion"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="12dp"
+                        android:text="🔄 Change / Skip Question"
+                        android:textAllCaps="false"
+                        android:textColor="@color/ig_text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        app:cornerRadius="23dp"
+                        app:strokeColor="@color/ig_border_subtle"
+                        app:strokeWidth="1dp"
+                        app:backgroundTint="@color/ig_bg_card_secondary" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Dedicated Auto-Solve Test Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAutoSolveTest"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="18dp"
+                android:text="🧪 Auto-Solve All 5 Questions (Test &amp; Stop Alarm)"
+                android:textAllCaps="false"
+                android:textColor="@color/ig_accent_amber"
+                android:textSize="13.5sp"
+                android:textStyle="bold"
+                app:cornerRadius="26dp"
+                app:strokeColor="#50FF8A1E"
+                app:strokeWidth="1.2dp"
+                app:backgroundTint="#241E18" />
+
+            <!-- Snooze Pill Button (Visible only when snoozeMinutes > 0) -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSnooze"
                 android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="14dp"
+                android:layout_height="50dp"
+                android:layout_marginTop="12dp"
                 android:text="💤 Snooze for 5 Min"
                 android:textAllCaps="false"
                 android:textColor="@color/ig_accent_amber"
                 android:textStyle="bold"
-                android:textSize="14sp"
-                app:cornerRadius="26dp"
+                android:textSize="13.5sp"
+                app:cornerRadius="25dp"
                 app:strokeColor="#40FF8A1E"
                 app:strokeWidth="1.2dp"
                 app:backgroundTint="#202530" />
-
-            <!-- Emergency / Test Stop Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnEmergencyStop"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginTop="20dp"
-                android:text="🛑 Stop Test"
-                android:textColor="@color/ig_text_secondary"
-                android:textSize="12sp"
-                app:cornerRadius="20dp"
-                app:strokeColor="@color/ig_border_subtle"
-                app:strokeWidth="1dp"
-                app:backgroundTint="#202530"
-                android:visibility="gone" />
 
         </LinearLayout>
     </ScrollView>
