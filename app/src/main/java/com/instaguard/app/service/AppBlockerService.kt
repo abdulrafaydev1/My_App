@@ -3056,51 +3056,55 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         fun syncFromPrefs(context: Context) {
-            appContext = context.applicationContext
-            val prefs = GuardPreferences(context)
-            val now = System.currentTimeMillis()
-            val todayStr = getTodayDateStr()
-            var allZero = true
+            try {
+                appContext = context.applicationContext
+                val prefs = GuardPreferences(context)
+                val now = System.currentTimeMillis()
+                val todayStr = getTodayDateStr()
+                var allZero = true
 
-            customTrackedPackages.clear()
-            customTrackedPackages.addAll(prefs.getCustomTrackedPackages())
-            maintenanceUntilMs = prefs.maintenanceUntilMs
-            deepWorkUnlockAtMs = prefs.deepWorkUnlockMs
-            if (deepWorkUnlockAtMs > 0L && deepWorkUnlockAtMs <= now) {
-                deepWorkUnlockAtMs = 0L
-                prefs.deepWorkUnlockMs = 0L
-            }
-
-            for (key in getAllTrackedKeys()) {
-                val usage = prefs.getAccumulatedUsage(key)
-                val unlock = prefs.getUnlockTimestamp(key)
-                val daily = prefs.getDailyTotal(todayStr, key)
-                val scrollToday = prefs.getScrollToday(todayStr, key)
-                val scrollTotal = prefs.getScrollTotal(key)
-                val blockedToday = prefs.getBlockedAttemptsToday(todayStr, key)
-                val blockedTotal = prefs.getBlockedAttemptsTotal(key)
-
-                if (unlock > 0L && unlock <= now) {
-                    accumulatedUsageMap[key] = 0L
-                    unlockTimestampMap[key] = 0L
-                    prefs.resetApp(key)
-                } else {
-                    accumulatedUsageMap[key] = usage
-                    unlockTimestampMap[key] = unlock
-                    if (usage > 0L || unlock > 0L) {
-                        allZero = false
-                    }
+                customTrackedPackages.clear()
+                customTrackedPackages.addAll(prefs.getCustomTrackedPackages())
+                maintenanceUntilMs = prefs.maintenanceUntilMs
+                deepWorkUnlockAtMs = prefs.deepWorkUnlockMs
+                if (deepWorkUnlockAtMs > 0L && deepWorkUnlockAtMs <= now) {
+                    deepWorkUnlockAtMs = 0L
+                    prefs.deepWorkUnlockMs = 0L
                 }
-                dailyTotalMap[key] = daily
-                scrollCountTodayMap[key] = scrollToday
-                scrollCountTotalMap[key] = scrollTotal
-                blockedAttemptsTodayMap[key] = blockedToday
-                blockedAttemptsTotalMap[key] = blockedTotal
-            }
 
-            // Only reconstruct from OS system events if SharedPreferences is 100% empty
-            if (allZero) {
-                syncAndReconstructFromSystemEvents(context)
+                for (key in getAllTrackedKeys()) {
+                    val usage = prefs.getAccumulatedUsage(key)
+                    val unlock = prefs.getUnlockTimestamp(key)
+                    val daily = prefs.getDailyTotal(todayStr, key)
+                    val scrollToday = prefs.getScrollToday(todayStr, key)
+                    val scrollTotal = prefs.getScrollTotal(key)
+                    val blockedToday = prefs.getBlockedAttemptsToday(todayStr, key)
+                    val blockedTotal = prefs.getBlockedAttemptsTotal(key)
+
+                    if (unlock > 0L && unlock <= now) {
+                        accumulatedUsageMap[key] = 0L
+                        unlockTimestampMap[key] = 0L
+                        prefs.resetApp(key)
+                    } else {
+                        accumulatedUsageMap[key] = usage
+                        unlockTimestampMap[key] = unlock
+                        if (usage > 0L || unlock > 0L) {
+                            allZero = false
+                        }
+                    }
+                    dailyTotalMap[key] = daily
+                    scrollCountTodayMap[key] = scrollToday
+                    scrollCountTotalMap[key] = scrollTotal
+                    blockedAttemptsTodayMap[key] = blockedToday
+                    blockedAttemptsTotalMap[key] = blockedTotal
+                }
+
+                // Only reconstruct from OS system events if SharedPreferences is 100% empty
+                if (allZero) {
+                    syncAndReconstructFromSystemEvents(context)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in syncFromPrefs: ${e.message}", e)
             }
         }
 

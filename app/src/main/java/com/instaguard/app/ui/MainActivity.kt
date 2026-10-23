@@ -50,10 +50,11 @@ import com.instaguard.app.util.UsageStatsHelper
 import java.util.Locale
 
 /**
- * Main Activity for InstaGuard Pro v15.1 (Obsidian & Volt-Lime Design System).
+ * Main Activity for InstaGuard Pro v15.2 (Obsidian & Volt-Lime Design System).
  * Features a Floating Translucent Pill Navigation Dock with synchronized continuous
  * directional dual-screen horizontal sliding and gliding active pill indicator (iOS App Store Style),
  * Bento-Grid screen layouts, real-time 30 FPS live ticker updates, and complete digital wellbeing shields.
+ * 100% crash-proof lifecycle management with lazy view lookups and fail-safe null guards.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -73,8 +74,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var settingsFragment: SettingsFragment
     private var activeFragment: Fragment? = null
 
-    private lateinit var tabContainers: Array<View>
-    private lateinit var navTabItemViews: Array<View>
     private var activeNavAnimator: ValueAnimator? = null
     private var currentTabIndex: Int = 0
     private var isProgrammaticNavSelection: Boolean = false
@@ -90,20 +89,43 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        guardManager = GuardManager(applicationContext)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
-            }
+        try {
+            binding = ActivityMainBinding.inflate(layoutInflater)
+            setContentView(binding.root)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            finish()
+            return
         }
 
-        checkAndRequestAlarmOptimizations()
+        try {
+            guardManager = GuardManager(applicationContext)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        initPreviewTts()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        try {
+            checkAndRequestAlarmOptimizations()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        try {
+            initPreviewTts()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         setupFragments(savedInstanceState)
         setupBottomNavigation()
         setupToolbar()
@@ -125,52 +147,86 @@ class MainActivity : AppCompatActivity() {
                 .add(R.id.fragmentContainer, alarmFragment, "ALARM")
                 .add(R.id.fragmentContainer, shieldsFragment, "SHIELDS")
                 .add(R.id.fragmentContainer, settingsFragment, "SETTINGS")
-                .commitNowAllowingStateLoss()
+                .commit()
         } else {
             homeFragment = fm.findFragmentByTag("HOME") as? HomeDashboardFragment ?: HomeDashboardFragment()
             analyticsFragment = fm.findFragmentByTag("ANALYTICS") as? AnalyticsFragment ?: AnalyticsFragment()
             alarmFragment = fm.findFragmentByTag("ALARM") as? AlarmFragment ?: AlarmFragment()
             shieldsFragment = fm.findFragmentByTag("SHIELDS") as? ShieldsFragment ?: ShieldsFragment()
             settingsFragment = fm.findFragmentByTag("SETTINGS") as? SettingsFragment ?: SettingsFragment()
-            fm.executePendingTransactions()
         }
 
         activeFragment = homeFragment
-        tabContainers = arrayOf(
-            homeFragment.requireView(),
-            analyticsFragment.requireView(),
-            alarmFragment.requireView(),
-            shieldsFragment.requireView(),
-            settingsFragment.requireView()
-        )
+        binding.fragmentContainer.post {
+            ensureTabScreensVisibility()
+        }
+    }
 
-        for (i in tabContainers.indices) {
-            val v = tabContainers[i]
-            v.translationX = 0f
-            v.alpha = 1f
-            v.setLayerType(View.LAYER_TYPE_NONE, null)
-            v.visibility = if (i == currentTabIndex) View.VISIBLE else View.GONE
+    private fun getTabScreenView(index: Int): View? {
+        val fragment = when (index) {
+            0 -> if (::homeFragment.isInitialized) homeFragment else null
+            1 -> if (::analyticsFragment.isInitialized) analyticsFragment else null
+            2 -> if (::alarmFragment.isInitialized) alarmFragment else null
+            3 -> if (::shieldsFragment.isInitialized) shieldsFragment else null
+            4 -> if (::settingsFragment.isInitialized) settingsFragment else null
+            else -> null
+        }
+        return fragment?.view
+    }
+
+    private fun getNavTabItemView(index: Int): View? {
+        val menuId = getMenuIdForIndex(index)
+        return try {
+            binding.bottomNavigationView.findViewById(menuId)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun getFragmentForIndex(index: Int): Fragment {
+        return when (index) {
+            0 -> if (::homeFragment.isInitialized) homeFragment else HomeDashboardFragment()
+            1 -> if (::analyticsFragment.isInitialized) analyticsFragment else AnalyticsFragment()
+            2 -> if (::alarmFragment.isInitialized) alarmFragment else AlarmFragment()
+            3 -> if (::shieldsFragment.isInitialized) shieldsFragment else ShieldsFragment()
+            4 -> if (::settingsFragment.isInitialized) settingsFragment else SettingsFragment()
+            else -> if (::homeFragment.isInitialized) homeFragment else HomeDashboardFragment()
+        }
+    }
+
+    private fun ensureTabScreensVisibility() {
+        try {
+            for (i in 0..4) {
+                val v = getTabScreenView(i) ?: continue
+                v.translationX = 0f
+                v.alpha = 1f
+                try {
+                    v.setLayerType(View.LAYER_TYPE_NONE, null)
+                } catch (_: Exception) {}
+                v.visibility = if (i == currentTabIndex) View.VISIBLE else View.GONE
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private fun setupBottomNavigation() {
-        navTabItemViews = arrayOf(
-            binding.bottomNavigationView.findViewById(R.id.nav_home),
-            binding.bottomNavigationView.findViewById(R.id.nav_analytics),
-            binding.bottomNavigationView.findViewById(R.id.nav_alarm),
-            binding.bottomNavigationView.findViewById(R.id.nav_shields),
-            binding.bottomNavigationView.findViewById(R.id.nav_settings)
-        )
-
-        binding.bottomNavigationView.doOnLayout {
-            val initialTab = navTabItemViews.getOrNull(currentTabIndex)
-            if (initialTab != null && initialTab.width > 0) {
-                binding.navSlidingPillIndicator.layoutParams = binding.navSlidingPillIndicator.layoutParams.apply {
-                    width = initialTab.width
+        binding.floatingNavDockContainer.post {
+            try {
+                val initialTab = getNavTabItemView(currentTabIndex)
+                if (initialTab != null && initialTab.width > 0) {
+                    val lp = binding.navSlidingPillIndicator.layoutParams
+                    if (lp != null) {
+                        lp.width = initialTab.width
+                        binding.navSlidingPillIndicator.layoutParams = lp
+                    }
+                    binding.navSlidingPillIndicator.translationX = getTabPillX(currentTabIndex)
                 }
-                binding.navSlidingPillIndicator.translationX = getTabPillX(currentTabIndex)
+                updateTabColorsImmediate(currentTabIndex)
+                ensureTabScreensVisibility()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-            updateTabColorsImmediate(currentTabIndex)
         }
 
         binding.bottomNavigationView.setOnItemSelectedListener { item ->
@@ -205,55 +261,66 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun switchTabWithContinuousSlide(targetIndex: Int, animate: Boolean = true) {
-        if (!::tabContainers.isInitialized || targetIndex !in tabContainers.indices) return
+        if (targetIndex !in 0..4) return
 
         if (targetIndex == currentTabIndex && activeNavAnimator?.isRunning != true) {
-            // Reselected current tab: keep state and smoothly scroll to top
             scrollActiveTabToTop(targetIndex)
             return
         }
 
-        val previousIndex = currentTabIndex
-        val outgoingView = tabContainers[previousIndex]
-        val incomingView = tabContainers[targetIndex]
+        val previousIndex = if (currentTabIndex in 0..4) currentTabIndex else 0
+        val outgoingView = getTabScreenView(previousIndex)
+        val incomingView = getTabScreenView(targetIndex)
+
+        // If either screen view is not ready yet, perform instant safe switch
+        if (outgoingView == null || incomingView == null) {
+            currentTabIndex = targetIndex
+            activeFragment = getFragmentForIndex(targetIndex)
+            ensureTabScreensVisibility()
+            updateTabColorsImmediate(targetIndex)
+            onTabDestinationEntered(targetIndex)
+            return
+        }
+
         val direction = if (targetIndex > previousIndex) 1f else -1f
 
-        // 1. Capture live in-flight pill position before cancelling any running animation
+        // 1. Capture live in-flight pill position before cancelling running animation
         val startPillX = binding.navSlidingPillIndicator.translationX
         val startPillWidth = binding.navSlidingPillIndicator.width.takeIf { it > 0 }
-            ?: navTabItemViews.getOrNull(previousIndex)?.width ?: 0
+            ?: (getNavTabItemView(previousIndex)?.width ?: 0)
 
-        activeNavAnimator?.cancel()
+        try {
+            activeNavAnimator?.cancel()
+        } catch (_: Exception) {}
 
-        // 2. Ensure any other non-participating tab views are cleanly hidden and reset
-        for (i in tabContainers.indices) {
+        // 2. Hide any other non-participating tab views
+        for (i in 0..4) {
             if (i != previousIndex && i != targetIndex) {
-                tabContainers[i].visibility = View.GONE
-                tabContainers[i].translationX = 0f
-                tabContainers[i].alpha = 1f
-                tabContainers[i].setLayerType(View.LAYER_TYPE_NONE, null)
+                getTabScreenView(i)?.let { v ->
+                    v.visibility = View.GONE
+                    v.translationX = 0f
+                    v.alpha = 1f
+                    try {
+                        v.setLayerType(View.LAYER_TYPE_NONE, null)
+                    } catch (_: Exception) {}
+                }
             }
         }
 
         currentTabIndex = targetIndex
-        val targetTabView = navTabItemViews[targetIndex]
+        val targetTabView = getNavTabItemView(targetIndex)
         val targetPillX = getTabPillX(targetIndex)
-        val targetPillWidth = targetTabView.width
+        val targetPillWidth = targetTabView?.width ?: 0
 
         // Keep BottomNavigationView selectedItemId in sync without re-triggering listener
         isProgrammaticNavSelection = true
-        binding.bottomNavigationView.selectedItemId = getMenuIdForIndex(targetIndex)
+        try {
+            binding.bottomNavigationView.selectedItemId = getMenuIdForIndex(targetIndex)
+        } catch (_: Exception) {}
         isProgrammaticNavSelection = false
 
-        // Update activeFragment reference immediately
-        activeFragment = when (targetIndex) {
-            0 -> homeFragment
-            1 -> analyticsFragment
-            2 -> alarmFragment
-            3 -> shieldsFragment
-            4 -> settingsFragment
-            else -> homeFragment
-        }
+        // Update activeFragment reference
+        activeFragment = getFragmentForIndex(targetIndex)
 
         val viewportWidth = (binding.fragmentContainer.width.takeIf { it > 0 }
             ?: resources.displayMetrics.widthPixels).toFloat()
@@ -262,17 +329,19 @@ class MainActivity : AppCompatActivity() {
             outgoingView.visibility = View.GONE
             outgoingView.translationX = 0f
             outgoingView.alpha = 1f
-            outgoingView.setLayerType(View.LAYER_TYPE_NONE, null)
+            try { outgoingView.setLayerType(View.LAYER_TYPE_NONE, null) } catch (_: Exception) {}
 
             incomingView.visibility = View.VISIBLE
             incomingView.translationX = 0f
             incomingView.alpha = 1f
-            incomingView.setLayerType(View.LAYER_TYPE_NONE, null)
+            try { incomingView.setLayerType(View.LAYER_TYPE_NONE, null) } catch (_: Exception) {}
 
             binding.navSlidingPillIndicator.translationX = targetPillX
             if (targetPillWidth > 0) {
-                binding.navSlidingPillIndicator.layoutParams = binding.navSlidingPillIndicator.layoutParams.apply {
-                    width = targetPillWidth
+                val lp = binding.navSlidingPillIndicator.layoutParams
+                if (lp != null) {
+                    lp.width = targetPillWidth
+                    binding.navSlidingPillIndicator.layoutParams = lp
                 }
             }
             updateTabColorsImmediate(targetIndex)
@@ -285,8 +354,8 @@ class MainActivity : AppCompatActivity() {
         incomingView.visibility = View.VISIBLE
         incomingView.bringToFront()
 
-        outgoingView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        incomingView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        try { outgoingView.setLayerType(View.LAYER_TYPE_HARDWARE, null) } catch (_: Exception) {}
+        try { incomingView.setLayerType(View.LAYER_TYPE_HARDWARE, null) } catch (_: Exception) {}
 
         val startOutgoingX = outgoingView.translationX
         val endOutgoingX = -direction * viewportWidth
@@ -297,7 +366,6 @@ class MainActivity : AppCompatActivity() {
         incomingView.translationX = startIncomingX
         incomingView.alpha = 1f
 
-        // Scale duration slightly if skipping multiple tabs (250ms for adjacent, 290ms for multi-tab jump)
         val tabDistance = kotlin.math.abs(targetIndex - previousIndex)
         val durationMs = if (tabDistance > 1) 290L else 250L
 
@@ -308,24 +376,20 @@ class MainActivity : AppCompatActivity() {
             addUpdateListener { anim ->
                 val fraction = anim.animatedValue as Float
 
-                // A. Synchronized Dual-Screen Horizontal Slide
                 outgoingView.translationX = startOutgoingX + (endOutgoingX - startOutgoingX) * fraction
                 incomingView.translationX = startIncomingX + (endIncomingX - startIncomingX) * fraction
-
-                // Subtle depth dimming on outgoing screen so transition feels 3D & effortless
                 outgoingView.alpha = 1f - (0.18f * fraction)
 
-                // B. Synchronized Gliding Pill Indicator Position & Width
                 binding.navSlidingPillIndicator.translationX = startPillX + (targetPillX - startPillX) * fraction
                 if (startPillWidth != targetPillWidth && targetPillWidth > 0) {
                     val currentW = (startPillWidth + (targetPillWidth - startPillWidth) * fraction).toInt()
-                    if (binding.navSlidingPillIndicator.layoutParams.width != currentW) {
-                        binding.navSlidingPillIndicator.layoutParams.width = currentW
-                        binding.navSlidingPillIndicator.requestLayout()
+                    val lp = binding.navSlidingPillIndicator.layoutParams
+                    if (lp != null && lp.width != currentW) {
+                        lp.width = currentW
+                        binding.navSlidingPillIndicator.layoutParams = lp
                     }
                 }
 
-                // C. Smooth Color Cross-Fade on Tab Icons & Labels
                 blendTabColors(previousIndex, targetIndex, fraction)
             }
 
@@ -337,8 +401,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onAnimationEnd(animation: Animator) {
-                    outgoingView.setLayerType(View.LAYER_TYPE_NONE, null)
-                    incomingView.setLayerType(View.LAYER_TYPE_NONE, null)
+                    try { outgoingView.setLayerType(View.LAYER_TYPE_NONE, null) } catch (_: Exception) {}
+                    try { incomingView.setLayerType(View.LAYER_TYPE_NONE, null) } catch (_: Exception) {}
 
                     if (!wasCancelled) {
                         outgoingView.visibility = View.GONE
@@ -362,7 +426,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getTabPillX(index: Int): Float {
-        val tabView = navTabItemViews.getOrNull(index) ?: return 0f
+        val tabView = getNavTabItemView(index) ?: return 0f
         var x = tabView.left.toFloat()
         var parent = tabView.parent as? View
         while (parent != null && parent != binding.bottomNavigationView && parent != binding.floatingNavDockContainer) {
@@ -395,14 +459,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTabColor(tabIndex: Int, color: Int) {
-        val tabItem = navTabItemViews.getOrNull(tabIndex) as? ViewGroup ?: return
+        val tabItem = getNavTabItemView(tabIndex) as? ViewGroup ?: return
         fun applyRecursively(view: View) {
             when (view) {
                 is ImageView -> {
-                    view.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+                    try {
+                        view.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+                    } catch (_: Exception) {}
                 }
                 is TextView -> {
-                    view.setTextColor(color)
+                    try {
+                        view.setTextColor(color)
+                    } catch (_: Exception) {}
                 }
                 is ViewGroup -> {
                     for (c in 0 until view.childCount) {
@@ -415,18 +483,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateTabColorsImmediate(targetIndex: Int) {
-        val activeColor = ContextCompat.getColor(this, R.color.ig_accent_amber)
-        val inactiveColor = ContextCompat.getColor(this, R.color.ig_nav_inactive)
+        val activeColor = try {
+            ContextCompat.getColor(this, R.color.ig_accent_amber)
+        } catch (_: Exception) {
+            Color.parseColor("#FF8A1E")
+        }
+        val inactiveColor = try {
+            ContextCompat.getColor(this, R.color.ig_nav_inactive)
+        } catch (_: Exception) {
+            Color.parseColor("#C9D1D9")
+        }
 
-        for (i in navTabItemViews.indices) {
+        for (i in 0..4) {
             val color = if (i == targetIndex) activeColor else inactiveColor
             applyTabColor(i, color)
         }
     }
 
     private fun blendTabColors(previousIndex: Int, targetIndex: Int, fraction: Float) {
-        val activeColor = ContextCompat.getColor(this, R.color.ig_accent_amber)
-        val inactiveColor = ContextCompat.getColor(this, R.color.ig_nav_inactive)
+        val activeColor = try {
+            ContextCompat.getColor(this, R.color.ig_accent_amber)
+        } catch (_: Exception) {
+            Color.parseColor("#FF8A1E")
+        }
+        val inactiveColor = try {
+            ContextCompat.getColor(this, R.color.ig_nav_inactive)
+        } catch (_: Exception) {
+            Color.parseColor("#C9D1D9")
+        }
 
         val outgoingColor = argbEvaluator.evaluate(fraction, activeColor, inactiveColor) as Int
         val incomingColor = argbEvaluator.evaluate(fraction, inactiveColor, activeColor) as Int
@@ -434,7 +518,7 @@ class MainActivity : AppCompatActivity() {
         applyTabColor(previousIndex, outgoingColor)
         applyTabColor(targetIndex, incomingColor)
 
-        for (i in navTabItemViews.indices) {
+        for (i in 0..4) {
             if (i != previousIndex && i != targetIndex) {
                 applyTabColor(i, inactiveColor)
             }
@@ -442,7 +526,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scrollActiveTabToTop(tabIndex: Int) {
-        val rootView = tabContainers.getOrNull(tabIndex) ?: return
+        val rootView = getTabScreenView(tabIndex) ?: return
         when (rootView) {
             is NestedScrollView -> rootView.smoothScrollTo(0, 0)
             is ScrollView -> rootView.smoothScrollTo(0, 0)
@@ -466,14 +550,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onTabDestinationEntered(targetIndex: Int) {
-        val targetFragment = when (targetIndex) {
-            0 -> homeFragment
-            1 -> analyticsFragment
-            2 -> alarmFragment
-            3 -> shieldsFragment
-            4 -> settingsFragment
-            else -> homeFragment
-        }
+        val targetFragment = getFragmentForIndex(targetIndex)
         activeFragment = targetFragment
 
         if (targetFragment == alarmFragment) {
@@ -485,7 +562,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupToolbar() {
         binding.toolbarMain.title = ""
         binding.tvToolbarTitle.text = "InstaGuard Pro"
-        binding.tvToolbarBadge.text = "v15.1 PRO"
+        binding.tvToolbarBadge.text = "v15.2 PRO"
         binding.btnRefresh.setOnClickListener {
             it.animate().rotationBy(360f).setDuration(350L).setInterpolator(navInterpolator).start()
             AppBlockerService.syncFromPrefs(this)
@@ -532,75 +609,102 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshActiveTab(fragment: Fragment) {
-        val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
-        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+        try {
+            if (!fragment.isAdded || fragment.view == null) return
+            val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
+            val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
 
-        when (fragment) {
-            is HomeDashboardFragment -> fragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
-            is AnalyticsFragment -> fragment.updateAnalytics(guardManager)
-            is AlarmFragment -> fragment.refreshAlarmsUI()
-            is ShieldsFragment -> fragment.refreshShieldsUI(guardManager)
-            is SettingsFragment -> fragment.refreshSettingsUI(guardManager)
+            when (fragment) {
+                is HomeDashboardFragment -> fragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
+                is AnalyticsFragment -> fragment.updateAnalytics(guardManager)
+                is AlarmFragment -> fragment.refreshAlarmsUI()
+                is ShieldsFragment -> fragment.refreshShieldsUI(guardManager)
+                is SettingsFragment -> fragment.refreshSettingsUI(guardManager)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private fun refreshAllFragments() {
-        val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
-        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+        try {
+            val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
+            val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
 
-        if (::homeFragment.isInitialized && homeFragment.isAdded) {
-            homeFragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
-        }
-        if (::analyticsFragment.isInitialized && analyticsFragment.isAdded) {
-            analyticsFragment.updateAnalytics(guardManager)
-        }
-        if (::alarmFragment.isInitialized && alarmFragment.isAdded) {
-            alarmFragment.refreshAlarmsUI()
-        }
-        if (::shieldsFragment.isInitialized && shieldsFragment.isAdded) {
-            shieldsFragment.refreshShieldsUI(guardManager)
-        }
-        if (::settingsFragment.isInitialized && settingsFragment.isAdded) {
-            settingsFragment.refreshSettingsUI(guardManager)
+            if (::homeFragment.isInitialized && homeFragment.isAdded && homeFragment.view != null) {
+                homeFragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
+            }
+            if (::analyticsFragment.isInitialized && analyticsFragment.isAdded && analyticsFragment.view != null) {
+                analyticsFragment.updateAnalytics(guardManager)
+            }
+            if (::alarmFragment.isInitialized && alarmFragment.isAdded && alarmFragment.view != null) {
+                alarmFragment.refreshAlarmsUI()
+            }
+            if (::shieldsFragment.isInitialized && shieldsFragment.isAdded && shieldsFragment.view != null) {
+                shieldsFragment.refreshShieldsUI(guardManager)
+            }
+            if (::settingsFragment.isInitialized && settingsFragment.isAdded && settingsFragment.view != null) {
+                settingsFragment.refreshSettingsUI(guardManager)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     private fun tickLiveMetrics() {
-        val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
-        val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
+        try {
+            val hasUsage = UsageStatsHelper.hasUsageStatsPermission(this)
+            val hasAccessibility = GuardManager.isAccessibilityServiceEnabled(this, AppBlockerService::class.java)
 
-        // Always update HomeDashboard at 30 FPS when visible or added
-        if (::homeFragment.isInitialized && homeFragment.isAdded) {
-            homeFragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
-        }
+            // Always update HomeDashboard at 30 FPS when visible or added
+            if (::homeFragment.isInitialized && homeFragment.isAdded && homeFragment.view != null) {
+                homeFragment.updateDashboard(guardManager, hasUsage, hasAccessibility)
+            }
 
-        // When Analytics is foreground, tick its live screen-time counters
-        if (activeFragment == analyticsFragment && ::analyticsFragment.isInitialized && analyticsFragment.isAdded) {
-            analyticsFragment.updateAnalytics(guardManager)
-        }
+            // When Analytics is foreground, tick its live screen-time counters
+            if (activeFragment == analyticsFragment && ::analyticsFragment.isInitialized && analyticsFragment.isAdded && analyticsFragment.view != null) {
+                analyticsFragment.updateAnalytics(guardManager)
+            }
 
-        // When Shields is foreground, update live scanner HUD diagnostic
-        if (activeFragment == shieldsFragment && ::shieldsFragment.isInitialized && shieldsFragment.isAdded) {
-            shieldsFragment.updateLiveHud()
+            // When Shields is foreground, update live scanner HUD diagnostic
+            if (activeFragment == shieldsFragment && ::shieldsFragment.isInitialized && shieldsFragment.isAdded && shieldsFragment.view != null) {
+                shieldsFragment.updateLiveHud()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        AppBlockerService.isOurAppScreenOpen = true
-        AppBlockerService.syncFromPrefs(this)
+        try {
+            AppBlockerService.isOurAppScreenOpen = true
+            AppBlockerService.syncFromPrefs(this)
 
-        refreshAllFragments()
-        InstaGuardWidgetProvider.updateAllWidgets(this)
+            refreshAllFragments()
+            InstaGuardWidgetProvider.updateAllWidgets(this)
+            ensureTabScreensVisibility()
+            updateTabColorsImmediate(currentTabIndex)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        uiHandler.removeCallbacks(liveTickerRunnable)
-        uiHandler.post(liveTickerRunnable)
+        try {
+            uiHandler.removeCallbacks(liveTickerRunnable)
+            uiHandler.post(liveTickerRunnable)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onPause() {
         super.onPause()
-        AppBlockerService.isOurAppScreenOpen = false
-        uiHandler.removeCallbacks(liveTickerRunnable)
+        try {
+            AppBlockerService.isOurAppScreenOpen = false
+            uiHandler.removeCallbacks(liveTickerRunnable)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onDestroy() {

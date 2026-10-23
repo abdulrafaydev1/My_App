@@ -19,7 +19,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="🛡️ InstaGuard Pro v15.1"
+            android:text="🛡️ InstaGuard Pro v15.2"
             android:textColor="#F5F7FA"
             android:textSize="13sp"
             android:textStyle="bold" />
