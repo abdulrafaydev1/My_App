@@ -22,6 +22,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.instaguard.app.R
 import com.instaguard.app.alarm.AlarmManagerHelper
+import com.instaguard.app.alarm.AlarmQuestion
+import com.instaguard.app.alarm.AlarmQuestionEngine
 import com.instaguard.app.alarm.AlarmReceiver
 import com.instaguard.app.alarm.AlarmRingingActivity
 import com.instaguard.app.alarm.HardAlarmSoundEngine
@@ -124,6 +126,14 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         if (!isCurrentlyRinging || activeAlarmId != alarmId) {
             isCurrentlyRinging = true
             activeAlarmId = alarmId
+
+            // Initialize fresh 5-question session for the newly ringing alarm
+            resetQuestionSession()
+            val engine = AlarmQuestionEngine()
+            activeQuestionEngine = engine
+            currentQuestionStep = 1
+            currentActiveQuestion = engine.nextQuestion()
+
             requestAlarmAudioFocus()
 
             // Start mathematical audio synthesizer directly in service (works reliably even with screen OFF)
@@ -211,22 +221,24 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val dismissIntent = Intent(this, AlarmRingingService::class.java).apply {
-            this.action = ACTION_DISMISS_ALARM
+        val solveIntent = Intent(this, AlarmRingingActivity::class.java).apply {
+            this.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(AlarmManagerHelper.EXTRA_ALARM_ID, alarm.id)
             putExtra("alarm_id", alarm.id)
+            putExtra(AlarmManagerHelper.EXTRA_IS_TEST, isTest)
+            putExtra(AlarmManagerHelper.EXTRA_IS_SNOOZE, isSnooze)
         }
-        val dismissPendingIntent = PendingIntent.getService(
+        val solvePendingIntent = PendingIntent.getActivity(
             this,
-            2027,
-            dismissIntent,
+            2028,
+            solveIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm_tab)
             .setContentTitle("⏰ InstaGuard Alarm Ringing!")
-            .setContentText("Alarm: ${alarm.label}. Tap to dismiss.")
+            .setContentText("Alarm: ${alarm.label}. Solve 5 questions to dismiss.")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -236,8 +248,8 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
             .setContentIntent(fullScreenPendingIntent)
             .addAction(
                 R.drawable.ic_alarm_clock,
-                "Dismiss / Stop Alarm",
-                dismissPendingIntent
+                "🧠 Solve 5 Questions to Stop Alarm",
+                solvePendingIntent
             )
             .build()
     }
@@ -358,6 +370,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
     private fun stopRingingAndDismiss(alarmId: String?) {
         isCurrentlyRinging = false
         activeAlarmId = null
+        resetQuestionSession()
 
         // 1. Stop mathematical sound synthesizer
         HardAlarmSoundEngine.stopPlaying(this)
@@ -425,6 +438,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         super.onDestroy()
         isCurrentlyRinging = false
         activeAlarmId = null
+        resetQuestionSession()
         AppBlockerService.clearAlarmRingingState(this)
         HardAlarmSoundEngine.stopPlaying(this)
         try {
@@ -464,6 +478,49 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         @Volatile
         var activeAlarmId: String? = null
 
+        @Volatile
+        var activeQuestionEngine: AlarmQuestionEngine? = null
+
+        @Volatile
+        var currentQuestionStep: Int = 1
+
+        @Volatile
+        var currentActiveQuestion: AlarmQuestion? = null
+
+        @Synchronized
+        fun getOrInitQuestionSession(): Pair<Int, AlarmQuestion> {
+            val engine = activeQuestionEngine ?: AlarmQuestionEngine().also { activeQuestionEngine = it }
+            val question = currentActiveQuestion ?: engine.nextQuestion().also { currentActiveQuestion = it }
+            return Pair(currentQuestionStep, question)
+        }
+
+        @Synchronized
+        fun advanceToNextQuestion(): Pair<Int, AlarmQuestion?> {
+            currentQuestionStep++
+            if (currentQuestionStep <= 5) {
+                val engine = activeQuestionEngine ?: AlarmQuestionEngine().also { activeQuestionEngine = it }
+                currentActiveQuestion = engine.nextQuestion()
+            } else {
+                currentActiveQuestion = null
+            }
+            return Pair(currentQuestionStep, currentActiveQuestion)
+        }
+
+        @Synchronized
+        fun skipCurrentQuestion(): AlarmQuestion {
+            val engine = activeQuestionEngine ?: AlarmQuestionEngine().also { activeQuestionEngine = it }
+            val newQ = engine.nextUnusedGkOrRandomQuestion()
+            currentActiveQuestion = newQ
+            return newQ
+        }
+
+        @Synchronized
+        fun resetQuestionSession() {
+            activeQuestionEngine = null
+            currentQuestionStep = 1
+            currentActiveQuestion = null
+        }
+
         fun startAlarm(
             context: Context,
             alarmId: String,
@@ -497,6 +554,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         fun stopAlarmAfterSolved(context: Context, alarmId: String?) {
             isCurrentlyRinging = false
             activeAlarmId = null
+            resetQuestionSession()
             HardAlarmSoundEngine.stopPlaying(context)
             AppBlockerService.clearAlarmRingingState(context)
             AlarmManagerHelper.handleAlarmDismissed(context, alarmId)

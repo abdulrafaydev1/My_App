@@ -126,4 +126,27 @@ class AlarmQuestionEngineTest {
         assertFalse(engine.checkAnswer(gkQ, "Karachi"))
         assertFalse(engine.checkAnswer(gkQ, "Lahore"))
     }
+
+    @Test
+    fun testPersistentSessionAdvancement() {
+        engine.resetSession()
+        assertEquals(0, engine.getUsedCount())
+
+        val q1 = engine.nextQuestion()
+        assertEquals(1, engine.getUsedCount())
+
+        // Simulating user skips a GK question if skippable
+        if (q1.canChangeOrSkip) {
+            val q1Replaced = engine.nextUnusedGkOrRandomQuestion()
+            assertTrue("Replaced question must have a different ID", q1.id != q1Replaced.id)
+            assertEquals(2, engine.getUsedCount())
+        }
+
+        // Draw remaining questions to reach 5
+        for (i in 2..5) {
+            val nextQ = engine.nextQuestion()
+            assertNotNull(nextQ)
+        }
+        assertTrue("At least 5 questions must be tracked", engine.getUsedCount() >= 5)
+    }
 }

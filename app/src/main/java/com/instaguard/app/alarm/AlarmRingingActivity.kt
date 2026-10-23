@@ -4,19 +4,26 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.KeyguardManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.PathInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.instaguard.app.databinding.ActivityAlarmRingingBinding
 import com.instaguard.app.service.AlarmRingingService
 import com.instaguard.app.service.AppBlockerService
@@ -25,9 +32,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Full-Screen Hardcore Alarm Ringing Activity (v15.4 Modular 5-Question Mission Edition).
- * Enforces solving 5 randomized Math & City/Country/General Knowledge questions before stopping.
- * Features strict skip/change rules and a dedicated Auto-Solve test button.
+ * Full-Screen Hardcore Alarm Ringing Activity (v15.5 Persistent & Immersive Edition).
+ * - Immersive sticky full-screen lock mode with system bars hidden.
+ * - Persistent 5-question mission state synced with AlarmRingingService across rotations/recreations.
+ * - Smooth 180ms cross-fade & horizontal slide animations between questions.
+ * - Debounced back-swipe/back-button card shake guard.
+ * - Safe app-switch re-entry guard via onUserLeaveHint.
  */
 class AlarmRingingActivity : AppCompatActivity() {
 
@@ -36,13 +46,13 @@ class AlarmRingingActivity : AppCompatActivity() {
     private var isTest = false
     private var isSnooze = false
 
-    private val questionEngine = AlarmQuestionEngine()
     private val totalQuestions = 5
     private var currentStep = 1
     private lateinit var currentQuestion: AlarmQuestion
 
     private val handler = Handler(Looper.getMainLooper())
     private var pulseAnimator: ObjectAnimator? = null
+    private var lastBackToastElapsedMs = 0L
 
     private val clockRunnable = object : Runnable {
         override fun run() {
@@ -55,17 +65,37 @@ class AlarmRingingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         wakeAndUnlockScreen()
 
+        // Configure Immersive Sticky Mode & Prevent Edge Swipes Leaving Screen
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        setFinishOnTouchOutside(false)
+
         binding = ActivityAlarmRingingBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Block Android Back button: Alarm cannot be dismissed by pressing Back
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                Toast.makeText(
-                    this@AlarmRingingActivity,
-                    "🚫 Solve all 5 questions or use Test Auto-Solve to stop the alarm!",
-                    Toast.LENGTH_SHORT
-                ).show()
+                val step = AlarmRingingService.currentQuestionStep
+                if (step <= totalQuestions) {
+                    ObjectAnimator.ofFloat(binding.cardQuestionMission, "translationX", 0f, -14f, 14f, -10f, 10f, 0f).apply {
+                        duration = 260
+                        start()
+                    }
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastBackToastElapsedMs >= 2000L) {
+                        lastBackToastElapsedMs = now
+                        val remaining = 6 - step
+                        Toast.makeText(
+                            this@AlarmRingingActivity,
+                            "🔒 Complete all 5 questions ($remaining remaining) to stop the alarm!",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             }
         })
 
@@ -99,15 +129,43 @@ class AlarmRingingActivity : AppCompatActivity() {
         setupSnoozeAndTestControls()
         startClockAndPulseAnimations()
 
-        // Draw initial Question 1 of 5
-        currentStep = 1
-        currentQuestion = questionEngine.nextQuestion()
+        // Bind to persistent 5-question session in AlarmRingingService
+        val (step, question) = AlarmRingingService.getOrInitQuestionSession()
+        currentStep = step
+        currentQuestion = question
         bindCurrentQuestionToUi()
     }
 
     override fun onResume() {
         super.onResume()
         AppBlockerService.setAlarmRingingState(this, isRinging = true, alarmId = alarm.id)
+
+        // Refresh and re-sync persistent session state on resume/recreation
+        val (step, question) = AlarmRingingService.getOrInitQuestionSession()
+        currentStep = step
+        currentQuestion = question
+        bindCurrentQuestionToUi()
+
+        // Re-hide system bars in case window focus changed
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // If alarm is still ringing and 5 questions are not finished, bring back to front
+        if (AlarmRingingService.isCurrentlyRinging && AlarmRingingService.currentQuestionStep <= totalQuestions) {
+            handler.postDelayed({
+                if (AlarmRingingService.isCurrentlyRinging && !isFinishing && !isDestroyed) {
+                    try {
+                        val bringFrontIntent = Intent(applicationContext, AlarmRingingActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        }
+                        startActivity(bringFrontIntent)
+                    } catch (_: Exception) {}
+                }
+            }, 250L)
+        }
     }
 
     private fun wakeAndUnlockScreen() {
@@ -178,6 +236,7 @@ class AlarmRingingActivity : AppCompatActivity() {
                     if (i < shuffled.size) {
                         choiceButtons[i].visibility = View.VISIBLE
                         choiceButtons[i].text = shuffled[i]
+                        choiceButtons[i].isEnabled = true
                         val optionText = shuffled[i]
                         choiceButtons[i].setOnClickListener {
                             checkAndSubmitAnswer(optionText)
@@ -223,9 +282,11 @@ class AlarmRingingActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Rule 4 & 5: Change to another unused GK question (or random unused)
-            currentQuestion = questionEngine.nextUnusedGkOrRandomQuestion()
-            bindCurrentQuestionToUi()
+            // Rule 4 & 5: Change to another unused GK question via AlarmRingingService
+            currentQuestion = AlarmRingingService.skipCurrentQuestion()
+            animateQuestionTransition {
+                bindCurrentQuestionToUi()
+            }
             val remaining = totalQuestions - currentStep + 1
             Toast.makeText(
                 this,
@@ -235,26 +296,61 @@ class AlarmRingingActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Smooth 180ms cross-fade and 10dp horizontal slide transition between questions.
+     */
+    private fun animateQuestionTransition(onMidPoint: () -> Unit) {
+        val interpolator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            PathInterpolator(0.22f, 1.0f, 0.36f, 1.0f)
+        } else {
+            DecelerateInterpolator()
+        }
+        val card = binding.cardQuestionMission
+        card.animate()
+            .alpha(0f)
+            .translationX(-10f)
+            .setDuration(90)
+            .setInterpolator(interpolator)
+            .withEndAction {
+                onMidPoint()
+                card.translationX = 10f
+                card.animate()
+                    .alpha(1f)
+                    .translationX(0f)
+                    .setDuration(90)
+                    .setInterpolator(interpolator)
+                    .start()
+            }
+            .start()
+    }
+
     private fun checkAndSubmitAnswer(userAnswer: String) {
         if (userAnswer.isBlank()) {
             Toast.makeText(this, "⚠️ Please enter or select an answer!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val isCorrect = questionEngine.checkAnswer(currentQuestion, userAnswer)
+        val engine = AlarmRingingService.activeQuestionEngine ?: AlarmQuestionEngine()
+        val isCorrect = engine.checkAnswer(currentQuestion, userAnswer)
         if (isCorrect) {
             hideKeyboard()
             if (currentStep < totalQuestions) {
-                Toast.makeText(
-                    this,
-                    "✅ Correct! Question $currentStep completed.",
-                    Toast.LENGTH_SHORT
-                ).show()
-                currentStep++
-                currentQuestion = questionEngine.nextQuestion()
-                bindCurrentQuestionToUi()
+                val (nextStep, nextQ) = AlarmRingingService.advanceToNextQuestion()
+                currentStep = nextStep
+                if (nextQ != null) {
+                    currentQuestion = nextQ
+                    animateQuestionTransition {
+                        bindCurrentQuestionToUi()
+                    }
+                    Toast.makeText(
+                        this,
+                        "✅ Correct! Question ${currentStep - 1} completed.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             } else {
-                // All 5 Questions Solved!
+                // All 5 Questions Solved! Disable buttons immediately to prevent double-tap race conditions
+                disableAllButtons()
                 dismissAlarmSuccessfully()
             }
         } else {
@@ -265,6 +361,16 @@ class AlarmRingingActivity : AppCompatActivity() {
             ).show()
             binding.etAnswer.selectAll()
         }
+    }
+
+    private fun disableAllButtons() {
+        binding.btnSubmitAnswer.isEnabled = false
+        binding.btnAutoSolveTest.isEnabled = false
+        binding.btnChangeQuestion.isEnabled = false
+        binding.btnChoice1.isEnabled = false
+        binding.btnChoice2.isEnabled = false
+        binding.btnChoice3.isEnabled = false
+        binding.btnChoice4.isEnabled = false
     }
 
     private fun setupSnoozeAndTestControls() {
@@ -286,7 +392,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun handleAutoSolveTest() {
-        currentStep = totalQuestions
+        disableAllButtons()
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
         AppBlockerService.clearAlarmRingingState(this)
         AlarmManagerHelper.handleAlarmDismissed(this, alarm.id)
@@ -300,6 +406,7 @@ class AlarmRingingActivity : AppCompatActivity() {
     }
 
     private fun snoozeAlarm() {
+        disableAllButtons()
         AppBlockerService.clearAlarmRingingState(this)
         AlarmRingingService.stopAlarmAfterSolved(this, alarm.id)
         AlarmManagerHelper.scheduleSnooze(this, alarm, alarm.snoozeMinutes)

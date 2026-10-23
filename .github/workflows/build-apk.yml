@@ -44,7 +44,7 @@ jobs:
       - name: Upload InstaGuard-APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: InstaGuard-v15.4-APK
+          name: InstaGuard-v15.5-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
 
