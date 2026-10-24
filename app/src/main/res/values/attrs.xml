@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom styling attributes for ElasticStretchButton (v16.0 Elastic Rubber Motion Engine) -->
+    <declare-styleable name="ElasticStretchButton">
+        <!-- Whether the button snaps back to its initial layout position on release, or stays dropped -->
+        <attr name="returnToAnchorOnRelease" format="boolean" />
+        <!-- Hold duration in milliseconds before press-and-drag elastic deformation begins -->
+        <attr name="pressHoldDurationMs" format="integer" />
+        <!-- Maximum stretch displacement limit in density-independent pixels -->
+        <attr name="maxStretchDistanceDp" format="dimension" />
+        <!-- Master toggle to enable or disable elastic stretch dragging -->
+        <attr name="isElasticDragEnabled" format="boolean" />
+    </declare-styleable>
+</resources>

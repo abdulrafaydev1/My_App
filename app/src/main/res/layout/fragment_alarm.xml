@@ -93,7 +93,7 @@
                     android:textSize="12.5sp" />
 
                 <!-- Primary Action Pill Button: + Create New Hard Alarm (#D8FF3E with dark text #0B0D10) -->
-                <com.google.android.material.button.MaterialButton
+                <com.instaguard.app.ui.widget.ElasticStretchButton
                     android:id="@+id/btnCreateAlarm"
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
@@ -104,10 +104,11 @@
                     android:textStyle="bold"
                     android:textSize="14.5sp"
                     app:cornerRadius="25dp"
+                    app:returnToAnchorOnRelease="true"
                     app:backgroundTint="@color/ig_accent_primary" />
 
                 <!-- Secondary Action Pill Button: ⚡ Test Alarm Now (#202530 with #FF8A1E accent) -->
-                <com.google.android.material.button.MaterialButton
+                <com.instaguard.app.ui.widget.ElasticStretchButton
                     android:id="@+id/btnTestEverythingNow"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
@@ -118,6 +119,7 @@
                     android:textStyle="bold"
                     android:textSize="13.5sp"
                     app:cornerRadius="24dp"
+                    app:returnToAnchorOnRelease="true"
                     app:strokeWidth="1dp"
                     app:strokeColor="#40FF8A1E"
                     app:backgroundTint="#202530" />

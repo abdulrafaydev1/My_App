@@ -401,7 +401,7 @@
                     android:layout_marginTop="14dp"
                     android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
+                    <com.instaguard.app.ui.widget.ElasticStretchButton
                         android:id="@+id/btnDeepWork1Hour"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
@@ -413,9 +413,10 @@
                         android:textStyle="bold"
                         android:textSize="13.5sp"
                         app:cornerRadius="24dp"
+                        app:returnToAnchorOnRelease="true"
                         app:backgroundTint="@color/ig_accent_primary" />
 
-                    <com.google.android.material.button.MaterialButton
+                    <com.instaguard.app.ui.widget.ElasticStretchButton
                         android:id="@+id/btnDeepWork2Hour"
                         android:layout_width="0dp"
                         android:layout_height="48dp"
@@ -427,6 +428,7 @@
                         android:textStyle="bold"
                         android:textSize="13.5sp"
                         app:cornerRadius="24dp"
+                        app:returnToAnchorOnRelease="true"
                         app:backgroundTint="@color/ig_accent_amber" />
                 </LinearLayout>
 
@@ -1001,7 +1003,7 @@
                     android:textColor="@color/ig_text_secondary"
                     android:textSize="12.5sp" />
 
-                <com.google.android.material.button.MaterialButton
+                <com.instaguard.app.ui.widget.ElasticStretchButton
                     android:id="@+id/btnDashboardAddCustomApp"
                     android:layout_width="match_parent"
                     android:layout_height="46dp"
@@ -1012,6 +1014,7 @@
                     android:textSize="13sp"
                     android:textStyle="bold"
                     app:cornerRadius="22dp"
+                    app:returnToAnchorOnRelease="true"
                     app:strokeWidth="1dp"
                     app:strokeColor="#33D8FF3E"
                     app:backgroundTint="#202530" />
