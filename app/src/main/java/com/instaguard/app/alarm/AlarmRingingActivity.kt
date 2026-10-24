@@ -153,18 +153,16 @@ class AlarmRingingActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        // If alarm is still ringing and 5 questions are not finished, bring back to front
-        if (AlarmRingingService.isCurrentlyRinging && AlarmRingingService.currentQuestionStep <= totalQuestions) {
-            handler.postDelayed({
-                if (AlarmRingingService.isCurrentlyRinging && !isFinishing && !isDestroyed) {
-                    try {
-                        val bringFrontIntent = Intent(applicationContext, AlarmRingingActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                        }
-                        startActivity(bringFrontIntent)
-                    } catch (_: Exception) {}
-                }
-            }, 250L)
+        // v15.6 Anti-bypass: immediately bring AlarmRingingActivity back to front if alarm is ringing
+        if (AppBlockerService.isAlarmCurrentlyRinging || (AlarmRingingService.isCurrentlyRinging && AlarmRingingService.currentQuestionStep <= totalQuestions)) {
+            if (!isFinishing && !isDestroyed) {
+                try {
+                    val bringFrontIntent = Intent(applicationContext, AlarmRingingActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    }
+                    startActivity(bringFrontIntent)
+                } catch (_: Exception) {}
+            }
         }
     }
 

@@ -424,7 +424,7 @@ class AlarmRingingService : Service(), TextToSpeech.OnInitListener {
         // Immortal alarm lock: if alarm is currently ringing, re-launch AlarmRingingActivity immediately!
         if (AppBlockerService.isAlarmCurrentlyRinging) {
             val restartIntent = Intent(this, AlarmRingingActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             try {
                 startActivity(restartIntent)

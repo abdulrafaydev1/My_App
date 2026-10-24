@@ -438,17 +438,19 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 null
             }
             if (rootPkg != null) {
-                // v13.2 Alarm Ringing Immortal Lock & Anti-Cheat Protection
+                // v15.6 Alarm Ringing Immortal Lock & Anti-Cheat Protection
                 if (isAlarmCurrentlyRinging) {
                     if (rootPkg != applicationContext.packageName && rootPkg !in EMERGENCY_CALL_PACKAGES) {
-                        if (isCalculatorAppPackage(rootPkg)) {
+                        if (tickCounter % 2 == 0 && isPowerOffMenuOpen(null)) {
+                            enforcePowerOffMenuBlock()
+                        } else if (isCalculatorAppPackage(rootPkg)) {
                             enforceCalculatorAppBlock(rootPkg)
                         } else if (isLauncherPackage(rootPkg) || rootPkg == "com.android.systemui") {
                             bringAlarmActivityToFront()
                         } else if (isAntiCheatBrowserPackage(rootPkg)) {
-                            if (tickCounter % 6 == 0) {
+                            if (tickCounter % 3 == 0) {
                                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                                if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                                if (hasCalculatorOrMathBypassInBrowser(root)) {
                                     enforceBrowserCalculatorBlock()
                                 }
                             }
@@ -822,7 +824,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
 
         val packageName = event.packageName?.toString() ?: ""
 
-        // v15.5 Alarm Persistent Lock & Anti-Cheat Guard while Alarm is Ringing
+        // v15.6 Alarm Persistent Lock & Anti-Cheat Guard while Alarm is Ringing
         if (isAlarmCurrentlyRinging) {
             // NEVER fire BACK or HOME when inside our own app package!
             if (packageName == applicationContext.packageName) {
@@ -834,9 +836,9 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 return
             }
 
-            // 1. If user opens Recents or returns to Home launcher, bring Alarm screen back immediately!
-            if (isLauncherPackage(packageName) || packageName == "com.android.systemui") {
-                bringAlarmActivityToFront()
+            // 1. Power-Off / Restart Menu Block while alarm is ringing
+            if (isPowerOffMenuOpen(event)) {
+                enforcePowerOffMenuBlock()
                 return
             }
 
@@ -849,10 +851,16 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             // 3. Browser Calculator Search Blocker while ringing
             if (isAntiCheatBrowserPackage(packageName)) {
                 val root = try { rootInActiveWindow } catch (e: Exception) { null }
-                if (hasCalculatorSearchOrWidgetInBrowser(root)) {
+                if (hasCalculatorOrMathBypassInBrowser(root)) {
                     enforceBrowserCalculatorBlock()
                     return
                 }
+            }
+
+            // 4. If user opens Recents or returns to Home launcher, bring Alarm screen back immediately!
+            if (isLauncherPackage(packageName) || packageName == "com.android.systemui") {
+                bringAlarmActivityToFront()
+                return
             }
         } else if (isAlarmAntiCheatGuardActive(this)) {
             // Post-alarm 3-minute anti-cheat window
@@ -2112,13 +2120,22 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    // v15.5 Anti-Cheat & Immortal Alarm Enforcement Methods
+    // v15.6 Anti-Cheat & Immortal Alarm Enforcement Methods
     private var lastAlarmActivityBringToFrontElapsedMs = 0L
-    private var lastAlarmCalculatorRelaunchElapsedMs = 0L
+    private var lastAlarmCalculatorToastElapsedMs = 0L
+    private var lastBrowserCalculatorToastElapsedMs = 0L
+    private var lastPowerOffBlockElapsedMs = 0L
+
+    private val POWER_OFF_KEYWORDS = listOf(
+        "power off", "shut down", "shutdown", "restart", "reboot",
+        "slide to power off", "turn off", "power menu", "tap to power off", "swipe to power off"
+    )
+
+    private val CALCULATOR_KEYPAD_BUTTONS = setOf("sin", "cos", "tan", "ac", "=")
 
     private fun bringAlarmActivityToFront() {
         val now = SystemClock.elapsedRealtime()
-        if (now - lastAlarmActivityBringToFrontElapsedMs < 400L) return
+        if (now - lastAlarmActivityBringToFrontElapsedMs < 300L) return
         lastAlarmActivityBringToFrontElapsedMs = now
 
         try {
@@ -2139,19 +2156,17 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         performGlobalAction(GLOBAL_ACTION_BACK)
         tickerHandler.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
-        }, 60L)
+        }, 50L)
 
         if (isAlarmCurrentlyRinging) {
-            if (now - lastAlarmCalculatorRelaunchElapsedMs >= 600L) {
-                lastAlarmCalculatorRelaunchElapsedMs = now
-                tickerHandler.postDelayed({
-                    bringAlarmActivityToFront()
-                }, 100L)
+            bringAlarmActivityToFront()
+            if (now - lastAlarmCalculatorToastElapsedMs >= 2000L) {
+                lastAlarmCalculatorToastElapsedMs = now
                 tickerHandler.post {
                     try {
                         Toast.makeText(
                             applicationContext,
-                            "🔒 Calculator is locked while Alarm is ringing! Complete the 5 questions.",
+                            "🚫 Calculator Locked! Solve all 5 Alarm Questions first!",
                             Toast.LENGTH_SHORT
                         ).show()
                     } catch (e: Exception) {
@@ -2183,19 +2198,17 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         performGlobalAction(GLOBAL_ACTION_BACK)
         tickerHandler.postDelayed({
             performGlobalAction(GLOBAL_ACTION_HOME)
-        }, 60L)
+        }, 50L)
 
         if (isAlarmCurrentlyRinging) {
-            if (now - lastAlarmCalculatorRelaunchElapsedMs >= 600L) {
-                lastAlarmCalculatorRelaunchElapsedMs = now
-                tickerHandler.postDelayed({
-                    bringAlarmActivityToFront()
-                }, 100L)
+            bringAlarmActivityToFront()
+            if (now - lastBrowserCalculatorToastElapsedMs >= 2000L) {
+                lastBrowserCalculatorToastElapsedMs = now
                 tickerHandler.post {
                     try {
                         Toast.makeText(
                             applicationContext,
-                            "🔒 Calculator is locked while Alarm is ringing! Complete the 5 questions.",
+                            "🚫 Browser Calculator Bypass Blocked! Complete all 5 Alarm Questions!",
                             Toast.LENGTH_SHORT
                         ).show()
                     } catch (e: Exception) {
@@ -2221,7 +2234,98 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun hasCalculatorSearchOrWidgetInBrowser(root: AccessibilityNodeInfo?): Boolean {
+    private fun containsPowerOffKeywords(root: AccessibilityNodeInfo?): Boolean {
+        if (root == null) return false
+        var found = false
+        fun traverse(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > 30 || found) return
+
+            val text = node.text?.toString()?.lowercase(Locale.ROOT)
+            val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT)
+
+            for (kw in POWER_OFF_KEYWORDS) {
+                if ((text != null && text.contains(kw)) || (desc != null && desc.contains(kw))) {
+                    found = true
+                    return
+                }
+            }
+
+            val count = node.childCount
+            for (i in 0 until count) {
+                val child = try { node.getChild(i) } catch (_: Exception) { null }
+                if (child != null) {
+                    traverse(child, depth + 1)
+                    try { child.recycle() } catch (_: Exception) {}
+                    if (found) return
+                }
+            }
+        }
+        traverse(root, 0)
+        return found
+    }
+
+    private fun isPowerOffMenuOpen(event: AccessibilityEvent?): Boolean {
+        if (event != null) {
+            val cls = event.className?.toString() ?: ""
+            if (cls.contains("GlobalActions", ignoreCase = true) ||
+                cls.contains("PowerOff", ignoreCase = true) ||
+                cls.contains("Shutdown", ignoreCase = true) ||
+                cls.contains("PowerMenu", ignoreCase = true)) {
+                return true
+            }
+        }
+
+        val activeRoot = try { rootInActiveWindow } catch (_: Exception) { null }
+        if (activeRoot != null) {
+            val found = containsPowerOffKeywords(activeRoot)
+            try { activeRoot.recycle() } catch (_: Exception) {}
+            if (found) return true
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                val winList = windows
+                if (winList != null) {
+                    for (w in winList) {
+                        val root = try { w.root } catch (_: Exception) { null }
+                        if (root != null) {
+                            val found = containsPowerOffKeywords(root)
+                            try { root.recycle() } catch (_: Exception) {}
+                            if (found) return true
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return false
+    }
+
+    private fun enforcePowerOffMenuBlock() {
+        val now = SystemClock.elapsedRealtime()
+        triggerDoublePulseVibration()
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
+        tickerHandler.postDelayed({
+            bringAlarmActivityToFront()
+        }, 50L)
+
+        if (now - lastPowerOffBlockElapsedMs >= 1500L) {
+            lastPowerOffBlockElapsedMs = now
+            tickerHandler.post {
+                try {
+                    Toast.makeText(
+                        applicationContext,
+                        "🚫 Power Off Blocked! Solve all 5 Questions to stop the alarm!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    private fun hasCalculatorOrMathBypassInBrowser(root: AccessibilityNodeInfo?): Boolean {
         if (root == null) return false
 
         var foundMatch = false
@@ -2265,6 +2369,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
             // 3. Check calculator keypad widget indicators
             val exactLabel = (text ?: desc)?.trim()
             if (exactLabel != null) {
+                if (CALCULATOR_KEYPAD_BUTTONS.contains(exactLabel)) {
+                    foundMatch = true
+                    return
+                }
                 when (exactLabel) {
                     "sin" -> hasSin = true
                     "cos" -> hasCos = true
@@ -2277,15 +2385,13 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
                 }
             }
 
-            // 4. If alarm currently ringing, check for math expressions inside EditText or input fields
-            if (isAlarmCurrentlyRinging) {
-                val isInput = className.contains("EditText", ignoreCase = true) || node.isEditable
-                if (isInput) {
-                    val inputContent = text ?: desc
-                    if (inputContent != null && MATH_EQUATION_REGEX.containsMatchIn(inputContent)) {
-                        foundMatch = true
-                        return
-                    }
+            // 4. Check for arithmetic expressions inside EditText or input fields
+            val isInput = className.contains("EditText", ignoreCase = true) || node.isEditable
+            if (isInput) {
+                val inputContent = text ?: desc
+                if (inputContent != null && MATH_EQUATION_REGEX.containsMatchIn(inputContent)) {
+                    foundMatch = true
+                    return
                 }
             }
 
@@ -2307,6 +2413,10 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
         }
 
         return foundMatch
+    }
+
+    private fun hasCalculatorSearchOrWidgetInBrowser(root: AccessibilityNodeInfo?): Boolean {
+        return hasCalculatorOrMathBypassInBrowser(root)
     }
 
     private fun startYoutubeLongVideoCountdown() {
