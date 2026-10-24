@@ -111,7 +111,7 @@ class AppBlockerService : AccessibilityService(), TextToSpeech.OnInitListener {
     // v13.1 Anti-Cheat Calculator & Browser Lock State
     private var lastCalculatorBlockToastElapsedMs = 0L
     private var lastCalculatorSearchBlockToastElapsedMs = 0L
-    private val MATH_EQUATION_REGEX = Regex("""\b\d+\s*[\*\×\+\-\/]\s*\d+\b""")
+    private val MATH_EQUATION_REGEX = Regex("""\b\d+\s*[-+*xX/\u00D7\u00F7]\s*\d+\b""")
     private val CALCULATOR_KEYWORDS = listOf(
         "calculator", "calculater", "calc ", "google calculator",
         "online calculator", "scientific calculator", "math solver", "solve math"

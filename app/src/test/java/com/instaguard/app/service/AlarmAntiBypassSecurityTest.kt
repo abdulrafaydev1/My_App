@@ -67,7 +67,7 @@ class AlarmAntiBypassSecurityTest {
 
     @Test
     fun testMathEquationRegexMatchesBypassAttempts() {
-        val mathRegex = Regex("""\b\d+\s*[\*\x\+\-\/\u00D7\u00F7]\s*\d+\b""")
+        val mathRegex = Regex("""\b\d+\s*[-+*xX/\u00D7\u00F7]\s*\d+\b""")
 
         // Standard operators
         assertTrue(mathRegex.containsMatchIn("12 + 45"))
